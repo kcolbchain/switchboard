@@ -1,0 +1,25 @@
+{
+  "name": "@switchboard/nonce-manager",
+  "version": "1.0.0",
+  "description": "Nonce manager with reorg protection for concurrent blockchain transactions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "nonce",
+    "blockchain",
+    "reorg",
+    "transaction"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  }
+}
