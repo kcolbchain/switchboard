@@ -45,4 +45,4 @@ jobs:
         run: pytest tests/ --collect-only -q
 
       - name: Run tests
-        run: pytest tests/ -v || true   # tracked: pre-existing failures, see PR notes
+        run: pytest tests/ -v
