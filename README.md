@@ -41,19 +41,8 @@ Built and maintained by [kcolbchain](https://kcolbchain.com). Aligned with [Lux 
 | `switchboard/zap_transport.py` | 🔄 in PR [#21](https://github.com/kcolbchain/switchboard/pull/21) | **Binary wire** for `PaymentOffer`/`PaymentProof` over [luxfi/zap](https://github.com/luxfi/zap). Zero-allocation, ~10× smaller than JSON. First production consumer of `zap_py`. |
 | `switchboard/gas_tracker.py` + `gas_budget.py` | ✅ shipped (PR [#14](https://github.com/kcolbchain/switchboard/pull/14)) | **Hard gas budgets** (per-hour, per-day) so an agent can't get rugged by its own runaway loop. Closes the #1 footgun of autonomous on-chain agents. |
 | `switchboard/nonce_manager.py` | ✅ shipped (PR [#11](https://github.com/kcolbchain/switchboard/pull/11)) | Client-side **nonce manager** with reorg protection. The thing every shipping agent eventually has to write. |
-| `contracts/AgentEscrow.sol` + `src/payment_protocol.py` + [`docs/agent-payment-protocol.md`](docs/agent-payment-protocol.md) | ✅ shipped (PR [#8](https://github.com/kcolbchain/switchboard/pull/8); PQ spec update in progress) | **Trustless escrow** with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI, plus protocol spec v1.1 with PQ signature envelope section. |
+| `contracts/AgentEscrow.sol` + `src/payment_protocol.py` | ✅ shipped (PR [#8](https://github.com/kcolbchain/switchboard/pull/8)) | **Trustless escrow** with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI. |
 | `web/` | ✅ shipped (PR [#15](https://github.com/kcolbchain/switchboard/pull/15)) | Side-by-side **explorer** for x402 / MPP / AP2 / Circle / on-chain escrow. The clearest public comparison of agent-payment rails today. |
-| `web/agents-demo.html` + [`SCENES.md`](web/SCENES.md) | ✅ shipped (PR [#39](https://github.com/kcolbchain/switchboard/pull/39), polish [#40](https://github.com/kcolbchain/switchboard/pull/40)) | Interactive **agent-payments lab** — 16 animated scenes covering x402 paywalls, escrow + refund, streaming MPP, AI compute auctions, HITL, treasury rebalance, signed oracle pulls, the PQ envelope proposal, taxi handover, café walk-by, food delivery, split bill, native ETH escrow, subscription, multi-city trip. Single static HTML, no build. |
-
----
-
-## Try the lab
-
-**Live:** [https://kcolbchain.github.io/switchboard/agents-demo.html](https://kcolbchain.github.io/switchboard/agents-demo.html)
-
-Single-file canvas demo (no build, no deps). Hover any agent for an informatics-rich tooltip; toggle light/dark; step through events with the transport bar (`space` play/pause, `n` step, `r` restart); scrub simulation sliders. Renames map to real places: **Work-In-Progress** is Abhi's coffee shop in Siolim, **Eat Pray Love** is Tridib's restaurant.
-
-The lab is intentionally fork-and-extend friendly: every scene is ~150 lines and follows the contract in [`web/SCENES.md`](web/SCENES.md). The pill bar already has a `+ Add your scene` slot that links to it. PRs welcome.
 
 ---
 
@@ -113,41 +102,7 @@ req = client.create_payment(
 client.confirm_payment(req.request_id)   # release funds
 ```
 
-### 4. Native ETH escrow — no token, no approve, every EVM chain
-
-The cheapest, most universal A2A primitive. No ERC-20 dance, no wrapped assets, no per-chain stablecoin contracts. Just `msg.value` directly into the escrow.
-
-```python
-from payment_protocol import PaymentClient
-
-# Patty commissions Abhi for a one-shot inference job priced in ETH.
-client = PaymentClient(patty_priv_key, escrow_address, rpc_url)
-
-# Lock funds — createPayment{value: 0.05 ether}
-req = client.create_payment(
-    payee="0xAbhi…",
-    amount_wei=5 * 10**16,        # 0.05 ETH
-    timeout_blocks=100,
-    challenge_period_blocks=10,
-)
-# Abhi delivers off-chain (URL / hash / event — verifiable by Patty)
-client.confirm_payment(req.request_id)   # → escrow .call{value:}(payee)
-```
-
-Or from Solidity directly:
-
-```solidity
-// Direct call from any agent contract — no approve(), no transferFrom()
-IAgentEscrow(escrow).createPayment{value: 0.05 ether}(
-    "req-7f3e", abhi, /*timeout*/ 100, /*challenge*/ 10
-);
-```
-
-Same code works on Lux, Base, Optimism, Arbitrum, Polygon, Ethereum mainnet — and any future EVM chain — without changing a line. ETH is the only asset universally available on every EVM chain without a token contract.
-
-See scene 14 (`native-ETH escrow`) in [the lab](https://kcolbchain.github.io/switchboard/agents-demo.html) for an animated walkthrough. The primitive is on the EIP track — see [issue #50](https://github.com/kcolbchain/switchboard/issues/50) and the [draft EIP](https://github.com/kcolbchain/switchboard/blob/eip/native-eth-a2a-escrow/eips/draft-native-eth-a2a-escrow.md) on branch `eip/native-eth-a2a-escrow`.
-
-### 5. Speak ZAP binary on a hot path
+### 4. Speak ZAP binary on a hot path
 
 ```python
 from switchboard.zap_transport import encode_offer, decode_offer, PaymentOffer, PaymentScheme
@@ -229,7 +184,6 @@ roundtrip = decode_offer(wire)           # exact equality
 ## Status & roadmap
 
 - ✅ **Shipped:** AgentEscrow contract, payment client + CLI, nonce manager, gas budget, x402 middleware, web explorer.
-- 🔄 **In flight:** [#34](https://github.com/kcolbchain/switchboard/issues/34) — protocol spec v1.1 / PQ signature envelope (§11 in `docs/agent-payment-protocol.md`).
 - 🔄 **In flight:** [PR #21](https://github.com/kcolbchain/switchboard/pull/21) — ZAP binary wire encoding for `PaymentOffer` / `PaymentProof`. Validates `zap_py` end-to-end.
 - 🛣️ **Next:** [#17](https://github.com/kcolbchain/switchboard/issues/17) MPP (multi-party micropayments) sessions, settlement-receipt format, Go interop fixtures with `luxfi/zap`.
 
@@ -240,23 +194,35 @@ Open issues with [`good first issue`](https://github.com/kcolbchain/switchboard/
 ## Install
 
 ```bash
-pip install switchboard-agents
-# optional, for ZAP binary wire:
-pip install 'switchboard-agents[zap]'
-# or, pinning to the upstream luxfi/zap python bindings directly:
-pip install 'luxfi-zap @ git+https://github.com/luxfi/zap@main#subdirectory=python'
+pip install switchboard-agent           # PyPI distribution name
+# import name stays `switchboard`:
+#   from switchboard.x402_middleware import X402Middleware
+
+# Optional extras:
+pip install 'switchboard-agent[fastapi]'   # FastAPI middleware deps
+pip install 'switchboard-agent[flask]'     # Flask middleware deps
+pip install 'switchboard-agent[zap]'       # ZAP binary wire (luxfi/zap)
+pip install 'switchboard-agent[all]'       # everything
 ```
 
-Or, for local development:
+Python 3.11+. Tests: `pytest tests/`. Solidity tests: `forge test` (see [Foundry setup](#foundry--on-chain-deployment) below).
+
+### Foundry / on-chain deployment
+
+`AgentEscrow.sol` ships with a Foundry scaffold for testnet deploys:
 
 ```bash
-git clone https://github.com/kcolbchain/switchboard && cd switchboard
-pip install -e '.[dev]'
+forge install                      # pulls OpenZeppelin + forge-std
+forge build
+forge test -vv
+
+# Copy .env.example → .env, then:
+make deploy-base-sepolia           # 84532
+make deploy-op-sepolia             # 11155420
+make deploy-lux-testnet            # 96368
 ```
 
-Python 3.11+. Tests: `pytest tests/`.
-
-> The PyPI distribution name is `switchboard-agents` (bare `switchboard` on PyPI is an unrelated WSGI library). The Python import name remains `import switchboard`.
+Deployed addresses go into `switchboard/registry.json` (chainId-keyed).
 
 ---
 
@@ -278,6 +244,6 @@ tests/test_zap_transport.py          ✅ 11 passed   (with luxfi-zap installed)
 
 MIT. Built by [kcolbchain](https://kcolbchain.com) — [@abhicris](https://github.com/abhicris).
 
-If you're building agent-payment infrastructure and want to compare notes — open an issue, or [research@kcolbchain.com](mailto:research@kcolbchain.com).
+If you're building agent-payment infrastructure and want to compare notes — open an issue, or [services@kcolbchain.com](mailto:services@kcolbchain.com).
 
 > **kcolb** = "block" reversed. We've been at this since 2015. The agent-payment rails are the part of crypto that finally has a real customer: AI.

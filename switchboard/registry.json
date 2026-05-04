@@ -1,0 +1,17 @@
+{
+  "84532": {
+    "name": "base-sepolia",
+    "escrow": null,
+    "usdc": "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+  },
+  "11155420": {
+    "name": "op-sepolia",
+    "escrow": null,
+    "usdc": "0x5fd84259d66Cd46123540766Be93DFE6D43130D7"
+  },
+  "96368": {
+    "name": "lux-testnet",
+    "escrow": null,
+    "usdc": null
+  }
+}

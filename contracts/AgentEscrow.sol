@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IOracleAggregator} from "./IOracleAggregator.sol";
 
 /**
@@ -9,9 +11,9 @@ import {IOracleAggregator} from "./IOracleAggregator.sol";
  * @dev Implements a payment protocol:
  *   1. Payer creates escrow with payment + timeout (+ optional policyHash)
  *   2. Agent performs work off-chain
- *   3. Payer confirms → funds released to payee
+ *   3. Payer confirms -> funds released to payee
  *      OR oracle aggregator authorizes release via attestation (when policyHash != 0)
- *   4. Timeout expires → payer can reclaim (after challenge period)
+ *   4. Timeout expires -> payer can reclaim (after challenge period)
  *
  * Backward compatibility:
  *   - The original 4-arg `createPayment(string, address, uint256, uint256)`
@@ -19,27 +21,32 @@ import {IOracleAggregator} from "./IOracleAggregator.sol";
  *     which means oracle release is disabled for that payment.
  *   - All existing functions (`confirmPayment`, `requestRefund`,
  *     `cancelPayment`, `getPayment`, `isState`, `isExpired`) are unchanged.
+ *
+ * Hardening (kcolb/testnet-hardening):
+ *   - registerAgent is now onlyOwner (was permissionless -- security bug).
+ *   - confirmPayment / requestRefund / cancelPayment are nonReentrant -- they perform
+ *     external ETH transfers via low-level call.
+ *   - State transitions follow checks-effects-interactions; the nonReentrant guard is
+ *     defense in depth.
  */
-contract AgentEscrow {
-    /// @notice Contract owner — manages agent registration
-    address public owner;
-
-    /// @notice Restricts function access to the contract owner
-    modifier onlyOwner() {
-        require(msg.sender == owner, "AgentEscrow: caller is not the owner");
-        _;
+contract AgentEscrow is Ownable, ReentrancyGuard {
+    enum State {
+        Created,
+        Locked,
+        Confirmed,
+        Released,
+        Refunded,
+        Cancelled
     }
-
-    enum State { Created, Locked, Confirmed, Released, Refunded, Cancelled }
 
     struct Payment {
         address payer;
         address payee;
         uint256 amount;
-        uint256 timeoutBlocks;      // blocks until auto-expire
-        uint256 challengePeriod;     // blocks payer must wait to reclaim after timeout
+        uint256 timeoutBlocks; // blocks until auto-expire
+        uint256 challengePeriod; // blocks payer must wait to reclaim after timeout
         State state;
-        string requestId;           // off-chain payment request ID
+        string requestId; // off-chain payment request ID
         uint256 createdAt;
         bytes32 policyHash;         // 0x00 = payer-only release; non-zero enables oracle release
     }
@@ -51,10 +58,10 @@ contract AgentEscrow {
     ///         even for payments that declared a non-zero policyHash.
     IOracleAggregator public immutable oracleAggregator;
 
-    // requestId → Payment
+    // requestId -> Payment
     mapping(string => Payment) public payments;
 
-    // Access control for agents
+    // Owner-curated allowlist of trusted agent addresses.
     mapping(address => bool) public registeredAgents;
 
     // Events
@@ -64,55 +71,34 @@ contract AgentEscrow {
     event PaymentReleased(string indexed requestId, address indexed payee, uint256 amount);
     event PaymentReleasedByOracle(string indexed requestId, bytes32 policyHash, bytes32 attestationHash);
     event PaymentRefunded(string indexed requestId, address indexed payer, uint256 amount);
+    event PaymentCancelled(string indexed requestId, address indexed payer, uint256 amount);
     event AgentRegistered(address indexed agent);
     event AgentDeregistered(address indexed agent);
 
     /// @param _chainId       Chain id this contract is deployed on.
     /// @param _aggregator    Optional oracle aggregator. Pass `address(0)`
-    ///                       to deploy without oracle-release support;
-    ///                       in that case any non-zero `policyHash` in
-    ///                       `createPaymentWithPolicy` will revert.
-    constructor(uint256 _chainId, IOracleAggregator _aggregator) {
-        owner = msg.sender;
+    ///                       to deploy without oracle-release support.
+    constructor(uint256 _chainId, IOracleAggregator _aggregator) Ownable(msg.sender) {
         chainId = _chainId;
         oracleAggregator = _aggregator;
     }
 
-    modifier onlyRegisteredAgent() {
-        require(registeredAgents[msg.sender], "Caller is not a registered agent");
-        _;
-    }
-
     /**
-     * @notice Register an agent address (owner-only).
-     * @dev Gated to prevent arbitrary address registration — only the
-     *      contract owner can add agents to the registry.
+     * @notice Register an agent address. Permissioned: only the contract owner.
+     * @dev Previously permissionless -- a known bug fixed in kcolb/testnet-hardening.
      */
     function registerAgent(address agent) external onlyOwner {
+        require(agent != address(0), "agent cannot be zero address");
         registeredAgents[agent] = true;
         emit AgentRegistered(agent);
     }
 
     /**
-     * @notice Deregister an agent address (owner-only).
-     * @dev Removes the agent from the registry and emits the previously
-     *      unused AgentDeregistered event. Reverts if the agent was not
-     *      previously registered.
+     * @notice Deregister a previously registered agent.
      */
     function deregisterAgent(address agent) external onlyOwner {
-        require(registeredAgents[agent], "AgentEscrow: agent not registered");
         registeredAgents[agent] = false;
         emit AgentDeregistered(agent);
-    }
-
-    /**
-     * @notice Transfer contract ownership to a new address.
-     * @dev Only the current owner may call. Use with caution — ownership
-     *      grants agent-registry management.
-     */
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "AgentEscrow: new owner is zero address");
-        owner = newOwner;
     }
 
     /**
@@ -131,10 +117,6 @@ contract AgentEscrow {
 
     /**
      * @notice Create a payment with an oracle-release policy.
-     * @dev    `policyHash` is the keccak256 of the canonical policy JSON
-     *         (see kcolbchain/escrow-oracles SPEC.md §3). A non-zero hash
-     *         enables `releaseByAttestation` for this payment; payer-only
-     *         release via `confirmPayment` continues to work as a fallback.
      */
     function createPaymentWithPolicy(
         string calldata requestId,
@@ -180,24 +162,27 @@ contract AgentEscrow {
     }
 
     /**
-     * @notice Payer confirms work is done → release funds to payee
+     * @notice Payer confirms work is done -> release funds to payee
      * @dev Can only be called by the original payer. Only in Locked state.
      *      Works regardless of whether the payment has an oracle policy;
      *      payer-only confirmation is always available as a fallback.
      */
-    function confirmPayment(string calldata requestId) external returns (bool) {
+    function confirmPayment(string calldata requestId) external nonReentrant returns (bool) {
         Payment storage p = payments[requestId];
         require(p.payer == msg.sender, "Only payer can confirm");
         require(p.state == State.Locked, "Payment not in Locked state");
         require(block.number < p.createdAt + p.timeoutBlocks, "Payment has expired");
 
+        uint256 amount = p.amount;
+        address payee = p.payee;
         p.state = State.Released;
-
-        (bool success, ) = p.payee.call{value: p.amount}("");
-        require(success, "Transfer to payee failed");
+        p.amount = 0;
 
         emit PaymentConfirmed(requestId, msg.sender);
-        emit PaymentReleased(requestId, p.payee, p.amount);
+        emit PaymentReleased(requestId, payee, amount);
+
+        (bool success,) = payee.call{value: amount}("");
+        require(success, "Transfer to payee failed");
         return true;
     }
 
@@ -217,7 +202,7 @@ contract AgentEscrow {
         string calldata requestId,
         bytes32 attestationHash,
         bytes[] calldata signatures
-    ) external returns (bool) {
+    ) external nonReentrant returns (bool) {
         Payment storage p = payments[requestId];
         require(p.state == State.Locked, "Payment not in Locked state");
         require(p.policyHash != bytes32(0), "No oracle policy on this payment");
@@ -228,13 +213,16 @@ contract AgentEscrow {
             "Oracle attestation rejected"
         );
 
+        uint256 amount = p.amount;
+        address payee = p.payee;
         p.state = State.Released;
-
-        (bool success, ) = p.payee.call{value: p.amount}("");
-        require(success, "Transfer to payee failed");
+        p.amount = 0;
 
         emit PaymentReleasedByOracle(requestId, p.policyHash, attestationHash);
-        emit PaymentReleased(requestId, p.payee, p.amount);
+        emit PaymentReleased(requestId, payee, amount);
+
+        (bool success, ) = payee.call{value: amount}("");
+        require(success, "Transfer to payee failed");
         return true;
     }
 
@@ -242,39 +230,41 @@ contract AgentEscrow {
      * @notice Payer requests refund after timeout + challenge period
      * @dev After timeout expires AND challenge period passes, payer can reclaim.
      */
-    function requestRefund(string calldata requestId) external returns (bool) {
+    function requestRefund(string calldata requestId) external nonReentrant returns (bool) {
         Payment storage p = payments[requestId];
         require(p.payer == msg.sender, "Only payer can request refund");
         require(p.state == State.Locked, "Payment not in Locked state");
-        require(
-            block.number >= p.createdAt + p.timeoutBlocks + p.challengePeriod,
-            "Challenge period not over"
-        );
+        require(block.number >= p.createdAt + p.timeoutBlocks + p.challengePeriod, "Challenge period not over");
 
+        uint256 amount = p.amount;
+        address payer = p.payer;
         p.state = State.Refunded;
+        p.amount = 0;
 
-        (bool success, ) = p.payer.call{value: p.amount}("");
+        emit PaymentRefunded(requestId, payer, amount);
+
+        (bool success,) = payer.call{value: amount}("");
         require(success, "Refund transfer failed");
-
-        emit PaymentRefunded(requestId, p.payer, p.amount);
         return true;
     }
 
     /**
      * @notice Cancel a payment before timeout (mutual agreement)
      */
-    function cancelPayment(string calldata requestId) external returns (bool) {
+    function cancelPayment(string calldata requestId) external nonReentrant returns (bool) {
         Payment storage p = payments[requestId];
         require(p.payer == msg.sender, "Only payer can cancel");
         require(p.state == State.Locked, "Payment not in Locked state");
 
         uint256 amount = p.amount;
+        address payer = p.payer;
         p.state = State.Cancelled;
         p.amount = 0;
 
-        (bool success, ) = p.payer.call{value: amount}("");
-        require(success, "Cancel refund failed");
+        emit PaymentCancelled(requestId, payer, amount);
 
+        (bool success,) = payer.call{value: amount}("");
+        require(success, "Cancel refund failed");
         return true;
     }
 

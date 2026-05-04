@@ -2,12 +2,24 @@
 src = "contracts"
 out = "out"
 libs = ["lib"]
-test = "contracts/test"
-fs_permissions = [{ access = "read", path = "./" }]
+test = "test"
+script = "script"
 solc_version = "0.8.20"
 optimizer = true
 optimizer_runs = 200
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "forge-std/=lib/forge-std/src/",
+]
+fs_permissions = [{ access = "read", path = "./switchboard/registry.json" }]
 
-# Note: this is the first Foundry config in the repo. Tests live at
-# contracts/test/*.t.sol and use an inline `Vm` interface so no
-# `lib/forge-std` submodule is required. Run with `forge test`.
+[rpc_endpoints]
+base_sepolia = "${RPC_BASE_SEPOLIA}"
+op_sepolia = "${RPC_OP_SEPOLIA}"
+lux_testnet = "${RPC_LUX_TESTNET}"
+
+[etherscan]
+base_sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 84532, url = "https://api-sepolia.basescan.org/api" }
+op_sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 11155420, url = "https://api-sepolia-optimistic.etherscan.io/api" }
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md
