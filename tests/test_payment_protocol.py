@@ -45,6 +45,19 @@ class MockAccount:
 
 # ─── Mock Contract ─────────────────────────────────────────────────────────
 
+class MockEvents:
+    """Stub for contract.events() — switchboard does not subscribe to events
+    in the unit-test surface (event monitoring is integration-tested elsewhere)."""
+    def PaymentCreated(self):
+        return MagicMock()
+
+    def PaymentReleased(self):
+        return MagicMock()
+
+    def PaymentRefunded(self):
+        return MagicMock()
+
+
 class MockContract:
     def __init__(self):
         self.address = "0x1234567890123456789012345678901234567890"
@@ -53,7 +66,7 @@ class MockContract:
     def functions(self):
         return MockContractFunctions(self)
 
-    def/events(self):
+    def events(self):
         return MockEvents()
 
 

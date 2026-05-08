@@ -75,9 +75,22 @@ class PaymentRequest:
         return cls(**d)
 
     def content_hash(self) -> str:
-        """Calculate content-based hash for integrity check"""
+        """Calculate content-based hash for integrity check.
+
+        Excludes ``created_at`` (instance-time metadata) and ``status``
+        (mutable state) so two PaymentRequest objects representing the
+        same payment intent always hash identically. Any consumer doing
+        replay-protection should use ``request_id`` (UUID) for that —
+        not the content hash.
+        """
+        d = asdict(self)
+        if self.amount_usd is not None:
+            d['amount_usd'] = str(self.amount_usd)
+        d.pop('created_at', None)
+        d.pop('status', None)
+        canonical = json.dumps(d, sort_keys=True, separators=(',', ':'))
         h = hashlib.sha256()
-        h.update(self.to_json().encode('utf-8'))
+        h.update(canonical.encode('utf-8'))
         return "0x" + h.hexdigest()
 
 
@@ -505,12 +518,15 @@ def parse_wei(amount: str) -> int:
         num_str = parts[0]
         currency = "ETH"
     
+    # Keys uppercase so .upper() always matches; "wei" was previously
+    # lowercase which silently fell through to the ETH default and
+    # multiplied wei amounts by 10**18.
     multiplier = {
         "ETH": 10**18,
-        "wei": 1,
+        "WEI": 1,
         "KETH": 10**21,
     }.get(currency.upper(), 10**18)
-    
+
     return int(Decimal(num_str) * Decimal(multiplier))
 
 
