@@ -1,0 +1,92 @@
+[project]
+name = "switchboard-agents"
+version = "0.1.0"
+description = "Programmable payments for AI agents — HTTP/402, on-chain escrow, ZAP binary wire, gas budgets, nonce safety."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Abhishek Krishna", email = "invokerkrishna@gmail.com" },
+]
+keywords = [
+    "ai-agents",
+    "agent-payments",
+    "agent-to-agent",
+    "x402",
+    "escrow",
+    "zap",
+    "blockchain",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Office/Business :: Financial",
+]
+dependencies = [
+    "sortedcontainers>=2.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.8.0",
+    "black>=23.0.0",
+]
+web3 = [
+    "web3>=6.11.0",
+    "eth-account>=0.10.0",
+]
+zap = [
+    "zap-py",
+]
+
+[project.urls]
+Homepage = "https://github.com/kcolbchain/switchboard"
+Documentation = "https://github.com/kcolbchain/switchboard#readme"
+Repository = "https://github.com/kcolbchain/switchboard"
+Source = "https://github.com/kcolbchain/switchboard"
+Issues = "https://github.com/kcolbchain/switchboard/issues"
+Changelog = "https://github.com/kcolbchain/switchboard/releases"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["switchboard"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/switchboard",
+    "/src",
+    "/contracts",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/CONTRIBUTING.md",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP"]
+ignore = ["E501"]

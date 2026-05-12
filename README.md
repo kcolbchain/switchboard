@@ -194,12 +194,23 @@ Open issues with [`good first issue`](https://github.com/kcolbchain/switchboard/
 ## Install
 
 ```bash
-pip install -e .
+pip install switchboard-agents
 # optional, for ZAP binary wire:
+pip install 'switchboard-agents[zap]'
+# or, pinning to the upstream luxfi/zap python bindings directly:
 pip install 'luxfi-zap @ git+https://github.com/luxfi/zap@main#subdirectory=python'
 ```
 
+Or, for local development:
+
+```bash
+git clone https://github.com/kcolbchain/switchboard && cd switchboard
+pip install -e '.[dev]'
+```
+
 Python 3.11+. Tests: `pytest tests/`.
+
+> The PyPI distribution name is `switchboard-agents` (bare `switchboard` on PyPI is an unrelated WSGI library). The Python import name remains `import switchboard`.
 
 ---
 
