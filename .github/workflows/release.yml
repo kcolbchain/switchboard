@@ -1,0 +1,98 @@
+# Publish switchboard-agents to PyPI on tag push.
+#
+# Triggered by any tag of the form v*.*.* (e.g. v0.1.0). Builds wheel + sdist,
+# verifies metadata with twine, and uploads to PyPI.
+#
+# PRIMARY PATH — PyPI Trusted Publisher (no API token):
+#   This workflow assumes a Trusted Publisher is configured on PyPI for the
+#   `switchboard-agents` project. One-time setup (Patty / kcolbchain accounts
+#   owner, on pypi.org):
+#     1. Log in to https://pypi.org with the kcolbchain release account
+#     2. Create the project `switchboard-agents` (or claim it on first publish)
+#     3. Project → Publishing → Add a new pending publisher (GitHub)
+#          Owner:        kcolbchain
+#          Repository:   switchboard
+#          Workflow:     release.yml
+#          Environment:  pypi
+#     4. Save. Subsequent tag pushes will publish without a token.
+#
+# FALLBACK PATH — API token:
+#   If trusted publisher is NOT yet configured when this workflow first runs,
+#   the publish step will fail at the OIDC handshake. Two options:
+#     (a) configure the trusted publisher per above, then re-run the failed job
+#     (b) set `PYPI_API_TOKEN` as a repo secret and uncomment the `password:`
+#         line on the publish step below. Once trusted publisher is in place,
+#         re-comment the password line and rotate / revoke the token.
+#
+# Permissions:
+#   id-token: write   — required for PyPI OIDC trusted publishing
+#   contents: read    — checkout
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Verify metadata
+        run: python -m twine check dist/*
+
+      - name: Upload distributions as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # Bind to a named environment so PyPI's trusted-publisher check can pin
+    # the workflow identity. Must match the environment configured on PyPI.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/switchboard-agents
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # PRIMARY: leave `password` unset — OIDC trusted publisher handles auth.
+          # FALLBACK: uncomment the next line and set the PYPI_API_TOKEN secret
+          # if trusted publisher is not yet configured on PyPI for this project.
+          # password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: dist/
+          skip-existing: true
+          verbose: true
