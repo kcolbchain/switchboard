@@ -18,13 +18,18 @@ keywords = [
     "blockchain",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Office/Business :: Financial",
 ]
 dependencies = [
     "sortedcontainers>=2.4.0",
@@ -46,10 +51,12 @@ zap = [
 ]
 
 [project.urls]
-Homepage = "https://kcolbchain.com"
+Homepage = "https://github.com/kcolbchain/switchboard"
 Documentation = "https://github.com/kcolbchain/switchboard#readme"
 Repository = "https://github.com/kcolbchain/switchboard"
+Source = "https://github.com/kcolbchain/switchboard"
 Issues = "https://github.com/kcolbchain/switchboard/issues"
+Changelog = "https://github.com/kcolbchain/switchboard/releases"
 
 [build-system]
 requires = ["hatchling"]
