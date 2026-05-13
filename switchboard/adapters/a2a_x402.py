@@ -1,247 +1,271 @@
-"""A2A x402 adapter for Switchboard payment envelopes.
+"""A2A x402 JSON adapter for Switchboard payment envelopes.
 
-The google-agentic-commerce/a2a-x402 extension carries payment requests and
-payment submissions as JSON metadata on A2A tasks/messages. Switchboard's core
-payment middleware uses small Python dataclasses (``PaymentOffer`` and
-``PaymentProof``) and can additionally encode them as ZAP binary messages.
-
-This module is intentionally dependency-free: it maps between the stable JSON
-shape documented by the A2A x402 spec and Switchboard's existing dataclasses
-without importing the A2A SDK, pydantic models, or x402 facilitator libraries.
-That keeps the adapter usable in clients that only need to bridge wire formats.
+The adapter is intentionally small and pure: it converts Switchboard's
+``PaymentOffer`` and ``PaymentProof`` data classes to and from the JSON
+metadata shape used by the A2A x402 extension. It does not sign, verify, or
+settle payments.
 """
 
 from __future__ import annotations
 
-import time
-from collections.abc import Mapping
-from typing import Any
+from typing import Any, Mapping
 
-from switchboard.x402_middleware import PaymentOffer, PaymentProof
+from switchboard.x402_middleware import PaymentOffer, PaymentProof, PaymentScheme
 
-PAYMENT_STATUS_KEY = "x402.payment.status"
-PAYMENT_REQUIRED_KEY = "x402.payment.required"
-PAYMENT_PAYLOAD_KEY = "x402.payment.payload"
-PAYMENT_REQUIRED = "payment-required"
-PAYMENT_SUBMITTED = "payment-submitted"
 
-_CHAIN_TO_NETWORK = {
+A2A_X402_EXTENSION_URI = "https://github.com/google-a2a/a2a-x402/v0.1"
+X402_VERSION = 1
+
+_CHAIN_ID_TO_NETWORK = {
     1: "ethereum",
     8453: "base",
     84532: "base-sepolia",
-    11155111: "sepolia",
 }
-_NETWORK_TO_CHAIN = {network: chain_id for chain_id, network in _CHAIN_TO_NETWORK.items()}
-_NETWORK_TO_CHAIN.update({"mainnet": 1, "eth": 1})
+_NETWORK_TO_CHAIN_ID = {network: chain_id for chain_id, network in _CHAIN_ID_TO_NETWORK.items()}
 
 
-def to_a2a_request(offer: PaymentOffer) -> dict[str, Any]:
-    """Convert a Switchboard ``PaymentOffer`` to standalone A2A x402 JSON.
+class A2AX402AdapterError(ValueError):
+    """Raised when an A2A x402 payload cannot be converted safely."""
 
-    The returned object is a complete ``message/send`` JSON-RPC request body
-    whose message metadata contains ``x402.payment.status`` and
-    ``x402.payment.required``. Callers that already build their own A2A message
-    can reuse ``request["params"]["message"]["metadata"]`` directly.
+
+def to_a2a_request(offer: PaymentOffer, *, mime_type: str = "application/json") -> dict[str, Any]:
+    """Convert a Switchboard payment offer to A2A x402 payment-required metadata.
+
+    The returned object is suitable for the ``x402.payment.required`` metadata
+    field described by the A2A x402 v0.1 specification.
     """
 
-    requirements = _offer_to_payment_requirements(offer)
-    return {
-        "jsonrpc": "2.0",
-        "method": "message/send",
-        "params": {
-            "message": {
-                "role": "agent",
-                "parts": [
-                    {
-                        "kind": "text",
-                        "text": offer.description or "Payment required.",
-                    }
-                ],
-                "metadata": {
-                    PAYMENT_STATUS_KEY: PAYMENT_REQUIRED,
-                    PAYMENT_REQUIRED_KEY: {
-                        "x402Version": 1,
-                        "accepts": [requirements],
-                        "error": "Payment required",
-                    },
-                },
-            }
-        },
+    requirement: dict[str, Any] = {
+        "scheme": offer.scheme.value,
+        "network": network_from_chain_id(offer.chain_id),
+        "asset": offer.currency,
+        "payTo": offer.recipient,
+        "maxAmountRequired": str(offer.amount_wei),
     }
+
+    if offer.endpoint:
+        requirement["resource"] = offer.endpoint
+    if offer.description:
+        requirement["description"] = offer.description
+    if mime_type:
+        requirement["mimeType"] = mime_type
+
+    extra: dict[str, Any] = {}
+    if offer.nonce:
+        extra["nonce"] = offer.nonce
+    if offer.expires_at is not None:
+        extra["expiresAt"] = offer.expires_at
+    if extra:
+        requirement["extra"] = extra
+
+    return {
+        "x402Version": X402_VERSION,
+        "accepts": [requirement],
+    }
+
+
+def from_a2a_request(payload: Mapping[str, Any], *, endpoint: str = "") -> PaymentOffer:
+    """Convert A2A x402 payment-required metadata back to ``PaymentOffer``."""
+
+    required = _metadata_value(payload, "x402.payment.required") or payload
+    accepts = required.get("accepts")
+    if not isinstance(accepts, list) or not accepts:
+        raise A2AX402AdapterError("A2A x402 request must contain a non-empty accepts list")
+
+    requirement = accepts[0]
+    if not isinstance(requirement, Mapping):
+        raise A2AX402AdapterError("A2A x402 payment requirement must be an object")
+
+    extra = requirement.get("extra")
+    if extra is None:
+        extra = {}
+    if not isinstance(extra, Mapping):
+        raise A2AX402AdapterError("A2A x402 payment requirement extra must be an object")
+
+    chain_id = chain_id_from_network(_required_str(requirement, "network"))
+
+    return PaymentOffer(
+        amount_wei=_required_int(requirement, "maxAmountRequired"),
+        currency=_required_str(requirement, "asset"),
+        recipient=_required_str(requirement, "payTo"),
+        chain_id=chain_id,
+        scheme=PaymentScheme(str(requirement.get("scheme", "exact"))),
+        description=str(requirement.get("description", "")),
+        endpoint=endpoint or str(requirement.get("resource", "")),
+        nonce=str(extra.get("nonce", "")),
+        expires_at=_optional_int(extra.get("expiresAt")),
+    )
 
 
 def from_a2a_response(payload: Mapping[str, Any]) -> PaymentProof:
-    """Extract a Switchboard ``PaymentProof`` from A2A x402 response JSON.
+    """Convert A2A x402 payment receipt/submission metadata to ``PaymentProof``.
 
-    ``payload`` may be any of the common standalone-flow shapes:
-
-    - a full JSON-RPC ``message/send`` request body,
-    - an A2A ``message`` object,
-    - a metadata dict containing ``x402.payment.payload``, or
-    - the ``PaymentPayload`` object itself.
-
-    The adapter accepts both camelCase aliases from x402/a2a JSON and the
-    snake_case field names used by Python model dumps.
+    The function accepts both final ``x402.payment.receipts`` entries and direct
+    ``x402.payment.payload``/``payload`` objects, because client and merchant
+    implementations expose different envelope depths.
     """
 
-    payment_payload = _extract_payment_payload(payload)
-    inner = _as_mapping(payment_payload.get("payload"), "payload")
-    authorization = _as_mapping(inner.get("authorization", {}), "payload.authorization")
+    proof_payload = _extract_proof_payload(payload)
 
-    network = _string(payment_payload.get("network"), "network")
-    chain_id = _chain_id_from_network(network)
+    tx_hash = _first_str(proof_payload, "transaction", "txHash", "transactionHash")
+    if not tx_hash:
+        raise A2AX402AdapterError("A2A x402 response is missing transaction/txHash")
 
-    payer = _first_string(
-        inner,
-        authorization,
-        keys=("payer", "from", "fromAddress", "from_address"),
-        field_name="payer/from",
-    )
-    amount = _first_int(
-        inner,
-        authorization,
-        keys=("amount", "value", "maxAmountRequired", "max_amount_required"),
-        field_name="amount/value",
-    )
-    tx_hash = _optional_first_string(
-        inner,
-        payment_payload,
-        keys=("txHash", "tx_hash", "transaction", "hash", "signature"),
-    ) or _synthetic_signature_reference(inner)
-    nonce = _optional_first_string(
-        inner,
-        authorization,
-        keys=("nonce", "paymentNonce", "payment_nonce"),
-    ) or ""
+    network = _first_str(proof_payload, "network")
+    chain_id_value = _first_value(proof_payload, "chainId", "chain_id")
+    if chain_id_value is not None:
+        chain_id = _to_int(chain_id_value, "chainId")
+    elif network:
+        chain_id = chain_id_from_network(network)
+    else:
+        raise A2AX402AdapterError("A2A x402 response is missing network/chainId")
 
-    return PaymentProof(
-        tx_hash=tx_hash,
-        chain_id=chain_id,
-        payer=payer,
-        amount_wei=amount,
-        nonce=nonce,
-        timestamp=float(int(time.time())),
-    )
+    amount_value = _first_value(proof_payload, "amount", "amountWei", "maxAmountRequired")
+    amount_wei = _to_int(amount_value, "amount") if amount_value is not None else 0
+
+    timestamp_value = _first_value(proof_payload, "timestamp")
+    proof_kwargs: dict[str, Any] = {
+        "tx_hash": tx_hash,
+        "chain_id": chain_id,
+        "payer": _first_str(proof_payload, "payer", "from") or "",
+        "amount_wei": amount_wei,
+        "nonce": _first_str(proof_payload, "nonce") or "",
+    }
+    if timestamp_value is not None:
+        proof_kwargs["timestamp"] = float(timestamp_value)
+
+    return PaymentProof(**proof_kwargs)
 
 
-def _offer_to_payment_requirements(offer: PaymentOffer) -> dict[str, Any]:
-    max_timeout = 600
-    if offer.expires_at is not None:
-        max_timeout = max(0, int(offer.expires_at - time.time()))
+def to_a2a_submission(proof: PaymentProof, *, network: str | None = None) -> dict[str, Any]:
+    """Convert a Switchboard proof to A2A x402 payment-submitted metadata."""
 
     return {
-        "scheme": offer.scheme.value,
-        "network": _network_from_chain_id(offer.chain_id),
-        "payTo": offer.recipient,
-        "maxAmountRequired": str(offer.amount_wei),
-        "asset": offer.currency,
-        "resource": offer.endpoint or "/",
-        "description": offer.description,
-        "mimeType": "application/json",
-        "maxTimeoutSeconds": max_timeout,
-        "extra": {
-            "switchboard": {
-                "chainId": offer.chain_id,
-                "currency": offer.currency,
-                "nonce": offer.nonce,
-                "scheme": offer.scheme.value,
-            }
+        "x402.payment.status": "payment-submitted",
+        "x402.payment.payload": {
+            "x402Version": X402_VERSION,
+            "network": network or network_from_chain_id(proof.chain_id),
+            "scheme": "exact",
+            "payload": {
+                "txHash": proof.tx_hash,
+                "chainId": proof.chain_id,
+                "payer": proof.payer,
+                "amount": str(proof.amount_wei),
+                "nonce": proof.nonce,
+                "timestamp": int(proof.timestamp),
+            },
         },
     }
 
 
-def _extract_payment_payload(payload: Mapping[str, Any]) -> Mapping[str, Any]:
-    current: Any = payload
+def to_a2a_receipt(proof: PaymentProof, *, success: bool = True) -> dict[str, Any]:
+    """Convert a Switchboard proof to an A2A x402 settlement receipt."""
 
-    if "params" in current:
-        current = _as_mapping(current["params"], "params").get("message", current)
-    if "message" in current:
-        current = current["message"]
-    if "metadata" in current:
-        current = _as_mapping(current["metadata"], "metadata")
-    if PAYMENT_PAYLOAD_KEY in current:
-        current = current[PAYMENT_PAYLOAD_KEY]
-
-    current = _as_mapping(current, PAYMENT_PAYLOAD_KEY)
-    if "payload" not in current:
-        raise ValueError("A2A x402 response is missing payment payload data")
-    return current
+    return {
+        "success": success,
+        "transaction": proof.tx_hash if success else "",
+        "network": network_from_chain_id(proof.chain_id),
+        "payer": proof.payer,
+        "amount": str(proof.amount_wei),
+        "nonce": proof.nonce,
+        "timestamp": int(proof.timestamp),
+    }
 
 
-def _network_from_chain_id(chain_id: int) -> str:
-    return _CHAIN_TO_NETWORK.get(chain_id, f"eip155:{chain_id}")
+def network_from_chain_id(chain_id: int) -> str:
+    """Return the A2A x402 network name for a numeric EVM chain id."""
+
+    return _CHAIN_ID_TO_NETWORK.get(chain_id, f"eip155:{chain_id}")
 
 
-def _chain_id_from_network(network: str) -> int:
-    if network in _NETWORK_TO_CHAIN:
-        return _NETWORK_TO_CHAIN[network]
+def chain_id_from_network(network: str) -> int:
+    """Return a numeric chain id for an A2A x402 network name."""
+
+    if network in _NETWORK_TO_CHAIN_ID:
+        return _NETWORK_TO_CHAIN_ID[network]
     if network.startswith("eip155:"):
-        return int(network.split(":", 1)[1])
-    raise ValueError(f"Unsupported x402 network: {network}")
+        return _to_int(network.split(":", 1)[1], "network")
+    raise A2AX402AdapterError(f"Unknown A2A x402 network: {network}")
 
 
-def _as_mapping(value: Any, field_name: str) -> Mapping[str, Any]:
-    if isinstance(value, Mapping):
-        return value
-    raise ValueError(f"{field_name} must be an object")
+def _extract_proof_payload(payload: Mapping[str, Any]) -> Mapping[str, Any]:
+    metadata = payload.get("metadata")
+    if isinstance(metadata, Mapping):
+        nested = _extract_from_metadata(metadata)
+        if nested is not None:
+            return nested
+
+    nested = _extract_from_metadata(payload)
+    if nested is not None:
+        return nested
+
+    return payload
 
 
-def _string(value: Any, field_name: str) -> str:
-    if isinstance(value, str) and value:
-        return value
-    raise ValueError(f"{field_name} must be a non-empty string")
+def _extract_from_metadata(payload: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    receipts = payload.get("x402.payment.receipts")
+    if isinstance(receipts, list) and receipts:
+        last_receipt = receipts[-1]
+        if isinstance(last_receipt, Mapping):
+            return last_receipt
 
+    for key in ("x402.payment.payload", "paymentPayload", "payment", "proof", "payload"):
+        candidate = payload.get(key)
+        if isinstance(candidate, Mapping):
+            if key == "payload":
+                merged = dict(payload)
+                merged.update(candidate)
+                return merged
+            nested_payload = candidate.get("payload")
+            if isinstance(nested_payload, Mapping):
+                merged = dict(candidate)
+                merged.update(nested_payload)
+                return merged
+            return candidate
 
-def _first_string(
-    primary: Mapping[str, Any],
-    secondary: Mapping[str, Any],
-    *,
-    keys: tuple[str, ...],
-    field_name: str,
-) -> str:
-    value = _optional_first_string(primary, secondary, keys=keys)
-    if value is None:
-        raise ValueError(f"A2A x402 payload is missing {field_name}")
-    return value
-
-
-def _optional_first_string(
-    primary: Mapping[str, Any],
-    secondary: Mapping[str, Any],
-    *,
-    keys: tuple[str, ...],
-) -> str | None:
-    for mapping in (primary, secondary):
-        for key in keys:
-            value = mapping.get(key)
-            if isinstance(value, str) and value:
-                return value
     return None
 
 
-def _first_int(
-    primary: Mapping[str, Any],
-    secondary: Mapping[str, Any],
-    *,
-    keys: tuple[str, ...],
-    field_name: str,
-) -> int:
-    for mapping in (primary, secondary):
-        for key in keys:
-            if key not in mapping:
-                continue
-            value = mapping[key]
-            if isinstance(value, int):
-                return value
-            if isinstance(value, str) and value.isdigit():
-                return int(value)
-    raise ValueError(f"A2A x402 payload is missing numeric {field_name}")
+def _metadata_value(payload: Mapping[str, Any], key: str) -> Any:
+    if key in payload:
+        return payload[key]
+    metadata = payload.get("metadata")
+    if isinstance(metadata, Mapping):
+        return metadata.get(key)
+    return None
 
 
-def _synthetic_signature_reference(inner: Mapping[str, Any]) -> str:
-    """Return a stable proof reference when a facilitator tx is not present yet."""
+def _required_str(payload: Mapping[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if value is None or value == "":
+        raise A2AX402AdapterError(f"A2A x402 payload is missing {key}")
+    return str(value)
 
-    signature = _optional_first_string(inner, {}, keys=("signature",))
-    if not signature:
-        raise ValueError("A2A x402 payload is missing txHash/transaction/signature")
-    return signature
+
+def _required_int(payload: Mapping[str, Any], key: str) -> int:
+    return _to_int(payload.get(key), key)
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    return _to_int(value, "optional integer")
+
+
+def _first_value(payload: Mapping[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in payload and payload[key] is not None:
+            return payload[key]
+    return None
+
+
+def _first_str(payload: Mapping[str, Any], *keys: str) -> str:
+    value = _first_value(payload, *keys)
+    return "" if value is None else str(value)
+
+
+def _to_int(value: Any, field: str) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise A2AX402AdapterError(f"A2A x402 field {field} must be an integer") from exc
