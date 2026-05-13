@@ -26,20 +26,22 @@ References:
     - EIP-7702 for smart account payments
 """
 
-import asyncio
-import hashlib
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from decimal import Decimal
-from typing import Optional, Dict, Any, Callable
 from enum import Enum
+from typing import TYPE_CHECKING, Any
 
 try:
     import aiohttp
     HAS_AIOHTTP = True
 except ImportError:
+    aiohttp = None
     HAS_AIOHTTP = False
+
+if TYPE_CHECKING:
+    import aiohttp as aiohttp_typing
 
 
 class PaymentScheme(Enum):
@@ -60,7 +62,7 @@ class PaymentOffer:
     description: str = ""
     endpoint: str = ""
     nonce: str = ""
-    expires_at: Optional[int] = None  # Unix timestamp
+    expires_at: int | None = None  # Unix timestamp
 
     @classmethod
     def from_header(cls, header_value: str, endpoint: str = "") -> "PaymentOffer":
@@ -129,13 +131,10 @@ class X402Middleware:
         payment_client,
         gas_tracker=None,
         max_payment_wei: int = 10**16,  # 0.01 ETH default cap
-        allowed_recipients: Optional[set] = None,
+        allowed_recipients: set | None = None,
         auto_pay: bool = True,
-        on_payment: Optional[Callable[[PaymentRecord], None]] = None,
+        on_payment: Callable[[PaymentRecord], None] | None = None,
     ):
-        if not HAS_AIOHTTP:
-            raise ImportError("aiohttp required: pip install aiohttp")
-
         self.payment_client = payment_client
         self.gas_tracker = gas_tracker
         self.max_payment_wei = max_payment_wei
@@ -145,9 +144,11 @@ class X402Middleware:
 
         self.payment_history: list[PaymentRecord] = []
         self.total_spent_wei: int = 0
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp_typing.ClientSession | None = None
 
-    async def _get_session(self) -> aiohttp.ClientSession:
+    async def _get_session(self) -> "aiohttp_typing.ClientSession":
+        if not HAS_AIOHTTP:
+            raise ImportError("aiohttp required: pip install aiohttp")
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
@@ -216,9 +217,9 @@ class X402Middleware:
         url: str,
         payload: Any = None,
         method: str = "POST",
-        headers: Optional[Dict[str, str]] = None,
+        headers: dict[str, str] | None = None,
         **kwargs,
-    ) -> aiohttp.ClientResponse:
+    ) -> "aiohttp_typing.ClientResponse":
         """
         Make an HTTP request. If the server returns 402, automatically
         pay and retry with payment proof.
@@ -272,7 +273,7 @@ class X402Middleware:
 
     def get_spend_summary(self) -> dict:
         """Return summary of all payments made."""
-        by_endpoint: Dict[str, int] = {}
+        by_endpoint: dict[str, int] = {}
         for record in self.payment_history:
             by_endpoint[record.endpoint] = (
                 by_endpoint.get(record.endpoint, 0) + record.offer.amount_wei
