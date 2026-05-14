@@ -1,172 +1,164 @@
-from __future__ import annotations
+"""Round-trip tests for the A2A x402 adapter."""
 
 import pytest
 
 from switchboard.adapters.a2a_x402 import (
-    PAYMENT_PAYLOAD_KEY,
-    PAYMENT_REQUIRED_KEY,
-    PAYMENT_STATUS_KEY,
+    A2AX402AdapterError,
+    chain_id_from_network,
+    from_a2a_request,
     from_a2a_response,
+    network_from_chain_id,
+    to_a2a_receipt,
     to_a2a_request,
+    to_a2a_submission,
 )
-from switchboard.x402_middleware import PaymentOffer, PaymentProof, PaymentScheme
-
-RECIPIENT = "0x1111111111111111111111111111111111111111"
-PAYER = "0x2222222222222222222222222222222222222222"
-SIGNATURE = "0x" + "ab" * 32
+from switchboard.x402_middleware import PaymentOffer, PaymentProof
 
 
-def sample_offer() -> PaymentOffer:
-    return PaymentOffer(
-        amount_wei=1_000_000,
-        currency="USDC",
-        recipient=RECIPIENT,
+def test_offer_to_a2a_request_uses_spec_shape():
+    offer = PaymentOffer(
+        amount_wei=48_240_000,
+        currency="0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913",
+        recipient="0xServerWalletAddressHere",
         chain_id=8453,
-        scheme=PaymentScheme.EXACT,
-        description="Generate one image",
-        endpoint="/v1/images",
-        nonce="offer-nonce-1",
-        expires_at=2_000_000_000,
+        description="Generate an image",
+        endpoint="https://api.example.com/generate-image",
+        nonce="nonce-1",
+        expires_at=1_800_000_000,
     )
 
+    payload = to_a2a_request(offer)
 
-def sample_payment_payload() -> dict:
-    return {
-        "x402Version": 1,
-        "scheme": "exact",
-        "network": "base",
-        "payload": {
-            "signature": SIGNATURE,
-            "authorization": {
-                "from": PAYER,
-                "to": RECIPIENT,
-                "value": "1000000",
-                "validAfter": "0",
-                "validBefore": "2000000000",
-                "nonce": "proof-nonce-1",
-            },
-        },
-    }
-
-
-def test_to_a2a_request_places_payment_required_metadata():
-    request = to_a2a_request(sample_offer())
-
-    assert request["jsonrpc"] == "2.0"
-    assert request["method"] == "message/send"
-    metadata = request["params"]["message"]["metadata"]
-    assert metadata[PAYMENT_STATUS_KEY] == "payment-required"
-
-    required = metadata[PAYMENT_REQUIRED_KEY]
-    assert required["x402Version"] == 1
-    assert required["error"] == "Payment required"
-    assert len(required["accepts"]) == 1
-
-
-def test_to_a2a_request_maps_offer_to_payment_requirements():
-    request = to_a2a_request(sample_offer())
-    requirement = request["params"]["message"]["metadata"][PAYMENT_REQUIRED_KEY]["accepts"][0]
-
+    assert payload["x402Version"] == 1
+    requirement = payload["accepts"][0]
     assert requirement["scheme"] == "exact"
     assert requirement["network"] == "base"
-    assert requirement["payTo"] == RECIPIENT
-    assert requirement["maxAmountRequired"] == "1000000"
-    assert requirement["asset"] == "USDC"
-    assert requirement["resource"] == "/v1/images"
-    assert requirement["description"] == "Generate one image"
-    assert requirement["mimeType"] == "application/json"
-    assert requirement["extra"]["switchboard"]["chainId"] == 8453
-    assert requirement["extra"]["switchboard"]["nonce"] == "offer-nonce-1"
+    assert requirement["resource"] == "https://api.example.com/generate-image"
+    assert requirement["asset"] == "0x833589fCD6eDb6E08f4c7C32D4f71b54bda02913"
+    assert requirement["payTo"] == "0xServerWalletAddressHere"
+    assert requirement["maxAmountRequired"] == "48240000"
+    assert requirement["extra"]["nonce"] == "nonce-1"
+    assert requirement["extra"]["expiresAt"] == 1_800_000_000
 
 
-def test_to_a2a_request_uses_eip155_network_for_unknown_chain():
-    offer = sample_offer()
-    offer.chain_id = 999999
+def test_a2a_request_roundtrips_to_payment_offer():
+    original = PaymentOffer(
+        amount_wei=1000,
+        currency="USDC",
+        recipient="0xabc",
+        chain_id=84532,
+        endpoint="/paid/task",
+        nonce="n1",
+    )
 
-    requirement = to_a2a_request(offer)["params"]["message"]["metadata"][PAYMENT_REQUIRED_KEY][
-        "accepts"
-    ][0]
+    parsed = from_a2a_request(to_a2a_request(original))
 
-    assert requirement["network"] == "eip155:999999"
+    assert parsed.amount_wei == original.amount_wei
+    assert parsed.currency == original.currency
+    assert parsed.recipient == original.recipient
+    assert parsed.chain_id == original.chain_id
+    assert parsed.endpoint == original.endpoint
+    assert parsed.nonce == original.nonce
 
 
-def test_from_a2a_response_accepts_full_jsonrpc_message_send_body():
-    response = {
-        "jsonrpc": "2.0",
-        "method": "message/send",
-        "params": {
-            "message": {
-                "taskId": "task-123",
-                "role": "user",
-                "parts": [{"kind": "text", "text": "Here is the payment authorization."}],
-                "metadata": {
-                    PAYMENT_STATUS_KEY: "payment-submitted",
-                    PAYMENT_PAYLOAD_KEY: sample_payment_payload(),
-                },
-            }
-        },
+def test_a2a_receipt_converts_to_payment_proof():
+    payload = {
+        "metadata": {
+            "x402.payment.status": "payment-completed",
+            "x402.payment.receipts": [
+                {
+                    "success": True,
+                    "transaction": "0xabc123",
+                    "network": "base",
+                    "payer": "0xpayer",
+                    "amount": "48240000",
+                    "nonce": "nonce-1",
+                    "timestamp": 1_700_000_000,
+                }
+            ],
+        }
     }
-
-    proof = from_a2a_response(response)
-
-    assert isinstance(proof, PaymentProof)
-    assert proof.tx_hash == SIGNATURE
-    assert proof.chain_id == 8453
-    assert proof.payer == PAYER
-    assert proof.amount_wei == 1_000_000
-    assert proof.nonce == "proof-nonce-1"
-
-
-def test_from_a2a_response_accepts_metadata_dict_directly():
-    proof = from_a2a_response({PAYMENT_PAYLOAD_KEY: sample_payment_payload()})
-
-    assert proof.tx_hash == SIGNATURE
-    assert proof.chain_id == 8453
-    assert proof.payer == PAYER
-
-
-def test_from_a2a_response_prefers_facilitator_transaction_reference_when_present():
-    payload = sample_payment_payload()
-    payload["payload"]["transaction"] = "0xsettled"
 
     proof = from_a2a_response(payload)
 
-    assert proof.tx_hash == "0xsettled"
+    assert proof.tx_hash == "0xabc123"
+    assert proof.chain_id == 8453
+    assert proof.payer == "0xpayer"
+    assert proof.amount_wei == 48_240_000
+    assert proof.nonce == "nonce-1"
+    assert proof.timestamp == 1_700_000_000
 
 
-def test_from_a2a_response_supports_eip155_networks_and_top_level_amounts():
+def test_a2a_payment_payload_aliases_convert_to_payment_proof():
+    payload = {
+        "x402.payment.payload": {
+            "x402Version": 1,
+            "network": "base-sepolia",
+            "scheme": "exact",
+            "payload": {
+                "txHash": "0xdef456",
+                "payer": "0xpayer",
+                "amount": "2500",
+            },
+        }
+    }
+
+    proof = from_a2a_response(payload)
+
+    assert proof.tx_hash == "0xdef456"
+    assert proof.chain_id == 84532
+    assert proof.amount_wei == 2500
+
+
+def test_direct_payment_payload_preserves_outer_network():
     payload = {
         "x402Version": 1,
+        "network": "base",
         "scheme": "exact",
-        "network": "eip155:11155111",
         "payload": {
-            "txHash": "0xabc123",
-            "payer": PAYER,
-            "amount": 42,
-            "nonce": "n1",
+            "txHash": "0xfeed",
+            "payer": "0xpayer",
+            "amount": "12",
         },
     }
 
     proof = from_a2a_response(payload)
 
-    assert proof.chain_id == 11155111
-    assert proof.tx_hash == "0xabc123"
-    assert proof.amount_wei == 42
-    assert proof.nonce == "n1"
+    assert proof.tx_hash == "0xfeed"
+    assert proof.chain_id == 8453
 
 
-@pytest.mark.parametrize(
-    ("payload", "message"),
-    [
-        ({"network": "base"}, "missing payment payload"),
-        ({"network": "unknown", "payload": {"signature": SIGNATURE}}, "Unsupported x402 network"),
-        ({"network": "base", "payload": {"signature": SIGNATURE}}, "missing payer/from"),
-        (
-            {"network": "base", "payload": {"signature": SIGNATURE, "payer": PAYER}},
-            "missing numeric amount/value",
-        ),
-    ],
-)
-def test_from_a2a_response_rejects_malformed_payloads(payload: dict, message: str):
-    with pytest.raises(ValueError, match=message):
-        from_a2a_response(payload)
+def test_switchboard_proof_exports_submission_and_receipt():
+    proof = PaymentProof(
+        tx_hash="0xabc",
+        chain_id=8453,
+        payer="0xpayer",
+        amount_wei=999,
+        nonce="n1",
+        timestamp=1_700_000_000,
+    )
+
+    submission = to_a2a_submission(proof)
+    receipt = to_a2a_receipt(proof)
+
+    assert submission["x402.payment.status"] == "payment-submitted"
+    assert submission["x402.payment.payload"]["network"] == "base"
+    assert submission["x402.payment.payload"]["payload"]["txHash"] == "0xabc"
+    assert receipt["success"] is True
+    assert receipt["transaction"] == "0xabc"
+    assert receipt["network"] == "base"
+
+
+def test_unknown_network_is_rejected():
+    with pytest.raises(A2AX402AdapterError, match="Unknown"):
+        chain_id_from_network("unknown-chain")
+
+
+def test_eip155_network_roundtrip():
+    assert network_from_chain_id(10) == "eip155:10"
+    assert chain_id_from_network("eip155:10") == 10
+
+
+def test_response_without_transaction_is_rejected():
+    with pytest.raises(A2AX402AdapterError, match="transaction"):
+        from_a2a_response({"network": "base", "amount": "1"})
