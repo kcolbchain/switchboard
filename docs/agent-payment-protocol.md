@@ -168,7 +168,29 @@ For non-EVM chains (Solana, Stellar, etc.) the wire format is reusable but the e
 - `content_hash` previously included `created_at`, which made the hash time-sensitive and broke determinism tests. v1.0 excludes `created_at` and `status` from the hash. Agents written against pre-v1.0 hashes MUST recompute on upgrade.
 - `parse_wei("N wei")` previously returned `N × 10^18` due to a case-mismatch in the unit dictionary. v1.0 fixes this to return `N` exactly. Audit any internal call sites that relied on the broken behavior.
 
-## 9. Future work
+## 9. Test vectors
+
+Frozen fixtures live at [`tests/protocol_vectors/payment_request.v1.json`](../tests/protocol_vectors/payment_request.v1.json). They pin the canonicalization rule + `content_hash` for three representative payloads:
+
+| Fixture | Exercises |
+|---|---|
+| `fixture-01-minimal` | Only required fields. No `amount_usd`, no `description`, no `metadata`. |
+| `fixture-02-full-metadata` | Optional `amount_usd` Decimal, free-form `description`, nested `metadata` dict with arrays. |
+| `fixture-03-unicode-boundary` | Emoji, quote, backslash, newline in `description`; mainnet `chain_id=1`; `amount_wei` at 250 ETH magnitude. |
+
+Each fixture records:
+
+- `input` — the dict the implementation receives.
+- `wire_canonical_bytes` — the exact byte sequence `to_json()` MUST produce.
+- `hash_input_canonical_bytes` — the same canonicalization with `created_at` and `status` removed (the bytes that get fed to sha256).
+- `content_hash_sha256` — the resulting `0x`-prefixed sha256 hex digest.
+
+Other-language implementations of this protocol can pin against the same JSON file and assert the same hashes. The Python conformance test lives at [`tests/test_protocol_vectors.py`](../tests/test_protocol_vectors.py) and runs under `pytest`.
+
+Any change that affects the canonicalization (e.g. adding a new optional field, changing how `Decimal` is stringified, switching JSON library to one with different sorting semantics) MUST update the fixtures **and** the spec's protocol version. A breaking-change to canonicalization without a version bump is a silent fork.
+
+## 10. Future work
+
 
 - **CAIP-2 chain identifiers** for non-EVM networks (issue: TBD).
 - **MPP session adapter** for high-frequency micro-payments under a budget cap (tracked in [#17](https://github.com/kcolbchain/switchboard/issues/17)).

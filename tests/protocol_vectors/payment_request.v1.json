@@ -1,0 +1,87 @@
+{
+  "schema_version": "1",
+  "protocol_version": "1.0",
+  "spec_source": "docs/agent-payment-protocol.md §2.1 wire encoding, §2.2 content hash",
+  "canonicalization_rule": "json.dumps(d, sort_keys=True, separators=(',', ':')); content_hash excludes created_at and status; amount_usd Decimal is stringified",
+  "note": "wire_canonical_bytes is the to_json() output used for transmission/signing. hash_input_canonical_bytes is the same encoding with created_at and status removed, hashed via sha256 to produce content_hash_sha256. Any conforming implementation MUST reproduce both byte sequences and the same content_hash from the input dict.",
+  "vectors": [
+    {
+      "name": "fixture-01-minimal",
+      "description": "Only required PaymentRequest fields. No amount_usd, no description, no metadata.",
+      "input": {
+        "version": "1.0",
+        "request_id": "00000000-0000-4000-8000-000000000001",
+        "payer": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
+        "payee": "0xC504Fd656330A823C3ffcBAB048c05cF45F60Bdf",
+        "amount_wei": 1000000,
+        "amount_usd": null,
+        "currency": "USDC",
+        "chain_id": 8453,
+        "timeout_blocks": 100,
+        "challenge_period_blocks": 10,
+        "description": "",
+        "metadata": {},
+        "created_at": 1715600000.0,
+        "status": "pending"
+      },
+      "wire_canonical_bytes": "{\"amount_usd\":null,\"amount_wei\":1000000,\"chain_id\":8453,\"challenge_period_blocks\":10,\"created_at\":1715600000.0,\"currency\":\"USDC\",\"description\":\"\",\"metadata\":{},\"payee\":\"0xC504Fd656330A823C3ffcBAB048c05cF45F60Bdf\",\"payer\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"request_id\":\"00000000-0000-4000-8000-000000000001\",\"status\":\"pending\",\"timeout_blocks\":100,\"version\":\"1.0\"}",
+      "hash_input_canonical_bytes": "{\"amount_usd\":null,\"amount_wei\":1000000,\"chain_id\":8453,\"challenge_period_blocks\":10,\"currency\":\"USDC\",\"description\":\"\",\"metadata\":{},\"payee\":\"0xC504Fd656330A823C3ffcBAB048c05cF45F60Bdf\",\"payer\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"request_id\":\"00000000-0000-4000-8000-000000000001\",\"timeout_blocks\":100,\"version\":\"1.0\"}",
+      "content_hash_sha256": "0x429de3fad95f4aa72f0c3b665bf657072c440eb59ce4f036313f5344286277ef"
+    },
+    {
+      "name": "fixture-02-full-metadata",
+      "description": "Full optional fields: amount_usd Decimal, free-form description, nested metadata dict including arrays.",
+      "input": {
+        "version": "1.0",
+        "request_id": "00000000-0000-4000-8000-000000000002",
+        "payer": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
+        "payee": "0xC504Fd656330A823C3ffcBAB048c05cF45F60Bdf",
+        "amount_wei": 50000000,
+        "amount_usd": "50.00",
+        "currency": "USDC",
+        "chain_id": 8453,
+        "timeout_blocks": 1200,
+        "challenge_period_blocks": 50,
+        "description": "Multi-source research bundle: 3 paid x402 endpoints",
+        "metadata": {
+          "work_uri": "ipfs://bafyreiabcdef",
+          "work_hash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+          "extensions": [
+            "walrus-blob-receipt-v1",
+            "kite-quikt-v0.4"
+          ]
+        },
+        "created_at": 1715600000.0,
+        "status": "pending"
+      },
+      "wire_canonical_bytes": "{\"amount_usd\":\"50.00\",\"amount_wei\":50000000,\"chain_id\":8453,\"challenge_period_blocks\":50,\"created_at\":1715600000.0,\"currency\":\"USDC\",\"description\":\"Multi-source research bundle: 3 paid x402 endpoints\",\"metadata\":{\"extensions\":[\"walrus-blob-receipt-v1\",\"kite-quikt-v0.4\"],\"work_hash\":\"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\"work_uri\":\"ipfs://bafyreiabcdef\"},\"payee\":\"0xC504Fd656330A823C3ffcBAB048c05cF45F60Bdf\",\"payer\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"request_id\":\"00000000-0000-4000-8000-000000000002\",\"status\":\"pending\",\"timeout_blocks\":1200,\"version\":\"1.0\"}",
+      "hash_input_canonical_bytes": "{\"amount_usd\":\"50.00\",\"amount_wei\":50000000,\"chain_id\":8453,\"challenge_period_blocks\":50,\"currency\":\"USDC\",\"description\":\"Multi-source research bundle: 3 paid x402 endpoints\",\"metadata\":{\"extensions\":[\"walrus-blob-receipt-v1\",\"kite-quikt-v0.4\"],\"work_hash\":\"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\",\"work_uri\":\"ipfs://bafyreiabcdef\"},\"payee\":\"0xC504Fd656330A823C3ffcBAB048c05cF45F60Bdf\",\"payer\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"request_id\":\"00000000-0000-4000-8000-000000000002\",\"timeout_blocks\":1200,\"version\":\"1.0\"}",
+      "content_hash_sha256": "0xde171e316e521a336a5fc8a65fe0c063269aed8ea2e75336a3922e00142d1819"
+    },
+    {
+      "name": "fixture-03-unicode-boundary",
+      "description": "Boundary: emoji + quote + backslash + newline in description; chain_id=1 mainnet; amount_wei at 250 ETH magnitude.",
+      "input": {
+        "version": "1.0",
+        "request_id": "00000000-0000-4000-8000-000000000003",
+        "payer": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
+        "payee": "0xC504Fd656330A823C3ffcBAB048c05cF45F60Bdf",
+        "amount_wei": 250000000000000000000,
+        "amount_usd": null,
+        "currency": "ETH",
+        "chain_id": 1,
+        "timeout_blocks": 21600,
+        "challenge_period_blocks": 720,
+        "description": "Édge-case: emoji 🦊, quote \"x\", backslash \\, newline\nhere.",
+        "metadata": {
+          "note": "tests JSON escaping + unicode sorting"
+        },
+        "created_at": 1715600000.0,
+        "status": "pending"
+      },
+      "wire_canonical_bytes": "{\"amount_usd\":null,\"amount_wei\":250000000000000000000,\"chain_id\":1,\"challenge_period_blocks\":720,\"created_at\":1715600000.0,\"currency\":\"ETH\",\"description\":\"\\u00c9dge-case: emoji \\ud83e\\udd8a, quote \\\"x\\\", backslash \\\\, newline\\nhere.\",\"metadata\":{\"note\":\"tests JSON escaping + unicode sorting\"},\"payee\":\"0xC504Fd656330A823C3ffcBAB048c05cF45F60Bdf\",\"payer\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"request_id\":\"00000000-0000-4000-8000-000000000003\",\"status\":\"pending\",\"timeout_blocks\":21600,\"version\":\"1.0\"}",
+      "hash_input_canonical_bytes": "{\"amount_usd\":null,\"amount_wei\":250000000000000000000,\"chain_id\":1,\"challenge_period_blocks\":720,\"currency\":\"ETH\",\"description\":\"\\u00c9dge-case: emoji \\ud83e\\udd8a, quote \\\"x\\\", backslash \\\\, newline\\nhere.\",\"metadata\":{\"note\":\"tests JSON escaping + unicode sorting\"},\"payee\":\"0xC504Fd656330A823C3ffcBAB048c05cF45F60Bdf\",\"payer\":\"0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0\",\"request_id\":\"00000000-0000-4000-8000-000000000003\",\"timeout_blocks\":21600,\"version\":\"1.0\"}",
+      "content_hash_sha256": "0x198870cf93763105eaca9250ce73227e1017e687418737577765cece33f94392"
+    }
+  ]
+}
