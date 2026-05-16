@@ -20,7 +20,7 @@ import time
 import uuid
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Optional, Dict, List, Callable
+from typing import Optional, Dict, List, Callable, TYPE_CHECKING
 from decimal import Decimal
 
 try:
@@ -31,6 +31,26 @@ except ImportError:
     HAS_WEB3 = False
     AsyncWeb3 = None
     Account = None
+
+if TYPE_CHECKING:
+    from switchboard.nonce_manager import NonceManager
+
+
+# ─── ChainClient Adapter for NonceManager ───────────────────────────────────
+
+class _Web3ChainClient:
+    """Adapts a web3.Web3 instance to the NonceManager.ChainClient Protocol.
+
+    Provides the single method required by the ``ChainClient`` Protocol so
+    ``switchboard.nonce_manager.NonceManager`` can drive reorg-safe nonce
+    tracking on top of a vanilla web3.py client without coupling the
+    nonce manager module to web3 itself.
+    """
+    def __init__(self, w3):
+        self._w3 = w3
+
+    def get_current_onchain_nonce(self, address: str) -> int:
+        return self._w3.eth.get_transaction_count(address)
 
 
 # ─── Payment Request Format ─────────────────────────────────────────────────
@@ -250,11 +270,12 @@ class PaymentClient:
         rpc_url: str,
         chain_id: int = 1,
         confirmations: int = 2,
-        gas_buffer_wei: int = 50000
+        gas_buffer_wei: int = 50000,
+        nonce_manager: Optional["NonceManager"] = None,
     ):
         if not HAS_WEB3:
             raise ImportError("web3.py is required: pip install web3 eth-account")
-        
+
         self.account = Account.from_key(private_key)
         self.wallet_address = self.account.address
         self.escrow_address = Web3.to_checksum_address(escrow_address)
@@ -270,23 +291,54 @@ class PaymentClient:
 
         # Track pending payments locally
         self.pending_payments: Dict[str, PaymentRequest] = {}
+
+        # Reorg-safe nonce management. Callers may inject their own manager
+        # (e.g. one shared across multiple PaymentClients, or one already
+        # wired into a reorg detector); otherwise we default-construct one
+        # so every caller transparently benefits from the safer path.
+        if nonce_manager is None:
+            # Lazy import so removing web3 still works (nonce_manager has no
+            # web3 dependency of its own).
+            from switchboard.nonce_manager import NonceManager
+            nonce_manager = NonceManager(_Web3ChainClient(self.w3))
+        self.nonce_manager = nonce_manager
+
+        # Maps tx_hash → nonce so wait_for_confirmations can confirm/release
+        # the correct nonce on the manager once a receipt arrives.
+        self._tx_nonces: Dict[str, int] = {}
+
+        # Deprecated: kept only for backward compatibility with callers that
+        # poked at the old ad-hoc cache directly. Unused by this class.
         self._nonce_cache: Dict[str, int] = {}
 
     # ─── Wallet Operations ─────────────────────────────────────────────────
 
     def get_nonce(self, force_refresh: bool = False) -> int:
-        """Get next nonce for wallet, with caching for concurrent txns"""
-        if force_refresh or self.wallet_address not in self._nonce_cache:
-            self._nonce_cache[self.wallet_address] = self.w3.eth.get_transaction_count(self.wallet_address)
-        else:
-            self._nonce_cache[self.wallet_address] += 1
-        return self._nonce_cache[self.wallet_address]
+        """Get next nonce for wallet.
+
+        Delegates to the reorg-safe ``NonceManager`` so concurrent payment
+        flows, transaction failures, and chain reorganizations stay
+        consistent. ``acquire_nonce`` always returns a fresh pending nonce
+        (the next sequentially-available one for this wallet), which matches
+        what the old ad-hoc cache attempted but could not guarantee.
+
+        The ``force_refresh`` flag is retained for backward compatibility
+        but is now a no-op: the manager always syncs with the chain on
+        each acquire.
+        """
+        return self.nonce_manager.acquire_nonce(self.wallet_address)
 
     def get_gas_price(self) -> int:
         return self.w3.eth.gas_price
 
     def sign_and_send(self, tx: dict) -> str:
-        """Sign transaction with wallet and send"""
+        """Sign transaction with wallet and send.
+
+        The nonce attached to ``tx`` (either user-supplied or freshly
+        acquired from the NonceManager) is stashed under the returned
+        tx hash so ``wait_for_confirmations`` can confirm or release it
+        on the manager once the receipt arrives.
+        """
         nonce = tx.get('nonce', self.get_nonce())
         tx['nonce'] = nonce
         tx['gas'] = int(tx.get('gas', 300000) * 1.2)
@@ -295,14 +347,27 @@ class PaymentClient:
 
         signed = self.account.sign_transaction(tx)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
-        return tx_hash.hex()
+        tx_hash_hex = tx_hash.hex()
+        self._tx_nonces[tx_hash_hex] = nonce
+        return tx_hash_hex
 
     def wait_for_confirmations(self, tx_hash: str, confirmations: int = None) -> dict:
-        """Wait for transaction to be confirmed"""
+        """Wait for transaction to be confirmed.
+
+        On a successful receipt the nonce associated with ``tx_hash`` is
+        marked confirmed on the NonceManager so subsequent acquisitions
+        advance correctly. On a failed receipt the nonce is released so
+        it can be reused (the chain may not have burned it).
+        """
         confirmations = confirmations or self.confirmations
         receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        nonce = self._tx_nonces.pop(tx_hash, None)
         if receipt.status == 0:
+            if nonce is not None:
+                self.nonce_manager.release_nonce(self.wallet_address, nonce)
             raise RuntimeError(f"Transaction {tx_hash} failed")
+        if nonce is not None:
+            self.nonce_manager.confirm_nonce(self.wallet_address, nonce)
         return receipt
 
     # ─── Payment Operations ────────────────────────────────────────────────
