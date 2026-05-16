@@ -327,5 +327,34 @@ def test_payment_metadata():
     assert "solidity" in d["metadata"]["tags"]
 
 
+def test_async_create_payment_forwards_kwargs():
+    """Regression: AsyncPaymentClient.create_payment_async must pass **kwargs through, not as a positional dict."""
+    import asyncio
+    from unittest.mock import MagicMock, patch
+    from src.payment_protocol import AsyncPaymentClient
+
+    with patch("src.payment_protocol.HAS_WEB3", True), \
+         patch("src.payment_protocol.Web3", create=True) as MockWeb3, \
+         patch("src.payment_protocol.Account", create=True) as MockAccount:
+        MockAccount.from_key.return_value = MagicMock(address="0xPAYER")
+        MockWeb3.to_checksum_address.side_effect = lambda a: a
+        client = AsyncPaymentClient(
+            private_key="0x" + "11" * 32,
+            escrow_address="0x" + "22" * 20,
+            rpc_url="http://localhost",
+        )
+        client.create_payment = MagicMock(return_value=MagicMock(request_id="req-1"))
+
+        asyncio.run(client.create_payment_async(
+            "0xPAYEE", 10**15,
+            timeout_blocks=42,
+            description="forwarded",
+        ))
+
+        client.create_payment.assert_called_once_with(
+            "0xPAYEE", 10**15, timeout_blocks=42, description="forwarded"
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

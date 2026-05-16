@@ -14,6 +14,7 @@ Usage:
 """
 
 import asyncio
+import functools
 import hashlib
 import json
 import time
@@ -482,7 +483,10 @@ class AsyncPaymentClient(PaymentClient):
     async def create_payment_async(self, payee: str, amount_wei: int, **kwargs) -> PaymentRequest:
         """Async version of create_payment"""
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.create_payment, payee, amount_wei, kwargs)
+        return await loop.run_in_executor(
+            None,
+            functools.partial(self.create_payment, payee, amount_wei, **kwargs),
+        )
 
     async def confirm_payment_async(self, request_id: str) -> bool:
         """Async version of confirm_payment"""
