@@ -194,4 +194,4 @@ Any change that affects the canonicalization (e.g. adding a new optional field, 
 
 - **CAIP-2 chain identifiers** for non-EVM networks (issue: TBD).
 - **MPP session adapter** for high-frequency micro-payments under a budget cap (tracked in [#17](https://github.com/kcolbchain/switchboard/issues/17)).
-- **A2A discovery** — how does Agent A know Agent B's address and accepted currencies? Out of scope for v1.0; consider `.well-known/agent-payment.json`.
+- **A2A discovery** — `.well-known/agent-payment.json` profile schema. Reference impl: `switchboard/discovery.py`. Spec: [agent-payment-discovery.md](agent-payment-discovery.md).

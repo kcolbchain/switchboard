@@ -43,6 +43,7 @@ Built and maintained by [kcolbchain](https://kcolbchain.com). Aligned with [Lux 
 | `switchboard/nonce_manager.py` | ✅ shipped (PR [#11](https://github.com/kcolbchain/switchboard/pull/11)) | Client-side **nonce manager** with reorg protection. The thing every shipping agent eventually has to write. |
 | `contracts/AgentEscrow.sol` + `src/payment_protocol.py` | ✅ shipped (PR [#8](https://github.com/kcolbchain/switchboard/pull/8)) | **Trustless escrow** with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI. |
 | `web/` | ✅ shipped (PR [#15](https://github.com/kcolbchain/switchboard/pull/15)) | Side-by-side **explorer** for x402 / MPP / AP2 / Circle / on-chain escrow. The clearest public comparison of agent-payment rails today. |
+| `switchboard/discovery.py` | ✅ shipped (PR) | **A2A discovery** — agents publish `/.well-known/agent-payment.json` so payers can fetch their address, accepted currencies, and supported schemes before initiating payment. |
 
 ---
 
