@@ -68,7 +68,6 @@ packages = ["switchboard"]
 [tool.hatch.build.targets.sdist]
 include = [
     "/switchboard",
-    "/src",
     "/contracts",
     "/tests",
     "/README.md",

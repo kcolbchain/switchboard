@@ -142,7 +142,7 @@ class MockFn:
 
 def test_payment_request_creation():
     """Test that PaymentRequest dataclass works correctly"""
-    from src.payment_protocol import PaymentRequest
+    from switchboard.payment_protocol import PaymentRequest
 
     req = PaymentRequest(
         request_id="test-123",
@@ -174,7 +174,7 @@ def test_payment_request_creation():
 
 def test_payment_request_from_dict():
     """Test deserialization from dict"""
-    from src.payment_protocol import PaymentRequest
+    from switchboard.payment_protocol import PaymentRequest
 
     d = {
         "version": "1.0",
@@ -201,7 +201,7 @@ def test_payment_request_from_dict():
 
 def test_format_wei():
     """Test wei formatting"""
-    from src.payment_protocol import format_wei
+    from switchboard.payment_protocol import format_wei
 
     assert "1.000000 ETH" in format_wei(10**18)
     assert "0.500000 ETH" in format_wei(5 * 10**17)
@@ -210,7 +210,7 @@ def test_format_wei():
 
 def test_parse_wei():
     """Test parsing human-readable amounts to wei"""
-    from src.payment_protocol import parse_wei
+    from switchboard.payment_protocol import parse_wei
 
     assert parse_wei("1 ETH") == 10**18
     assert parse_wei("0.5 ETH") == 5 * 10**17
@@ -220,7 +220,7 @@ def test_parse_wei():
 
 def test_payment_state_enum():
     """Test PaymentState enum"""
-    from src.payment_protocol import PaymentState
+    from switchboard.payment_protocol import PaymentState
 
     assert PaymentState.LOCKED.value == "locked"
     assert PaymentState.RELEASED.value == "released"
@@ -229,7 +229,7 @@ def test_payment_state_enum():
 
 def test_content_hash_deterministic():
     """Test that content_hash is deterministic"""
-    from src.payment_protocol import PaymentRequest
+    from switchboard.payment_protocol import PaymentRequest
 
     req1 = PaymentRequest(
         request_id="det-test",
@@ -306,7 +306,7 @@ def test_timeout_and_refund():
 
 def test_payment_metadata():
     """Test that arbitrary metadata can be stored with payment"""
-    from src.payment_protocol import PaymentRequest
+    from switchboard.payment_protocol import PaymentRequest
 
     req = PaymentRequest(
         request_id="meta-test",

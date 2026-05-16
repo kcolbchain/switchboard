@@ -1,7 +1,7 @@
 # Agent-to-Agent Payment Protocol — switchboard
 
 **Status:** Draft v1.0
-**Reference impl:** [`src/payment_protocol.py`](../src/payment_protocol.py)
+**Reference impl:** [`switchboard/payment_protocol.py`](../switchboard/payment_protocol.py)
 **On-chain side:** [`contracts/AgentEscrow.sol`](../contracts/AgentEscrow.sol)
 **Tracks issue:** [#2 — Add agent-to-agent payment protocol](https://github.com/kcolbchain/switchboard/issues/2)
 
@@ -64,7 +64,7 @@ The `payer` calls `createPayment(request_id, payee, timeout_blocks, challenge_pe
 - `requestRefund(request_id)` — returned to `payer`. Callable only by `payer` AND only after `created_at + timeout_blocks + challenge_period`.
 - `cancelPayment(request_id)` — returned to `payer`. Callable only by `payer` AND only while still in `LOCKED`.
 
-Events emitted: `PaymentCreated`, `PaymentReleased`, `PaymentRefunded`. ABI mirrored in [`src/payment_protocol.py`](../src/payment_protocol.py) → `ESCROW_ABI`.
+Events emitted: `PaymentCreated`, `PaymentReleased`, `PaymentRefunded`. ABI mirrored in [`switchboard/payment_protocol.py`](../switchboard/payment_protocol.py) → `ESCROW_ABI`.
 
 ## 4. State machine
 
@@ -106,7 +106,7 @@ Events emitted: `PaymentCreated`, `PaymentReleased`, `PaymentRefunded`. ABI mirr
 | EXPIRED    | REFUNDED                                          | `requestRefund()` after challenge period              |
 | RELEASED, REFUNDED, CANCELLED | (terminal)                            | —                                                     |
 
-`PaymentState` enum mirrors this in `src/payment_protocol.py`.
+`PaymentState` enum mirrors this in `switchboard/payment_protocol.py`.
 
 ## 5. Lifecycle (happy path)
 

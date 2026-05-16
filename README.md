@@ -41,7 +41,7 @@ Built and maintained by [kcolbchain](https://kcolbchain.com). Aligned with [Lux 
 | `switchboard/zap_transport.py` | 🔄 in PR [#21](https://github.com/kcolbchain/switchboard/pull/21) | **Binary wire** for `PaymentOffer`/`PaymentProof` over [luxfi/zap](https://github.com/luxfi/zap). Zero-allocation, ~10× smaller than JSON. First production consumer of `zap_py`. |
 | `switchboard/gas_tracker.py` + `gas_budget.py` | ✅ shipped (PR [#14](https://github.com/kcolbchain/switchboard/pull/14)) | **Hard gas budgets** (per-hour, per-day) so an agent can't get rugged by its own runaway loop. Closes the #1 footgun of autonomous on-chain agents. |
 | `switchboard/nonce_manager.py` | ✅ shipped (PR [#11](https://github.com/kcolbchain/switchboard/pull/11)) | Client-side **nonce manager** with reorg protection. The thing every shipping agent eventually has to write. |
-| `contracts/AgentEscrow.sol` + `src/payment_protocol.py` | ✅ shipped (PR [#8](https://github.com/kcolbchain/switchboard/pull/8)) | **Trustless escrow** with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI. |
+| `contracts/AgentEscrow.sol` + `switchboard/payment_protocol.py` | ✅ shipped (PR [#8](https://github.com/kcolbchain/switchboard/pull/8)) | **Trustless escrow** with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI. |
 | `web/` | ✅ shipped (PR [#15](https://github.com/kcolbchain/switchboard/pull/15)) | Side-by-side **explorer** for x402 / MPP / AP2 / Circle / on-chain escrow. The clearest public comparison of agent-payment rails today. |
 
 ---
@@ -88,7 +88,7 @@ budget.record(actual_cost_wei)
 ### 3. Settle work over an escrow
 
 ```python
-from payment_protocol import PaymentClient
+from switchboard.payment_protocol import PaymentClient
 
 client = PaymentClient(private_key, escrow_address, rpc_url)
 
