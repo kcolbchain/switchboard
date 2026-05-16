@@ -82,6 +82,13 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+filterwarnings = [
+    # GasTracker is deprecated in favor of GasBudgetTracker; allow its own
+    # legacy tests to keep instantiating it without polluting test output.
+    # Matched by message because `stacklevel=2` attributes the warning to the
+    # caller's module, not to switchboard.gas_tracker itself.
+    "ignore:switchboard.gas_tracker.GasTracker is deprecated:DeprecationWarning",
+]
 
 [tool.ruff]
 target-version = "py311"

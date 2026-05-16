@@ -26,6 +26,15 @@ Typical usage::
 
     # ... send tx ...
     tracker.record(wallet, gas_used=receipt.gasUsed)
+
+For single-wallet contexts (e.g. middleware that holds one signer), bind the
+tracker to a wallet to get a ``can_send_transaction`` / ``record_gas_usage``
+shim that matches the legacy :class:`switchboard.gas_tracker.GasTracker` API::
+
+    bound = tracker.bind_wallet(wallet)
+    if bound.can_send_transaction(estimated_gas):
+        ...
+        bound.record_gas_usage(receipt.gasUsed)
 """
 
 from __future__ import annotations
@@ -192,6 +201,18 @@ class GasBudgetTracker:
         with self._lock:
             self._ledgers[wallet] = _WalletLedger()
 
+    # ---- compatibility shim --------------------------------------------
+
+    def bind_wallet(self, wallet: str) -> "WalletBoundBudget":
+        """Return a wallet-scoped view exposing the legacy single-wallet API.
+
+        Useful for callers (e.g. :class:`switchboard.x402_middleware.X402Middleware`)
+        that hold one signer and want ``can_send_transaction`` /
+        ``record_gas_usage`` semantics without having to thread a wallet
+        argument through every call.
+        """
+        return WalletBoundBudget(self, wallet)
+
     # ---- internals -----------------------------------------------------
 
     def _evict_locked(self, ledger: _WalletLedger) -> None:
@@ -231,3 +252,44 @@ class GasBudgetTracker:
             spent_last_day=ledger.sum_day,
             paused=ledger.paused,
         )
+
+
+class WalletBoundBudget:
+    """Single-wallet adapter exposing the legacy ``GasTracker`` API.
+
+    Wraps a :class:`GasBudgetTracker` together with a fixed wallet address so
+    that callers built against the older ``can_send_transaction`` /
+    ``record_gas_usage`` signatures (notably
+    :class:`switchboard.x402_middleware.X402Middleware`) can drive the new
+    multi-wallet tracker without modification.
+
+    Obtain instances via :meth:`GasBudgetTracker.bind_wallet`.
+    """
+
+    __slots__ = ("_t", "_w")
+
+    def __init__(self, tracker: GasBudgetTracker, wallet: str):
+        self._t = tracker
+        self._w = wallet
+
+    @property
+    def wallet(self) -> str:
+        """The wallet address this view is bound to."""
+        return self._w
+
+    @property
+    def tracker(self) -> GasBudgetTracker:
+        """The underlying multi-wallet tracker."""
+        return self._t
+
+    def can_send_transaction(self, estimated_gas: int) -> bool:
+        """Legacy alias for :meth:`GasBudgetTracker.can_spend` on the bound wallet."""
+        return self._t.can_spend(self._w, estimated_gas)
+
+    def record_gas_usage(self, gas_used: int) -> None:
+        """Legacy alias for :meth:`GasBudgetTracker.record` on the bound wallet."""
+        self._t.record(self._w, gas_used)
+
+    def is_paused(self) -> bool:
+        """Whether the bound wallet is currently paused."""
+        return self._t.status(self._w).paused

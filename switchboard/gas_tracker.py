@@ -1,7 +1,15 @@
 import time
 import threading
+import warnings
 from typing import Optional, Callable
 import datetime
+
+_DEPRECATION_MESSAGE = (
+    "switchboard.gas_tracker.GasTracker is deprecated; use "
+    "switchboard.gas_budget.GasBudgetTracker (with bind_wallet for the "
+    "single-wallet API). gas_tracker.py will be removed in v0.3."
+)
+
 
 class GasBudgetExhaustedError(Exception):
     """
@@ -35,13 +43,18 @@ class GasTracker:
     def __init__(self, hourly_limit: int = 0, daily_limit: int = 0, time_source: Callable[[], float] = time.time):
         """
         Initializes the GasTracker.
-        
+
+        .. deprecated::
+            Prefer :class:`switchboard.gas_budget.GasBudgetTracker`.
+            ``gas_tracker.py`` will be removed in v0.3.
+
         Args:
             hourly_limit (int): Maximum gas allowed per hour. 0 means no hourly limit.
             daily_limit (int): Maximum gas allowed per day. 0 means no daily limit.
             time_source (Callable[[], float]): A function that returns the current time
                                               as a float timestamp. Defaults to `time.time`.
         """
+        warnings.warn(_DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
         if not hasattr(self, '_initialized'):
             self._hourly_limit = hourly_limit
             self._daily_limit = daily_limit

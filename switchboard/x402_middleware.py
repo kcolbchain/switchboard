@@ -8,16 +8,22 @@ payment proof header.
 
 Supports:
 - Automatic 402 detection and payment handling
-- Budget-aware payment gating (integrates with GasTracker)
+- Budget-aware payment gating (integrates with ``GasBudgetTracker``;
+  the legacy ``GasTracker`` is still accepted but deprecated)
 - Payment proof via X-Payment-Proof header
 - USDC and ETH settlement
 - Configurable per-endpoint pricing caps
 
 Usage:
+    from switchboard.gas_budget import GasBudgetTracker, GasLimits
+
+    budget = GasBudgetTracker(
+        default_limits=GasLimits(per_hour=2_000_000, per_day=20_000_000),
+    )
     middleware = X402Middleware(
         payment_client=client,
-        gas_tracker=tracker,
-        max_payment_usd=Decimal("1.00"),
+        gas_tracker=budget.bind_wallet(client.wallet_address),
+        max_payment_wei=10**16,
     )
     response = await middleware.request("https://agent.example.com/inference", payload)
 
@@ -122,19 +128,47 @@ class X402Middleware:
     HTTP middleware that intercepts 402 responses and pays automatically.
 
     Integrates with:
-    - PaymentClient for on-chain settlement
-    - GasTracker for budget enforcement
+    - ``PaymentClient`` for on-chain settlement
+    - A gas budget for spend enforcement. Recommended:
+      :class:`switchboard.gas_budget.GasBudgetTracker` bound to the payer wallet
+      via ``budget.bind_wallet(addr)`` — yielding a
+      :class:`switchboard.gas_budget.WalletBoundBudget`. The legacy
+      :class:`switchboard.gas_tracker.GasTracker` singleton is still accepted
+      (anything exposing ``can_send_transaction(int) -> bool`` and
+      ``record_gas_usage(int) -> None`` works) but is deprecated and will be
+      removed in v0.3.
     """
 
     def __init__(
         self,
         payment_client,
-        gas_tracker=None,
+        gas_tracker: "Any | None" = None,
         max_payment_wei: int = 10**16,  # 0.01 ETH default cap
         allowed_recipients: set | None = None,
         auto_pay: bool = True,
         on_payment: Callable[[PaymentRecord], None] | None = None,
     ):
+        """Initialize the middleware.
+
+        Parameters
+        ----------
+        payment_client:
+            The on-chain client used to sign and submit payments.
+        gas_tracker:
+            Optional budget enforcer. Accepts either a
+            :class:`switchboard.gas_budget.WalletBoundBudget` (recommended)
+            or the legacy :class:`switchboard.gas_tracker.GasTracker`. Any
+            object exposing ``can_send_transaction(int) -> bool`` and
+            ``record_gas_usage(int) -> None`` will work.
+        max_payment_wei:
+            Hard cap on a single offer's ``amount_wei``.
+        allowed_recipients:
+            Optional allowlist of recipient addresses.
+        auto_pay:
+            If ``False``, 402 responses are returned untouched.
+        on_payment:
+            Callback fired after each successful payment.
+        """
         self.payment_client = payment_client
         self.gas_tracker = gas_tracker
         self.max_payment_wei = max_payment_wei
