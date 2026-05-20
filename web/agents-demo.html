@@ -14,15 +14,28 @@
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--fg);
+  html, body { margin: 0; background:
+    radial-gradient(1200px 800px at 20% 0%, #11161d 0%, #0b0d10 60%),
+    radial-gradient(900px 600px at 100% 100%, #131922 0%, #0b0d10 60%);
+    background-attachment: fixed;
+    color: var(--fg);
     font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     overflow: hidden; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
-  header { padding: 12px 24px; border-bottom: 1px solid var(--border);
+  /* Translucent glass on every floating chrome surface */
+  .glass { background: rgba(15, 18, 22, 0.55);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.06); }
+
+  header { padding: 12px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     display: flex; justify-content: space-between; align-items: center; gap: 12px;
-    flex-wrap: wrap; }
+    flex-wrap: wrap;
+    background: rgba(13, 16, 21, 0.55);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%); }
   header h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--muted);
     letter-spacing: 0.02em; display: flex; align-items: center; gap: 10px; }
   header .crumbs { color: var(--muted-2); font-size: 11px; }
@@ -52,21 +65,37 @@
   .sb-char.scrambling::before { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
   .sb-tag { color: var(--muted); font-weight: 400; font-size: 12px; }
 
-  .scene-bar { display: flex; gap: 4px; padding: 8px 24px; border-bottom: 1px solid var(--border);
-    background: var(--panel-2); overflow-x: auto; }
-  .scene-bar button { background: transparent; color: var(--muted); border: 1px solid transparent;
-    padding: 5px 11px; border-radius: 6px; cursor: pointer;
-    font: inherit; font-size: 12px; white-space: nowrap; }
-  .scene-bar button:hover { color: var(--fg); }
-  .scene-bar button.active { background: var(--panel); color: var(--fg); border-color: var(--border); }
-  .scene-bar button .num { color: var(--muted-2); font-family: var(--mono); margin-right: 6px; }
+  .scene-bar { display: flex; gap: 6px; padding: 8px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(13, 16, 21, 0.55);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    overflow-x: auto; align-items: center; }
+  .scene-bar::-webkit-scrollbar { height: 0; }
+  .scene-bar button { background: rgba(255, 255, 255, 0.02); color: var(--muted);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 5px 11px; border-radius: 999px; cursor: pointer;
+    font: inherit; font-size: 12px; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: color 0.15s, background 0.15s, border-color 0.15s; }
+  .scene-bar button:hover { color: var(--fg); border-color: rgba(255, 255, 255, 0.12); }
+  .scene-bar button.active { background: rgba(96, 165, 250, 0.12);
+    color: var(--fg); border-color: rgba(96, 165, 250, 0.5); }
+  .scene-bar button .num { color: var(--muted-2); font-family: var(--mono); font-size: 11px; }
+  .scene-bar .sep { width: 1px; height: 16px; background: rgba(255, 255, 255, 0.08); margin: 0 2px; }
 
-  .layout { display: grid; grid-template-columns: 240px 1fr 300px;
-    height: calc(100vh - 95px); }
+  .layout { display: grid; grid-template-columns: 250px 1fr 300px;
+    height: calc(100vh - 95px); gap: 0; }
 
-  aside { background: var(--panel-2); padding: 14px 16px; overflow-y: auto;
-    border-right: 1px solid var(--border); }
-  aside.right { border-right: none; border-left: 1px solid var(--border); }
+  aside { padding: 16px 16px 18px 16px; overflow-y: auto;
+    background: rgba(15, 18, 22, 0.55);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border-right: 1px solid rgba(255, 255, 255, 0.04); }
+  aside.right { border-right: none; border-left: 1px solid rgba(255, 255, 255, 0.04); }
+  aside::-webkit-scrollbar { width: 6px; }
+  aside::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 3px; }
+  aside::-webkit-scrollbar-track { background: transparent; }
   aside h2 { font-size: 10px; color: var(--muted); text-transform: uppercase;
     letter-spacing: 0.1em; margin: 0 0 8px 0; font-weight: 500; }
   aside h2:not(:first-child) { margin-top: 16px; }
@@ -109,22 +138,33 @@
   .log .info { color: var(--info); }
   .log .seg { color: var(--muted); }
 
-  .stage { position: relative; overflow: hidden; background: var(--bg); }
-  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  .stage { position: relative; overflow: hidden; background: transparent; }
+  .stage::after {                                /* inner boundary frame */
+    content: ""; position: absolute; inset: 12px; pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px;
+    box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.35); }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair;
+    position: relative; z-index: 1; }
 
-  .stats { position: absolute; top: 10px; left: 12px;
-    background: rgba(13, 16, 21, 0.85); border: 1px solid var(--border);
-    border-radius: 6px; padding: 6px 10px; font-family: var(--mono); font-size: 10px;
-    display: flex; gap: 14px; }
+  .stats { position: absolute; top: 18px; left: 20px; z-index: 2;
+    background: rgba(13, 16, 21, 0.6);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 999px; padding: 6px 14px; font-family: var(--mono); font-size: 10px;
+    display: flex; gap: 14px; align-items: center; }
   .stats .label { color: var(--muted-2); margin-right: 4px; }
   .stats .val { color: var(--fg); }
   .stats .val.ok { color: var(--ok); }
   .stats .val.warn { color: var(--warn); }
 
-  .caption { position: absolute; bottom: 10px; left: 12px; right: 12px;
-    background: rgba(13, 16, 21, 0.86); border: 1px solid var(--border);
-    border-radius: 6px; padding: 10px 14px; font-size: 11px; color: var(--muted);
-    line-height: 1.55; max-width: 720px; margin: 0 auto; }
+  .caption { position: absolute; bottom: 18px; left: 20px; right: 20px; z-index: 2;
+    background: rgba(13, 16, 21, 0.6);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px; padding: 11px 16px; font-size: 11px; color: var(--muted);
+    line-height: 1.55; max-width: 760px; margin: 0 auto; }
   .caption .step { color: var(--info); font-family: var(--mono); font-size: 10px;
     margin-right: 8px; }
   .caption code { font-family: var(--mono); color: var(--fg);
@@ -296,6 +336,14 @@
     iris:   makeAgent({ id: "iris",    name: "Iris",    role: "buyer",             wallet: "agentic",  hue: 180, balance: 6,    dailyCap: 12 }),
     juno:   makeAgent({ id: "juno",    name: "Juno",    role: "buyer",             wallet: "agentic",  hue:  90, balance: 5,    dailyCap: 10 }),
     escrow: makeAgent({ id: "escrow",  name: "Escrow",  role: "AgentEscrow.sol",   wallet: "contract", hue: 220, balance: 0, dailyCap: 999, radius: 30, shape: "hex" }),
+
+    // ── service agents for real-world use-case scenes ──
+    driver:  makeAgent({ id: "driver",  name: "Sai",      role: "taxi driver",         wallet: "provider", hue: 180, balance: 0,  dailyCap: 200, radius: 32 }),
+    dispatch:makeAgent({ id: "dispatch",name: "Dispatch", role: "ride-share matcher",  wallet: "contract", hue: 215, balance: 0,  dailyCap: 999, radius: 28, shape: "hex" }),
+    cafe:    makeAgent({ id: "cafe",    name: "Aroma",    role: "café POS",            wallet: "provider", hue:  28, balance: 0,  dailyCap: 200, radius: 34 }),
+    rest:    makeAgent({ id: "rest",    name: "Spice Hub",role: "restaurant",          wallet: "provider", hue:   8, balance: 0,  dailyCap: 200, radius: 34 }),
+    rider:   makeAgent({ id: "rider",   name: "Kiran",    role: "delivery rider",      wallet: "provider", hue: 115, balance: 0,  dailyCap: 200, radius: 30 }),
+    merchant:makeAgent({ id: "merchant",name: "Tridib's", role: "merchant (bill)",     wallet: "provider", hue:  60, balance: 0,  dailyCap: 999, radius: 36 }),
   };
   const ALL = Object.values(A);
 
@@ -386,12 +434,20 @@
   }
 
   function drawGrid() {
+    // Dot grid with a soft center vignette so the stage feels framed.
     ctx.save();
-    ctx.strokeStyle = "rgba(35, 39, 47, 0.4)";
-    ctx.lineWidth = 1;
-    const step = 40;
-    for (let x = 0; x < W; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = 0; y < H; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    const step = 36;
+    const cx = W / 2, cy = H / 2;
+    const maxD = Math.hypot(cx, cy);
+    for (let x = step; x < W; x += step) {
+      for (let y = step; y < H; y += step) {
+        const d = Math.hypot(x - cx, y - cy) / maxD;   // 0 center → 1 corner
+        const alpha = 0.18 * (1 - d * 0.65);
+        if (alpha <= 0.01) continue;
+        ctx.fillStyle = `rgba(180, 196, 222, ${alpha})`;
+        ctx.beginPath(); ctx.arc(x, y, 0.9, 0, Math.PI * 2); ctx.fill();
+      }
+    }
     ctx.restore();
   }
 
@@ -1393,8 +1449,430 @@
     },
   };
 
+  // — helpers shared by the use-case scenes ————————————————————————————————
+  function drawPin(ctx, x, y, label, color = "#60a5fa") {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y - 4, 8, Math.PI, 0);
+    ctx.lineTo(x, y + 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#0b0d10";
+    ctx.beginPath(); ctx.arc(x, y - 4, 3, 0, Math.PI * 2); ctx.fill();
+    if (label) {
+      ctx.fillStyle = "rgba(231, 233, 238, 0.85)";
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(label, x, y + 24);
+    }
+    ctx.restore();
+  }
+
+  function drawDashedCurve(ctx, x1, y1, x2, y2, lift = 70, color = "rgba(96,165,250,0.35)") {
+    ctx.save();
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    const cx = (x1 + x2) / 2;
+    const cy = Math.min(y1, y2) - lift;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(cx, cy, x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  function bezierPoint(t, p0, p1, p2) {
+    const u = 1 - t;
+    return { x: u*u*p0.x + 2*u*t*p1.x + t*t*p2.x,
+             y: u*u*p0.y + 2*u*t*p1.y + t*t*p2.y };
+  }
+
+  // — Scene 10: Taxi handover ——————————————————————————————————————————————
+  // Centerpiece scene. Walks the full story: Patty's agent books a ride,
+  // matches with a driver, validates the offer (PQ sig + price + ETA),
+  // funds lock in dispatch escrow, GPS handshake on arrival, ride
+  // animates A→B, both agents confirm at the dropoff, escrow releases.
+  SCENES.taxi = {
+    id: "taxi",
+    name: "Taxi handover",
+    short: "10",
+    desc: "<strong>Patty</strong>'s agent books a ride. It RFQs <strong>Dispatch</strong>, picks <strong>Sai</strong> on price+ETA, validates the signed quote, locks funds in escrow, watches the GPS handshake at pickup, rides A→B, and releases on dropoff. Zero taps once policy is set.",
+    enter() {
+      setVisible(["bob", "driver", "dispatch", "escrow"]);
+      A.bob.balance = 25; A.bob.spent = 0; A.bob.dailyCap = 50;
+      A.driver.balance = 0; A.escrow.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 50;
+      this.driveT = 0;
+      A.driver._visible = false; A.driver.pos = { ...this.pickup };
+      setCaption("step 1 / 8", "<strong>Patty</strong> at pin <strong>A</strong>. Her agent broadcasts a ride request to <strong>Dispatch</strong>.");
+      log(`<span class="info">taxi</span> scene loaded · pickup A → dropoff B`);
+    },
+    layout() {
+      this.pickup  = { x: W * 0.18, y: H * 0.72 };
+      this.dropoff = { x: W * 0.82, y: H * 0.30 };
+      A.bob.pos = { ...this.pickup };
+      A.dispatch.pos = { x: W * 0.5,  y: H * 0.18 };
+      A.escrow.pos   = { x: W * 0.5,  y: H * 0.82 };
+      A.driver.pos   = { ...this.pickup };
+    },
+    drawUnderlay(ctx, W, H) {
+      // map pins + curved route
+      drawPin(ctx, this.pickup.x, this.pickup.y, "A · pickup", "#7dd3fc");
+      drawPin(ctx, this.dropoff.x, this.dropoff.y, "B · dropoff", "#34d399");
+      drawDashedCurve(ctx, this.pickup.x, this.pickup.y, this.dropoff.x, this.dropoff.y, 110,
+                      "rgba(96,165,250,0.3)");
+    },
+    drawOverlay(ctx, W, H) {
+      // small "validate" badge on Patty while validating
+      if (this.phase === 3) {
+        ctx.fillStyle = "rgba(96, 165, 250, 0.9)";
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        const a = A.bob;
+        ctx.fillText("validating: sig · price · ETA", a.pos.x, a.pos.y - a.radius - 16);
+      }
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          emit("bob", "dispatch", { kind: "request", label: "ride A→B", speed: 0.02 });
+          log(`Patty → Dispatch: <code>requestRide(A, B)</code>`);
+          this.phase = 1; this.cool = 60;
+          setCaption("step 2 / 8", "<strong>Dispatch</strong> fans the request out to nearby drivers and collects bids.");
+          break;
+        case 1:
+          A.driver._visible = true;
+          A.driver.pos = { x: W * 0.85, y: H * 0.75 };
+          emit("driver", "dispatch", { kind: "bid", label: "$5.20 · 3 min", speed: 0.02 });
+          log(`Sai bids: <span class="warn">5.20 USDC · ETA 3 min</span> · PQ-signed quote`);
+          this.phase = 2; this.cool = 80;
+          setCaption("step 3 / 8", "Sai's agent returns a signed quote. Other drivers bid too; Dispatch forwards the winning offer.");
+          break;
+        case 2:
+          emit("dispatch", "bob", { kind: "offer", label: "Sai · 5.20", speed: 0.02 });
+          this.phase = 3; this.cool = 100;
+          setCaption("step 4 / 8", "Patty's agent validates the offer: <code>verify(sig, pk)</code>, price under cap, ETA under tolerance.");
+          break;
+        case 3:
+          emit("bob", "escrow", { kind: "offer", label: "lock 5.20", amount: 5.2, speed: 0.018,
+            onArrive: () => { A.bob.balance -= 5.2; A.escrow.balance += 5.2; } });
+          log(`Patty → Escrow: lock 5.20 USDC`);
+          this.phase = 4; this.cool = 90;
+          setCaption("step 5 / 8", "Funds lock in <span class=\"pill\">Escrow</span>. Sai's agent watches the lock event before rolling.");
+          break;
+        case 4: {
+          // animate Sai's car from off-screen position to pickup
+          this.driveT += 0.018;
+          const start = { x: W * 0.85, y: H * 0.75 };
+          A.driver.pos = {
+            x: lerp(start.x, this.pickup.x + 38, Math.min(1, this.driveT)),
+            y: lerp(start.y, this.pickup.y, Math.min(1, this.driveT)),
+          };
+          if (this.driveT >= 1) {
+            log(`Sai arrives at <strong>A</strong>. GPS handshake: <span class="ok">match</span>`);
+            emit("driver", "bob", { kind: "data", label: "GPS sig", speed: 0.03 });
+            emit("bob", "driver", { kind: "data", label: "GPS ack",  speed: 0.03 });
+            this.phase = 5; this.cool = 60; this.driveT = 0;
+            setCaption("step 6 / 8", "Sai pulls up. Both agents exchange signed GPS positions. Match → ride begins.");
+          }
+          break;
+        }
+        case 5: {
+          // animate the actual ride along the curve, both Patty and Sai together
+          this.driveT += 0.005;
+          const p0 = this.pickup;
+          const p2 = this.dropoff;
+          const p1 = { x: (p0.x + p2.x) / 2, y: Math.min(p0.y, p2.y) - 110 };
+          const pt = bezierPoint(Math.min(1, this.driveT), p0, p1, p2);
+          A.driver.pos = pt;
+          A.bob.pos = { x: pt.x - 28, y: pt.y + 2 };
+          if (this.driveT >= 1) {
+            log(`Arrived at <strong>B</strong>. Both agents confirm dropoff.`);
+            this.phase = 6; this.cool = 50; this.driveT = 0;
+            setCaption("step 7 / 8", "Arrival confirmed by both agents. Patty's app calls <code>confirmPayment()</code>.");
+          }
+          break;
+        }
+        case 6:
+          emit("bob", "escrow", { kind: "request", label: "confirm", speed: 0.022,
+            onArrive: () => {
+              emit("escrow", "driver", { kind: "proof", label: "released 5.20", speed: 0.022,
+                onArrive: () => {
+                  A.escrow.balance -= 5.2; A.driver.balance += 5.2;
+                  jobs++; jobsEl.textContent = jobs;
+                }});
+            }});
+          log(`<span class="ok">Escrow released 5.20 USDC to Sai</span> · handover complete`);
+          this.phase = 7; this.cool = 220;
+          setCaption("step 8 / 8", "Escrow releases 5.20 USDC to Sai. Receipt PQ-signed; Patty's done. No taps after step 1.");
+          break;
+        case 7:
+          // reset for loop
+          A.bob.balance = 25; A.bob.spent = 0;
+          A.driver.balance = 0; A.escrow.balance = 0;
+          this.driveT = 0; this.phase = 0;
+          this.layout();
+          A.driver._visible = false;
+          this.cool = 80;
+          break;
+      }
+    },
+  };
+
+  // — Scene 11: Café walk-up ——————————————————————————————————————————————
+  SCENES.cafe = {
+    id: "cafe",
+    name: "Café walk-up",
+    short: "11",
+    desc: "Smallest possible flow. <strong>Patty</strong> walks past <strong>Aroma</strong>'s shop, her agent does a proximity handshake, picks a latte off the signed menu, pays 4.50 USDC, takes the cup.",
+    enter() {
+      setVisible(["bob", "cafe"]);
+      A.bob.balance = 20; A.bob.spent = 0;
+      A.cafe.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 50;
+      setCaption("step 1 / 5", "<strong>Patty</strong> approaches <strong>Aroma</strong>. Bluetooth-range handshake announces both agents to each other.");
+      log(`<span class="info">cafe</span> scene loaded`);
+    },
+    layout() {
+      A.bob.pos  = { x: W * 0.25, y: H * 0.55 };
+      A.cafe.pos = { x: W * 0.72, y: H * 0.5  };
+    },
+    drawUnderlay(ctx, W, H) {
+      // counter rectangle behind the cafe
+      ctx.save();
+      const x = W * 0.62, y = H * 0.35, w = W * 0.26, h = H * 0.32;
+      const g = ctx.createLinearGradient(x, y, x, y + h);
+      g.addColorStop(0, "rgba(251, 191, 36, 0.06)");
+      g.addColorStop(1, "rgba(251, 191, 36, 0.0)");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.25)";
+      ctx.lineWidth = 1;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = "rgba(231, 233, 238, 0.5)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.fillText("AROMA  ·  espresso bar", x + 10, y + 16);
+      ctx.restore();
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          emit("bob", "cafe", { kind: "request", label: "hello", speed: 0.03 });
+          emit("cafe", "bob", { kind: "data",    label: "menu (signed)", speed: 0.03 });
+          log(`handshake complete · Aroma sent signed menu`);
+          setCaption("step 2 / 5", "Aroma sends a PQ-signed menu. Patty's agent picks: latte 4.50 USDC.");
+          this.phase = 1; this.cool = 70;
+          break;
+        case 1:
+          emit("bob", "cafe", { kind: "offer", label: "latte · 4.50", amount: 4.5, speed: 0.022 });
+          setCaption("step 3 / 5", "Order placed. Aroma confirms availability and pricing.");
+          this.phase = 2; this.cool = 80;
+          break;
+        case 2:
+          emit("bob", "cafe", { kind: "offer", label: "X-Payment-Proof", amount: 4.5, speed: 0.022,
+            onArrive: () => { A.bob.balance -= 4.5; A.cafe.balance += 4.5; } });
+          log(`Patty pays 4.50 USDC via <code>X-Payment-Proof</code>`);
+          setCaption("step 4 / 5", "Payment settles. Aroma starts the latte.");
+          this.phase = 3; this.cool = 110;
+          break;
+        case 3:
+          emit("cafe", "bob", { kind: "data", label: "☕ ready", speed: 0.022 });
+          log(`<span class="ok">latte handed over</span> · receipt signed`);
+          setCaption("step 5 / 5", "Cup handover. Receipt is a PQ-signed proof — Patty leaves without touching the phone.");
+          jobs++; jobsEl.textContent = jobs;
+          this.phase = 4; this.cool = 200;
+          break;
+        case 4:
+          A.bob.balance = 20; A.cafe.balance = 0;
+          this.phase = 0; this.cool = 60;
+          break;
+      }
+    },
+  };
+
+  // — Scene 12: Food delivery (3-party) ————————————————————————————————————
+  SCENES.delivery = {
+    id: "delivery",
+    name: "Food delivery",
+    short: "12",
+    desc: "Three-party flow. <strong>Patty</strong> orders from <strong>Spice Hub</strong>; <strong>Kiran</strong> takes the delivery slot. Escrow splits the payout: food to the restaurant, tip to the rider. Rider's position animates along the route.",
+    enter() {
+      setVisible(["bob", "rest", "rider", "escrow"]);
+      A.bob.balance = 25; A.rest.balance = 0; A.rider.balance = 0;
+      A.escrow.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      this.tRide = 0;
+      A.rider._visible = false;
+      setCaption("step 1 / 7", "<strong>Patty</strong> orders from <strong>Spice Hub</strong>: ₹420 of biryani. Restaurant confirms.");
+      log(`<span class="info">delivery</span> scene loaded · multi-party escrow`);
+    },
+    layout() {
+      this.home = { x: W * 0.82, y: H * 0.68 };
+      this.restaurant = { x: W * 0.18, y: H * 0.32 };
+      A.bob.pos  = { ...this.home };
+      A.rest.pos = { ...this.restaurant };
+      A.escrow.pos = { x: W * 0.5, y: H * 0.85 };
+      A.rider.pos = { x: W * 0.1, y: H * 0.5 };
+    },
+    drawUnderlay(ctx, W, H) {
+      drawPin(ctx, this.restaurant.x, this.restaurant.y, "kitchen", "#f87171");
+      drawPin(ctx, this.home.x, this.home.y, "you", "#7dd3fc");
+      drawDashedCurve(ctx, this.restaurant.x, this.restaurant.y, this.home.x, this.home.y, 90,
+                      "rgba(115, 188, 130, 0.3)");
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          emit("bob", "rest", { kind: "offer", label: "order 5.00", speed: 0.022 });
+          this.phase = 1; this.cool = 70;
+          setCaption("step 2 / 7", "Funds locked in escrow with a split policy: 80% to restaurant on pickup, 20% rider tip on delivery.");
+          break;
+        case 1:
+          emit("bob", "escrow", { kind: "offer", label: "lock 5.00", amount: 5.0, speed: 0.02,
+            onArrive: () => { A.bob.balance -= 5; A.escrow.balance += 5; } });
+          this.phase = 2; this.cool = 80;
+          setCaption("step 3 / 7", "Kiran's rider agent claims the slot — fastest ETA wins.");
+          A.rider._visible = true;
+          break;
+        case 2:
+          emit("rider", "escrow", { kind: "bid", label: "claim", speed: 0.022 });
+          log(`Kiran claims the delivery slot`);
+          this.phase = 3; this.cool = 60;
+          setCaption("step 4 / 7", "Kiran rides to the kitchen for pickup.");
+          break;
+        case 3: {
+          this.tRide += 0.012;
+          A.rider.pos = {
+            x: lerp(W * 0.1, this.restaurant.x + 36, Math.min(1, this.tRide)),
+            y: lerp(H * 0.5, this.restaurant.y + 6,  Math.min(1, this.tRide)),
+          };
+          if (this.tRide >= 1) {
+            log(`Pickup complete · 80% (4.00 USDC) released to Spice Hub`);
+            emit("escrow", "rest", { kind: "proof", label: "food paid 4.00", speed: 0.022,
+              onArrive: () => { A.escrow.balance -= 4; A.rest.balance += 4; } });
+            this.phase = 4; this.cool = 60; this.tRide = 0;
+            setCaption("step 5 / 7", "Pickup confirmed → 80% released to <strong>Spice Hub</strong>. Kiran rolls toward Patty.");
+          }
+          break;
+        }
+        case 4: {
+          this.tRide += 0.008;
+          const p0 = this.restaurant;
+          const p2 = this.home;
+          const p1 = { x: (p0.x + p2.x) / 2, y: Math.min(p0.y, p2.y) - 90 };
+          A.rider.pos = bezierPoint(Math.min(1, this.tRide), p0, p1, p2);
+          if (this.tRide >= 1) {
+            this.phase = 5; this.cool = 50; this.tRide = 0;
+            setCaption("step 6 / 7", "Delivery confirmed by Patty's agent. Rider tip released.");
+          }
+          break;
+        }
+        case 5:
+          emit("bob", "escrow", { kind: "request", label: "confirm delivery", speed: 0.022,
+            onArrive: () => {
+              emit("escrow", "rider", { kind: "proof", label: "tip 1.00", speed: 0.022,
+                onArrive: () => { A.escrow.balance -= 1; A.rider.balance += 1; }});
+            }});
+          log(`<span class="ok">Delivery complete</span> · tip 1.00 USDC → Kiran`);
+          this.phase = 6; this.cool = 220;
+          jobs++; jobsEl.textContent = jobs;
+          setCaption("step 7 / 7", "Done. Restaurant got food revenue at pickup; rider got the tip on confirmed delivery. Patty never touched a card.");
+          break;
+        case 6:
+          A.bob.balance = 25; A.rest.balance = 0; A.rider.balance = 0; A.escrow.balance = 0;
+          A.rider._visible = false; this.tRide = 0; this.phase = 0;
+          this.layout(); this.cool = 70;
+          break;
+      }
+    },
+  };
+
+  // — Scene 13: Split bill ——————————————————————————————————————————————
+  SCENES.split = {
+    id: "split",
+    name: "Split bill",
+    short: "13",
+    desc: "Four friends, one tab. Each agent computes its share against the signed line-items and pays the merchant simultaneously. The merchant only sees one settlement event: a complete bill. Drop-in for fintech apps that today require a single payer + chase-up later.",
+    enter() {
+      setVisible(["bob", "alice", "iris", "juno", "merchant"]);
+      A.bob.balance = 30; A.alice.balance = 30; A.iris.balance = 30; A.juno.balance = 30;
+      A.merchant.balance = 0;
+      this.total = 48.00;
+      this.share = this.total / 4;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      setCaption("step 1 / 3", `Bill: <code>${this.total.toFixed(2)} USDC</code>. Four agents see the signed itemized receipt and compute their share (${this.share.toFixed(2)} each).`);
+      log(`<span class="info">split</span> scene loaded · bill 48.00 USDC / 4 friends`);
+    },
+    layout() {
+      A.merchant.pos = { x: W * 0.5, y: H * 0.5 };
+      ring(["bob", "alice", "iris", "juno"], W * 0.5, H * 0.5, Math.min(W, H) * 0.3);
+    },
+    drawUnderlay(ctx, W, H) {
+      // round "table" behind the merchant
+      ctx.save();
+      const cx = W * 0.5, cy = H * 0.5, r = Math.min(W, H) * 0.22;
+      const g = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, r);
+      g.addColorStop(0, "rgba(251, 191, 36, 0.06)");
+      g.addColorStop(1, "rgba(251, 191, 36, 0.0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.22)";
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          ["bob", "alice", "iris", "juno"].forEach(id => emit("merchant", id, { kind: "data", label: "receipt", speed: 0.024 }));
+          log(`Tridib's sends signed line-items to all four agents`);
+          this.phase = 1; this.cool = 70;
+          setCaption("step 2 / 3", "Each agent verifies the merchant's signature and the line-items it's accountable for, then fires its share.");
+          break;
+        case 1:
+          ["bob", "alice", "iris", "juno"].forEach((id, i) => {
+            setTimeout(() => {
+              emit(id, "merchant", { kind: "offer", label: this.share.toFixed(2),
+                amount: this.share, speed: 0.024,
+                onArrive: () => {
+                  A[id].balance -= this.share; A.merchant.balance += this.share;
+                  if (Math.abs(A.merchant.balance - this.total) < 0.001) {
+                    log(`<span class="ok">bill settled</span> · 4 payers, one event`);
+                    jobs++; jobsEl.textContent = jobs;
+                  }
+                }});
+              log(`${A[id].name} → Tridib's: ${this.share.toFixed(2)} USDC`);
+            }, i * 140);
+          });
+          this.phase = 2; this.cool = 200;
+          setCaption("step 3 / 3", "Merchant receives all four packets within one settlement window. No chasing, no Venmo IOU thread.");
+          break;
+        case 2:
+          A.bob.balance = 30; A.alice.balance = 30; A.iris.balance = 30; A.juno.balance = 30;
+          A.merchant.balance = 0;
+          this.phase = 0; this.cool = 80;
+          break;
+      }
+    },
+  };
+
   // ─── scene registry & switcher ────────────────────────────────────────────
-  const SCENE_ORDER = ["x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack"];
+  const SCENE_ORDER = [
+    "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
+    "taxi", "cafe", "delivery", "split",
+  ];
 
   function selectScene(id, force) {
     if (!force && currentScene && currentScene.id === id) return;

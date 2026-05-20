@@ -101,6 +101,7 @@ def test_scramble_logic_present(lab_script: str) -> None:
 
 EXPECTED_SCENES = [
     "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
+    "taxi", "cafe", "delivery", "split",
 ]
 
 
