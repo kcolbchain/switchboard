@@ -23,10 +23,34 @@
   header { padding: 12px 24px; border-bottom: 1px solid var(--border);
     display: flex; justify-content: space-between; align-items: center; gap: 12px;
     flex-wrap: wrap; }
-  header h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--muted); letter-spacing: 0.02em; }
-  header h1 .name { color: var(--fg); font-weight: 600; }
+  header h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--muted);
+    letter-spacing: 0.02em; display: flex; align-items: center; gap: 10px; }
   header .crumbs { color: var(--muted-2); font-size: 11px; }
   header .crumbs a { color: var(--muted-2); }
+
+  /* ─── split-flap switchboard title ──────────────────────────────────── */
+  .sb-title { display: inline-flex; gap: 1px; font-family: var(--mono);
+    font-weight: 600; font-size: 15px; cursor: pointer; user-select: none;
+    padding: 6px 10px 8px 10px; border-radius: 6px;
+    background: linear-gradient(180deg, #0f1216 0%, #13161b 100%);
+    border: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 0 rgba(0,0,0,0.3); }
+  .sb-char { display: inline-block; position: relative; min-width: 0.78em;
+    text-align: center; color: var(--fg); padding-top: 6px;
+    transition: color 0.15s, transform 0.15s, text-shadow 0.2s; }
+  .sb-char::before {                       /* LED dot above each char */
+    content: ""; position: absolute; top: 0; left: 50%;
+    width: 3px; height: 3px; border-radius: 50%;
+    background: var(--muted-2); transform: translateX(-50%);
+    transition: background 0.2s, box-shadow 0.2s; }
+  .sb-char.settled {
+    color: var(--fg); text-shadow: 0 0 8px rgba(96, 165, 250, 0.25); }
+  .sb-char.settled::before {
+    background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .sb-char.scrambling {
+    color: var(--accent); transform: translateY(-1px); }
+  .sb-char.scrambling::before { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .sb-tag { color: var(--muted); font-weight: 400; font-size: 12px; }
 
   .scene-bar { display: flex; gap: 4px; padding: 8px 24px; border-bottom: 1px solid var(--border);
     background: var(--panel-2); overflow-x: auto; }
@@ -109,6 +133,22 @@
     background: var(--panel); border: 1px solid var(--border); font-size: 10px;
     color: var(--muted); margin: 0 3px; font-family: var(--mono); }
 
+  .tt { position: fixed; pointer-events: none; z-index: 50;
+    background: rgba(13, 16, 21, 0.94); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font-size: 11px; min-width: 180px;
+    opacity: 0; transform: translateY(-2px);
+    transition: opacity 0.12s, transform 0.12s;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+  .tt.show { opacity: 1; transform: translateY(0); }
+  .tt .ttname { font-weight: 600; font-size: 12px; color: var(--fg); }
+  .tt .ttrole { color: var(--muted); font-size: 10px; margin-bottom: 6px; }
+  .tt .ttkind { display: inline-block; padding: 1px 5px; border-radius: 3px;
+    border: 1px solid; font-size: 10px; font-family: var(--mono); margin-bottom: 6px; }
+  .tt dl { margin: 4px 0 0 0; display: grid; grid-template-columns: auto 1fr;
+    gap: 2px 8px; font-family: var(--mono); font-size: 10px; }
+  .tt dt { color: var(--muted-2); }
+  .tt dd { margin: 0; color: var(--fg); }
+
   .approve { position: absolute; pointer-events: auto;
     background: var(--panel); border: 1px solid var(--warn); color: var(--warn);
     border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 10px;
@@ -131,7 +171,12 @@
 <body>
 
 <header>
-  <h1><span class="name">switchboard</span> · agent payments lab</h1>
+  <h1>
+    <span class="sb-title" id="sbTitle" title="hover to re-patch">
+      <span class="sb-char" data-target="s">s</span><span class="sb-char" data-target="w">w</span><span class="sb-char" data-target="i">i</span><span class="sb-char" data-target="t">t</span><span class="sb-char" data-target="c">c</span><span class="sb-char" data-target="h">h</span><span class="sb-char" data-target="b">b</span><span class="sb-char" data-target="o">o</span><span class="sb-char" data-target="a">a</span><span class="sb-char" data-target="r">r</span><span class="sb-char" data-target="d">d</span>
+    </span>
+    <span class="sb-tag">· agent payments lab</span>
+  </h1>
   <div class="crumbs">
     <a href="./index.html">protocol explorer</a> ·
     <span>vanilla canvas, no build</span>
@@ -159,6 +204,7 @@
       <div><span class="dot" style="background: var(--treasury)"></span><span class="row-key">treasury</span> — high balance, low velocity</div>
       <div><span class="dot" style="background: var(--provider)"></span><span class="row-key">provider</span> — sells work</div>
       <div><span class="dot" style="background: var(--oracle)"></span><span class="row-key">oracle</span> — sells data</div>
+      <div><span class="dot" style="background: var(--accent)"></span><span class="row-key">contract / repo</span> — hex shape</div>
     </div>
   </aside>
 
@@ -182,6 +228,7 @@
 
 </div>
 
+<div class="tt" id="tooltip"></div>
 <footer><a href="https://github.com/kcolbchain/switchboard">source</a></footer>
 
 <script>
@@ -239,12 +286,12 @@
 
   const A = {
     alice:  makeAgent({ id: "alice",   name: "Alice",   role: "researcher",        wallet: "agentic",  hue: 195, balance: 8.0,  dailyCap: 12 }),
-    bob:    makeAgent({ id: "bob",     name: "Bob",     role: "data buyer",        wallet: "agentic",  hue: 145, balance: 6.0,  dailyCap: 10 }),
+    bob:    makeAgent({ id: "bob",     name: "Patty",   role: "data buyer",        wallet: "agentic",  hue: 145, balance: 6.0,  dailyCap: 10 }),
     chen:   makeAgent({ id: "chen",    name: "Chen",    role: "price oracle",      wallet: "oracle",   hue: 295, balance: 30,   dailyCap: 80, radius: 38 }),
     deva:   makeAgent({ id: "deva",    name: "Deva",    role: "trader",            wallet: "hitl",     hue:  40, balance: 4.0,  dailyCap: 25 }),
-    eli:    makeAgent({ id: "eli",     name: "Eli",     role: "inference service", wallet: "provider", hue: 152, balance: 1.0,  dailyCap: 50, radius: 36 }),
+    eli:    makeAgent({ id: "eli",     name: "Abhi",    role: "inference service", wallet: "provider", hue: 152, balance: 1.0,  dailyCap: 50, radius: 36 }),
     fina:   makeAgent({ id: "fina",    name: "Fina",    role: "treasury",          wallet: "treasury", hue: 250, balance: 80,   dailyCap: 90, radius: 44 }),
-    gus:    makeAgent({ id: "gus",     name: "Gus",     role: "image-gen service", wallet: "provider", hue:   8, balance: 0.5,  dailyCap: 40, radius: 36 }),
+    gus:    makeAgent({ id: "gus",     name: "Tridib",  role: "image-gen service", wallet: "provider", hue:   8, balance: 0.5,  dailyCap: 40, radius: 36 }),
     hana:   makeAgent({ id: "hana",    name: "Hana",    role: "embed service",     wallet: "provider", hue: 330, balance: 0.8,  dailyCap: 40, radius: 36 }),
     iris:   makeAgent({ id: "iris",    name: "Iris",    role: "buyer",             wallet: "agentic",  hue: 180, balance: 6,    dailyCap: 12 }),
     juno:   makeAgent({ id: "juno",    name: "Juno",    role: "buyer",             wallet: "agentic",  hue:  90, balance: 5,    dailyCap: 10 }),
@@ -273,14 +320,26 @@
   }
 
   // ─── interaction ──────────────────────────────────────────────────────────
+  const ttEl = document.getElementById("tooltip");
   cvs.addEventListener("mousemove", e => {
     const r = cvs.getBoundingClientRect();
     mouse.x = e.clientX - r.left;
     mouse.y = e.clientY - r.top;
+    const prevHover = hoverId;
     hoverId = pickAgent(mouse.x, mouse.y);
+    if (hoverId && hoverId !== prevHover) {
+      // kick a ripple wave on first frame of hover
+      const a = A[hoverId];
+      a._ripples = a._ripples || [];
+      a._ripples.push({ t: 0, r: a.radius });
+    }
     renderInfo();
+    renderTooltip(e.clientX, e.clientY);
   });
-  cvs.addEventListener("mouseleave", () => { hoverId = null; renderInfo(); });
+  cvs.addEventListener("mouseleave", () => {
+    hoverId = null; renderInfo();
+    ttEl.classList.remove("show");
+  });
   cvs.addEventListener("click", () => {
     if (!hoverId || !currentScene.onAgentClick) return;
     currentScene.onAgentClick(A[hoverId]);
@@ -352,9 +411,25 @@
   }
 
   function drawAgent(a) {
-    const { x, y } = a.pos, r = a.radius;
+    const { x, y } = a.pos;
     const hovered = (a.id === hoverId);
+    // hover scale-up: smooth ease toward 1.12 when hovered, 1.0 otherwise
+    a._hoverEase = (a._hoverEase ?? 1) + ((hovered ? 1.12 : 1.0) - (a._hoverEase ?? 1)) * 0.18;
+    const r = a.radius * a._hoverEase;
     const balanceRatio = Math.min(1, a.balance / Math.max(1, a.dailyCap));
+
+    // hover ripples — expanding rings, fade as they grow
+    if (a._ripples) {
+      for (let i = a._ripples.length - 1; i >= 0; i--) {
+        const rp = a._ripples[i];
+        rp.t += 0.04;
+        if (rp.t >= 1) { a._ripples.splice(i, 1); continue; }
+        const rr = a.radius + rp.t * 50;
+        ctx.strokeStyle = hsla(a.hue, 90, 65, (1 - rp.t) * 0.5);
+        ctx.lineWidth = 2 * (1 - rp.t);
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI*2); ctx.stroke();
+      }
+    }
 
     // halo
     if (a.state === "active" || a.state === "paying" || a.state === "listening") {
@@ -457,19 +532,21 @@
     }
     ctx.closePath();
     const inner = ctx.createRadialGradient(x, y, 1, x, y, r);
-    inner.addColorStop(0,  hsla(a.hue, 50, 50, 0.45));
-    inner.addColorStop(1,  hsla(a.hue, 30, 25, 0.85));
+    inner.addColorStop(0,  hsla(a.hue, 60, 55, 0.5));
+    inner.addColorStop(1,  hsla(a.hue, 35, 28, 0.85));
     ctx.fillStyle = inner; ctx.fill();
     ctx.strokeStyle = walletColor(a.wallet); ctx.lineWidth = 1.6; ctx.stroke();
-    // little lock icon
-    ctx.strokeStyle = hsla(a.hue, 60, 80, 0.7);
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.rect(x - 5, y - 2, 10, 8);
-    ctx.moveTo(x - 3, y - 2); ctx.lineTo(x - 3, y - 5);
-    ctx.arc(x, y - 5, 3, Math.PI, 0);
-    ctx.lineTo(x + 3, y - 2);
-    ctx.stroke();
+    // Only draw the lock glyph for actual escrow contracts, not repo nodes.
+    if (a.id === "escrow" || a.id === "aeo_repo") {
+      ctx.strokeStyle = hsla(a.hue, 60, 80, 0.7);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.rect(x - 5, y - 2, 10, 8);
+      ctx.moveTo(x - 3, y - 2); ctx.lineTo(x - 3, y - 5);
+      ctx.arc(x, y - 5, 3, Math.PI, 0);
+      ctx.lineTo(x + 3, y - 2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -585,6 +662,42 @@
     `;
   }
 
+  function renderTooltip(clientX, clientY) {
+    if (!hoverId) { ttEl.classList.remove("show"); return; }
+    const a = A[hoverId];
+    const walletDesc = {
+      agentic:  "autonomous, auto-pays under cap",
+      hitl:     "human approves spend above threshold",
+      treasury: "rebalancer / fleet funder",
+      provider: "sells work, receives payments",
+      oracle:   "sells signed data, pay-per-query",
+      contract: "on-chain settlement (AgentEscrow.sol)",
+    }[a.wallet] || "";
+    const wColor = walletColor(a.wallet);
+    ttEl.innerHTML = `
+      <div class="ttname">${a.name}</div>
+      <div class="ttrole">${a.role}</div>
+      <span class="ttkind" style="color:${wColor};border-color:${wColor}">${a.wallet}</span>
+      <div style="color:var(--muted);font-size:10px;margin-bottom:4px">${walletDesc}</div>
+      <dl>
+        <dt>balance</dt><dd>${a.balance.toFixed(2)} USDC</dd>
+        <dt>daily cap</dt><dd>${a.dailyCap.toFixed(0)} USDC</dd>
+        <dt>spent</dt><dd>${a.spent.toFixed(2)} USDC</dd>
+        <dt>state</dt><dd>${a.state}</dd>
+        <dt>sig hue</dt><dd>h${a.hue}°</dd>
+      </dl>
+    `;
+    // place near cursor, flip when near right edge
+    const pad = 14;
+    let tx = clientX + pad, ty = clientY + pad;
+    const rect = ttEl.getBoundingClientRect();
+    if (tx + 220 > window.innerWidth) tx = clientX - 220 - pad;
+    if (ty + 200 > window.innerHeight) ty = clientY - rect.height - pad;
+    ttEl.style.left = tx + "px";
+    ttEl.style.top  = ty + "px";
+    ttEl.classList.add("show");
+  }
+
   function log(html) {
     const row = document.createElement("div");
     row.className = "row";
@@ -657,7 +770,7 @@
       A.bob.balance = 6; A.bob.spent = 0;
       A.eli.balance = 1;
       this.layout(); this.phase = 0; this.cool = 0;
-      setCaption("step 1 / 4", "<code>GET /inference</code> — <strong>Bob</strong> calls <strong>Eli</strong>'s endpoint cold, no <code>X-Payment-Proof</code> header attached.");
+      setCaption("step 1 / 4", "<code>GET /inference</code> — <strong>Patty</strong> calls <strong>Abhi</strong>'s endpoint cold, no <code>X-Payment-Proof</code> header attached.");
       log(`<span class="info">x402</span> scene loaded`);
     },
     layout() {
@@ -668,23 +781,23 @@
       if (this.cool > 0) { this.cool--; return; }
       if (this.phase === 0 && t % 220 === 30) {
         emit("bob", "eli", { kind: "request", label: "GET /infer", speed: 0.018 });
-        log(`Bob → Eli: <code>GET /inference</code>`);
+        log(`Patty → Abhi: <code>GET /inference</code>`);
         this.phase = 1; this.cool = 60;
       } else if (this.phase === 1) {
         emit("eli", "bob", { kind: "request", label: "402 + accepts[]", speed: 0.018 });
-        log(`Eli → Bob: <span class="warn">402 Payment Required</span> · 0.001 USDC`);
-        setCaption("step 2 / 4", "Eli returns <code>402 Payment Required</code> with an <code>accepts[]</code> envelope describing the price and recipient.");
+        log(`Abhi → Patty: <span class="warn">402 Payment Required</span> · 0.001 USDC`);
+        setCaption("step 2 / 4", "Abhi returns <code>402 Payment Required</code> with an <code>accepts[]</code> envelope describing the price and recipient.");
         this.phase = 2; this.cool = 80;
       } else if (this.phase === 2) {
         emit("bob", "eli", { kind: "offer", label: "X-Payment-Proof", amount: 0.001, speed: 0.018,
           onArrive: () => { A.bob.balance -= 0.001; A.eli.balance += 0.001; A.bob.spent += 0.001; }});
-        log(`Bob → Eli: <code>X-Payment-Proof</code> 0.001 USDC`);
-        setCaption("step 3 / 4", "Bob signs an <code>X-Payment-Proof</code> header and retries. Payment settles on-chain in the background.");
+        log(`Patty → Abhi: <code>X-Payment-Proof</code> 0.001 USDC`);
+        setCaption("step 3 / 4", "Patty signs an <code>X-Payment-Proof</code> header and retries. Payment settles on-chain in the background.");
         this.phase = 3; this.cool = 80;
       } else if (this.phase === 3) {
         emit("eli", "bob", { kind: "proof", label: "200 OK", speed: 0.018 });
-        log(`Eli → Bob: <span class="ok">200 OK</span> · inference result`);
-        setCaption("step 4 / 4", "Eli verifies the proof, serves <code>200 OK</code> with the inference result. Loop repeats — every paid call costs Bob 0.001 USDC.");
+        log(`Abhi → Patty: <span class="ok">200 OK</span> · inference result`);
+        setCaption("step 4 / 4", "Abhi verifies the proof, serves <code>200 OK</code> with the inference result. Loop repeats — every paid call costs Patty 0.001 USDC.");
         jobs++; jobsEl.textContent = jobs;
         this.phase = 0; this.cool = 140;
       }
@@ -706,7 +819,7 @@
       A.deva.balance = 10; A.hana.balance = 0.5;
       this.layout();
       this.phase = 0; this.cool = 60; this.block = 0; this.refundBlock = 0;
-      setCaption("step 1 / 5", "Two parallel flows. <strong>Alice → Gus</strong> follows the happy path. <strong>Deva → Hana</strong> will demonstrate the refund path.");
+      setCaption("step 1 / 5", "Two parallel flows. <strong>Alice → Tridib</strong> follows the happy path. <strong>Deva → Hana</strong> will demonstrate the refund path.");
       log(`<span class="info">escrow</span> scene loaded · two parallel flows`);
     },
     layout() {
@@ -753,10 +866,10 @@
         setCaption("step 2 / 5", "<strong>Alice</strong> calls <code>createPayment()</code>, locking 2.5 USDC in the <span class=\"pill\">Escrow</span> contract.");
         this.phase = 1; this.cool = 80;
       } else if (this.phase === 1) {
-        // Gus delivers work (data packet to Alice)
+        // Tridib delivers work (data packet to Alice)
         emit("gus", "alice", { kind: "data", label: "deliverable", speed: 0.016 });
-        log(`Gus → Alice: deliverable submitted`);
-        setCaption("step 3 / 5", "<strong>Gus</strong> performs the work off-chain and delivers the artifact.");
+        log(`Tridib → Alice: deliverable submitted`);
+        setCaption("step 3 / 5", "<strong>Tridib</strong> performs the work off-chain and delivers the artifact.");
         this.phase = 2; this.cool = 80;
       } else if (this.phase === 2) {
         // Alice confirms, escrow releases to Gus
@@ -765,8 +878,8 @@
             emit("escrow", "gus", { kind: "proof", label: "released 2.5", amount: 2.5, speed: 0.018,
               onArrive: () => { A.escrow.balance -= 2.5; A.gus.balance += 2.5; jobs++; jobsEl.textContent = jobs; }});
           }});
-        log(`Alice → Escrow: <code>confirmPayment(request_id)</code> · <span class="ok">released to Gus</span>`);
-        setCaption("step 4 / 5", "Alice calls <code>confirmPayment()</code> → escrow releases 2.5 USDC to Gus.");
+        log(`Alice → Escrow: <code>confirmPayment(request_id)</code> · <span class="ok">released to Tridib</span>`);
+        setCaption("step 4 / 5", "Alice calls <code>confirmPayment()</code> → escrow releases 2.5 USDC to Tridib.");
         this.phase = 3; this.cool = 100;
         // Kick off refund-path scenario
         this.refundBlock = this.block + 20;
@@ -798,7 +911,7 @@
     id: "stream",
     name: "Streaming micropayments",
     short: "03",
-    desc: "Multi-party / streaming pay: Alice opens a budget-capped session with Eli, and pays per chunk as inference tokens stream back. Like x402's <code>STREAMING</code> scheme — small, fast, capped.",
+    desc: "Multi-party / streaming pay: Alice opens a budget-capped session with Abhi, and pays per chunk as inference tokens stream back. Like x402's <code>STREAMING</code> scheme — small, fast, capped.",
     enter() {
       setVisible(["alice", "eli"]);
       A.alice.balance = 5; A.alice.spent = 0; A.alice.dailyCap = 5;
@@ -806,7 +919,7 @@
       this.layout();
       this.tokensServed = 0;
       this.budget = 5.0;
-      setCaption("step 1 / 2", "Session opened. Cap is 5 USDC. Each chunk = 0.02 USDC. Alice's balance drains as Eli's grows; session auto-closes at cap.");
+      setCaption("step 1 / 2", "Session opened. Cap is 5 USDC. Each chunk = 0.02 USDC. Alice's balance drains as Abhi's grows; session auto-closes at cap.");
       log(`<span class="info">stream</span> scene loaded · cap 5.00 USDC, 0.02 USDC/chunk`);
     },
     layout() {
@@ -859,7 +972,7 @@
     id: "auction",
     name: "AI compute auction",
     short: "04",
-    desc: "Marketplace flow. <strong>Iris</strong> broadcasts a job (transcribe 10 minutes of audio). <strong>Eli</strong>, <strong>Gus</strong>, and <strong>Hana</strong> bid. Lowest bid wins; payment goes through escrow.",
+    desc: "Marketplace flow. <strong>Iris</strong> broadcasts a job (transcribe 10 minutes of audio). <strong>Abhi</strong>, <strong>Tridib</strong>, and <strong>Hana</strong> bid. Lowest bid wins; payment goes through escrow.",
     enter() {
       setVisible(["iris", "eli", "gus", "hana", "escrow"]);
       A.iris.balance = 12; A.iris.spent = 0;
@@ -1029,7 +1142,7 @@
     id: "oracle",
     name: "On-chain oracle pull",
     short: "07",
-    desc: "AI-on-chain pattern. <strong>Chen</strong> sells signed price quotes. <strong>Alice</strong>, <strong>Bob</strong>, and <strong>Iris</strong> pull on demand and pay per-query. Signed responses fold into the PQ-signed-envelope work tracked in <a href=\"https://github.com/kcolbchain/switchboard/issues/33\">#33</a>.",
+    desc: "AI-on-chain pattern. <strong>Chen</strong> sells signed price quotes. <strong>Alice</strong>, <strong>Patty</strong>, and <strong>Iris</strong> pull on demand and pay per-query. Signed responses fold into the PQ-signed-envelope work tracked in <a href=\"https://github.com/kcolbchain/switchboard/issues/33\">#33</a>.",
     enter() {
       setVisible(["chen", "alice", "bob", "iris"]);
       A.chen.balance = 12;
@@ -1071,8 +1184,217 @@
     },
   };
 
+  // — Scene 8: PQ-signed envelopes (our proposal) ————————————————————————
+  SCENES.pq = {
+    id: "pq",
+    name: "PQ-signed envelopes",
+    short: "08",
+    desc: "Our proposal — every <code>PaymentOffer</code> / <code>PaymentProof</code> carries an application-layer post-quantum signature (default <strong>ML-DSA-65</strong>; <strong>hybrid</strong> mode pairs it with ECDSA). Receivers verify <em>before</em> paying. Tracked in <a href=\"https://github.com/kcolbchain/switchboard/issues/33\">#33</a>.",
+    enter() {
+      setVisible(["bob", "eli", "deva"]);
+      A.bob.balance = 8;  A.bob.spent = 0;
+      A.eli.balance = 1;
+      A.deva.balance = 8; A.deva.spent = 0;
+      this.layout();
+      this.phase = 0; this.cool = 50; this.mode = "ml-dsa-65";
+      setCaption("step 1 / 4", "<strong>Patty</strong> constructs a <code>PaymentOffer</code>, signs the canonical transcript with her PQ secret key, attaches the signature.");
+      log(`<span class="info">pq</span> scene loaded · default alg ml-dsa-65`);
+    },
+    layout() {
+      A.bob.pos  = { x: W * 0.22, y: H * 0.38 };
+      A.eli.pos  = { x: W * 0.78, y: H * 0.5 };
+      A.deva.pos = { x: W * 0.22, y: H * 0.72 };
+    },
+    drawOverlay(ctx, W, H) {
+      // signing/verifying glyphs near agents in flight phases
+      if (this.signing) {
+        const a = A.bob;
+        const ang = (tick * 0.18) % (Math.PI * 2);
+        for (let i = 0; i < 6; i++) {
+          const aa = ang + (i / 6) * Math.PI * 2;
+          const px = a.pos.x + Math.cos(aa) * (a.radius + 16);
+          const py = a.pos.y + Math.sin(aa) * (a.radius + 16);
+          ctx.fillStyle = "rgba(96, 165, 250, 0.85)";
+          ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.fillStyle = "rgba(96, 165, 250, 0.9)";
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("signing…", a.pos.x, a.pos.y - a.radius - 18);
+      }
+      if (this.verifying) {
+        const a = A.eli;
+        const ang = (-tick * 0.22) % (Math.PI * 2);
+        ctx.strokeStyle = "rgba(52, 211, 153, 0.7)";
+        ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(a.pos.x, a.pos.y, a.radius + 12, ang, ang + Math.PI * 1.5);
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(52, 211, 153, 0.9)";
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("verifying ml-dsa-65…", a.pos.x, a.pos.y - a.radius - 18);
+      }
+      // legend strip near top
+      const lx = W * 0.5;
+      ctx.fillStyle = "rgba(231, 233, 238, 0.7)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("⬢ signed envelope    ⬡ unsigned (rejected in strict mode)", lx, 18);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.phase === 0) {
+        this.signing = true; this.cool = 60;
+        this.phase = 1;
+        return;
+      }
+      if (this.phase === 1) {
+        this.signing = false;
+        const amount = 0.5;
+        emit("bob", "eli", { kind: "offer", label: "ml-dsa-65 ✓", amount, speed: 0.014,
+          onArrive: () => { this.verifying = true; }
+        });
+        log(`Patty → Abhi: <code>PaymentOffer</code> + <span class="info">ml-dsa-65</span> sig (3,309 bytes)`);
+        setCaption("step 2 / 4", "Envelope leaves <strong>Patty</strong> with the PQ signature attached. Comet head + label show <code>ml-dsa-65</code>.");
+        this.phase = 2; this.cool = 80;
+        return;
+      }
+      if (this.phase === 2) {
+        this.verifying = false;
+        emit("eli", "bob", { kind: "proof", label: "verified · 0.5 USDC", amount: 0.5, speed: 0.018,
+          onArrive: () => { A.bob.balance -= 0.5; A.eli.balance += 0.5; jobs++; jobsEl.textContent = jobs; }
+        });
+        log(`<span class="ok">Abhi verified</span> sig vs Patty's pubkey · 200 OK · 0.5 USDC`);
+        setCaption("step 3 / 4", "<strong>Abhi</strong> verifies the signature against Patty's public key <em>before</em> paying. Today's code path can't do this — it has to settle first and inspect the tx hash after.");
+        this.phase = 3; this.cool = 120;
+        return;
+      }
+      if (this.phase === 3) {
+        // Contrast: Deva sends an UNSIGNED offer (strict mode rejects)
+        emit("deva", "eli", { kind: "request", label: "unsigned", amount: 0.5, speed: 0.014,
+          onArrive: () => {
+            log(`<span class="hot">Abhi rejected</span> offer from Deva: signature_alg = "none" (strict mode)`);
+            // bounce-back red refund packet
+            emit("eli", "deva", { kind: "refund", label: "reject", speed: 0.022 });
+          }
+        });
+        setCaption("step 4 / 4", "<strong>Deva</strong> sends an <em>unsigned</em> offer. With <code>X402Middleware.require_signed=True</code> the receiver rejects on principle — no settlement, no leak.");
+        this.phase = 4; this.cool = 180;
+        return;
+      }
+      if (this.phase === 4) {
+        // hybrid demo: ECDSA + ML-DSA-65 stamped twice
+        emit("bob", "eli", { kind: "offer", label: "hybrid (ecdsa + ml-dsa-65)", amount: 0.5, speed: 0.014,
+          onArrive: () => {
+            log(`<span class="ok">hybrid verified</span> · both halves passed (ecdsa + ml-dsa-65)`);
+            emit("eli", "bob", { kind: "proof", label: "200 OK", speed: 0.018,
+              onArrive: () => { A.bob.balance -= 0.5; A.eli.balance += 0.5; jobs++; jobsEl.textContent = jobs; }
+            });
+          }
+        });
+        log(`Patty → Abhi: hybrid envelope (ecdsa + ml-dsa-65)`);
+        setCaption("step 4 / 4", "<strong>Hybrid mode</strong> — two signatures stacked. Verifier requires <em>both</em> to pass. Migration-friendly: classical-only verifiers still see the ECDSA half.");
+        this.phase = 5; this.cool = 200;
+        return;
+      }
+      if (this.phase === 5) {
+        this.phase = 0; this.cool = 100;
+        A.bob.balance = 8; A.eli.balance = 1; A.deva.balance = 8;
+      }
+    },
+  };
+
+  // — Scene 9: stack — coexistence with neighboring repos ————————————————————
+  // Switchboard isn't alone. ZAP, x402, gas-oracle, scout, arka all sit
+  // adjacent. This scene illustrates the data-flow seams.
+  // We extend the agent registry with repo "nodes" rendered with a contract
+  // hex shape but distinct hues + per-repo roles.
+  A.swb       = makeAgent({ id: "swb",       name: "switchboard", role: "agent payments substrate", wallet: "contract", hue: 215, radius: 42, shape: "hex" });
+  A.zap_repo  = makeAgent({ id: "zap_repo",  name: "zap",         role: "zero-alloc binary wire",   wallet: "contract", hue: 285, radius: 32, shape: "hex" });
+  A.arka_repo = makeAgent({ id: "arka_repo", name: "arka",        role: "Rust agent SDK",           wallet: "contract", hue:  25, radius: 32, shape: "hex" });
+  A.scout_repo= makeAgent({ id: "scout_repo",name: "scout",       role: "wallet intel",             wallet: "contract", hue: 165, radius: 32, shape: "hex" });
+  A.gas_repo  = makeAgent({ id: "gas_repo",  name: "gas-oracle",  role: "L2 gas forecasts",         wallet: "contract", hue:  55, radius: 32, shape: "hex" });
+  A.x402_repo = makeAgent({ id: "x402_repo", name: "x402",        role: "upstream HTTP-402 spec",   wallet: "contract", hue: 195, radius: 32, shape: "hex" });
+  A.aeo_repo  = makeAgent({ id: "aeo_repo",  name: "AgentEscrow", role: "on-chain settlement",      wallet: "contract", hue: 250, radius: 30, shape: "hex" });
+
+  SCENES.stack = {
+    id: "stack",
+    name: "Repo coexistence",
+    short: "09",
+    desc: "Switchboard's place in the stack. Arrows are real data-flow seams in the code: <code>zap_transport.py</code> ↔ <a href=\"https://github.com/luxfi/zap\">zap</a>, <code>gas_tracker.py</code> ↔ <a href=\"https://github.com/kcolbchain/gas-oracle\">gas-oracle</a>, <code>x402_middleware.py</code> implements the <a href=\"https://x402.org\">x402</a> spec, etc.",
+    enter() {
+      setVisible(["swb", "zap_repo", "arka_repo", "scout_repo", "gas_repo", "x402_repo", "aeo_repo"]);
+      this.layout();
+      this.cool = 30; this.flows = [];
+      // ascii arrows shown on canvas
+      setCaption("step 1 / 1", "Each repo owns one job. Switchboard composes them: it imports zap for the wire, gas-oracle for budget signals, scout for counterparty intel, and ships the AgentEscrow contract that gives the rails their on-chain teeth. Hover to inspect.");
+      log(`<span class="info">stack</span> scene loaded · 7 nodes`);
+    },
+    layout() {
+      A.swb.pos       = { x: W * 0.5,  y: H * 0.5  };
+      A.zap_repo.pos  = { x: W * 0.78, y: H * 0.28 };
+      A.arka_repo.pos = { x: W * 0.78, y: H * 0.72 };
+      A.scout_repo.pos= { x: W * 0.22, y: H * 0.72 };
+      A.gas_repo.pos  = { x: W * 0.22, y: H * 0.28 };
+      A.x402_repo.pos = { x: W * 0.5,  y: H * 0.18 };
+      A.aeo_repo.pos  = { x: W * 0.5,  y: H * 0.82 };
+    },
+    drawChannels(ctx) {
+      // directional arrows with labels
+      const edges = [
+        { a: "zap_repo",  b: "swb", label: "wire", color: "rgba(240, 171, 252, 0.45)" },
+        { a: "gas_repo",  b: "swb", label: "gas signals", color: "rgba(251, 191, 36, 0.45)" },
+        { a: "x402_repo", b: "swb", label: "implements", color: "rgba(125, 211, 252, 0.45)" },
+        { a: "scout_repo",b: "swb", label: "intel", color: "rgba(52, 211, 153, 0.45)" },
+        { a: "swb", b: "arka_repo", label: "consumer", color: "rgba(96, 165, 250, 0.45)" },
+        { a: "swb", b: "aeo_repo",  label: "ships", color: "rgba(167, 139, 250, 0.45)" },
+      ];
+      ctx.save();
+      ctx.lineWidth = 1.5;
+      for (const e of edges) {
+        const a = A[e.a], b = A[e.b];
+        const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
+        const len = Math.hypot(dx, dy);
+        const ux = dx / len, uy = dy / len;
+        const sx = a.pos.x + ux * (a.radius + 4);
+        const sy = a.pos.y + uy * (a.radius + 4);
+        const ex = b.pos.x - ux * (b.radius + 4);
+        const ey = b.pos.y - uy * (b.radius + 4);
+        ctx.strokeStyle = e.color;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+        // arrowhead
+        const ah = 6;
+        const angle = Math.atan2(uy, ux);
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - ah * Math.cos(angle - 0.4), ey - ah * Math.sin(angle - 0.4));
+        ctx.lineTo(ex - ah * Math.cos(angle + 0.4), ey - ah * Math.sin(angle + 0.4));
+        ctx.closePath(); ctx.fillStyle = e.color; ctx.fill();
+        // label
+        const lx = (sx + ex) / 2, ly = (sy + ey) / 2;
+        ctx.fillStyle = "rgba(231, 233, 238, 0.65)";
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(e.label, lx, ly - 4);
+      }
+      ctx.restore();
+    },
+    tick(t) {
+      // Periodically emit a tiny data dot along each edge for liveliness
+      if (t % 90 === 0) {
+        const edges = [
+          ["zap_repo", "swb"], ["gas_repo", "swb"], ["x402_repo", "swb"],
+          ["scout_repo", "swb"], ["swb", "arka_repo"], ["swb", "aeo_repo"],
+        ];
+        const [a, b] = edges[Math.floor(Math.random() * edges.length)];
+        emit(a, b, { kind: "data", label: "", speed: 0.018 });
+      }
+    },
+  };
+
   // ─── scene registry & switcher ────────────────────────────────────────────
-  const SCENE_ORDER = ["x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle"];
+  const SCENE_ORDER = ["x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack"];
 
   function selectScene(id, force) {
     if (!force && currentScene && currentScene.id === id) return;
@@ -1101,9 +1423,40 @@
     sceneBar.appendChild(b);
   });
 
+  // ─── split-flap "switchboard" title ───────────────────────────────────────
+  const SB_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789-_/";
+  const sbTitle = document.getElementById("sbTitle");
+  const sbLetters = Array.from(sbTitle.querySelectorAll(".sb-char"));
+  const sbTargets = sbLetters.map(c => c.dataset.target);
+  let sbBusy = false;
+
+  function scrambleSwitchboard() {
+    if (sbBusy) return;
+    sbBusy = true;
+    let remaining = sbLetters.length;
+    sbLetters.forEach((c, i) => {
+      c.classList.remove("settled");
+      c.classList.add("scrambling");
+      let ticks = 6 + i * 2;             // stagger: left settles first
+      const id = setInterval(() => {
+        if (--ticks <= 0) {
+          c.textContent = sbTargets[i];
+          c.classList.remove("scrambling");
+          c.classList.add("settled");
+          clearInterval(id);
+          if (--remaining === 0) sbBusy = false;
+          return;
+        }
+        c.textContent = SB_CHARS[Math.floor(Math.random() * SB_CHARS.length)];
+      }, 45);
+    });
+  }
+  sbTitle.addEventListener("mouseenter", scrambleSwitchboard);
+
   // ─── go ───────────────────────────────────────────────────────────────────
   resize();
   selectScene("x402");
+  scrambleSwitchboard();
   requestAnimationFrame(step);
 })();
 </script>
