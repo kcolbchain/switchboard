@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>switchboard — agentic payments demo</title>
-<meta name="description" content="Interactive canvas demo of agent-to-agent payments. Hover to reveal each agent's signature gradient, click to send a payment, watch human-in-the-loop gates." />
+<title>agent payments — interactive lab</title>
+<meta name="description" content="Interactive canvas lab of agent-to-agent payment patterns: HTTP-402 paywalls, on-chain escrow, streaming micropayments, AI compute auctions, human-in-the-loop, treasury rebalance, oracle pull." />
 <style>
   :root {
     --bg: #0b0d10; --panel: #13161b; --panel-2: #0f1216; --border: #23272f;
-    --fg: #e7e9ee; --muted: #8a93a3;
+    --fg: #e7e9ee; --muted: #8a93a3; --muted-2: #5a6270;
     --accent: #60a5fa; --ok: #34d399; --warn: #fbbf24; --hot: #f87171; --info: #7dd3fc;
-    --agentic: #7dd3fc; --hitl: #fbbf24; --treasury: #a78bfa;
+    --agentic: #7dd3fc; --hitl: #fbbf24; --treasury: #a78bfa; --provider: #34d399; --oracle: #f0abfc;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
@@ -20,123 +20,145 @@
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
-  header { padding: 14px 24px; border-bottom: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
-  header h1 .dot { color: var(--accent); }
-  header .crumbs { color: var(--muted); font-size: 12px; }
-  header .crumbs a { color: var(--muted); }
-  header .crumbs a:hover { color: var(--fg); }
+  header { padding: 12px 24px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--muted); letter-spacing: 0.02em; }
+  header h1 .name { color: var(--fg); font-weight: 600; }
+  header .crumbs { color: var(--muted-2); font-size: 11px; }
+  header .crumbs a { color: var(--muted-2); }
 
-  .layout { display: grid; grid-template-columns: 260px 1fr 280px;
-    height: calc(100vh - 50px); }
+  .scene-bar { display: flex; gap: 4px; padding: 8px 24px; border-bottom: 1px solid var(--border);
+    background: var(--panel-2); overflow-x: auto; }
+  .scene-bar button { background: transparent; color: var(--muted); border: 1px solid transparent;
+    padding: 5px 11px; border-radius: 6px; cursor: pointer;
+    font: inherit; font-size: 12px; white-space: nowrap; }
+  .scene-bar button:hover { color: var(--fg); }
+  .scene-bar button.active { background: var(--panel); color: var(--fg); border-color: var(--border); }
+  .scene-bar button .num { color: var(--muted-2); font-family: var(--mono); margin-right: 6px; }
 
-  aside { background: var(--panel-2); border-right: 1px solid var(--border);
-    padding: 16px; overflow-y: auto; }
+  .layout { display: grid; grid-template-columns: 240px 1fr 300px;
+    height: calc(100vh - 95px); }
+
+  aside { background: var(--panel-2); padding: 14px 16px; overflow-y: auto;
+    border-right: 1px solid var(--border); }
   aside.right { border-right: none; border-left: 1px solid var(--border); }
-  aside h2 { font-size: 11px; color: var(--muted); text-transform: uppercase;
-    letter-spacing: 0.08em; margin: 0 0 8px 0; }
-  aside h2:not(:first-child) { margin-top: 18px; }
+  aside h2 { font-size: 10px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.1em; margin: 0 0 8px 0; font-weight: 500; }
+  aside h2:not(:first-child) { margin-top: 16px; }
 
-  .legend { font-size: 12px; color: var(--muted); line-height: 1.7; }
-  .legend .dot { display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; vertical-align: 1px; margin-right: 6px; }
+  .scene-title { font-size: 15px; font-weight: 600; color: var(--fg); margin: 0 0 4px 0; }
+  .scene-desc { font-size: 12px; color: var(--muted); line-height: 1.55; }
+  .scene-desc code { font-family: var(--mono); font-size: 11px; color: var(--info);
+    background: var(--panel); padding: 1px 4px; border-radius: 3px; }
 
-  .agent-info { font-family: var(--mono); font-size: 12px; }
-  .agent-info .name { font-size: 14px; color: var(--fg); font-family: inherit;
-    margin-bottom: 4px; font-family: -apple-system, system-ui, sans-serif; font-weight: 600; }
+  .agent-info { font-family: var(--mono); font-size: 11px; }
+  .agent-info .name { font-size: 13px; color: var(--fg);
+    font-family: -apple-system, system-ui, sans-serif; font-weight: 600; margin-bottom: 2px; }
   .agent-info .role { color: var(--muted); font-family: -apple-system, system-ui, sans-serif;
-    margin-bottom: 12px; }
+    margin-bottom: 10px; font-size: 11px; }
   .agent-info dl { margin: 0; display: grid; grid-template-columns: auto 1fr;
-    gap: 4px 12px; }
-  .agent-info dt { color: var(--muted); }
+    gap: 3px 10px; }
+  .agent-info dt { color: var(--muted-2); }
   .agent-info dd { margin: 0; color: var(--fg); }
-  .agent-info .bar { height: 4px; background: var(--panel); border-radius: 2px;
+  .agent-info .bar { height: 3px; background: var(--panel); border-radius: 2px;
     overflow: hidden; margin-top: 4px; }
-  .agent-info .bar > div { height: 100%; background: var(--ok); }
+  .agent-info .bar > div { height: 100%; background: var(--ok); transition: width 0.2s; }
+  .agent-info .bar.warn > div { background: var(--warn); }
   .agent-info .bar.over > div { background: var(--hot); }
 
-  .empty { color: var(--muted); font-style: italic; font-size: 12px; }
+  .empty { color: var(--muted-2); font-style: italic; font-size: 11px; }
 
-  .log { font-family: var(--mono); font-size: 11px; line-height: 1.5; }
-  .log .row { padding: 4px 0; border-bottom: 1px dashed var(--border);
-    display: flex; gap: 8px; }
-  .log .t { color: var(--muted); flex: 0 0 38px; }
+  .legend { font-size: 11px; color: var(--muted); line-height: 1.8; }
+  .legend .dot { display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; vertical-align: 1px; margin-right: 6px; }
+  .legend .row-key { color: var(--fg); }
+
+  .log { font-family: var(--mono); font-size: 10px; line-height: 1.5; }
+  .log .row { padding: 3px 0; border-bottom: 1px dashed var(--border);
+    display: flex; gap: 6px; }
+  .log .t { color: var(--muted-2); flex: 0 0 32px; }
   .log .m { color: var(--fg); flex: 1; word-break: break-word; }
   .log .ok { color: var(--ok); }
   .log .warn { color: var(--warn); }
   .log .hot { color: var(--hot); }
+  .log .info { color: var(--info); }
+  .log .seg { color: var(--muted); }
 
-  .stage { position: relative; }
+  .stage { position: relative; overflow: hidden; background: var(--bg); }
   canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
 
-  .stats { position: absolute; top: 12px; left: 12px;
+  .stats { position: absolute; top: 10px; left: 12px;
     background: rgba(13, 16, 21, 0.85); border: 1px solid var(--border);
-    border-radius: 8px; padding: 8px 12px; font-family: var(--mono); font-size: 11px;
-    display: flex; gap: 16px; }
-  .stats .label { color: var(--muted); margin-right: 4px; }
+    border-radius: 6px; padding: 6px 10px; font-family: var(--mono); font-size: 10px;
+    display: flex; gap: 14px; }
+  .stats .label { color: var(--muted-2); margin-right: 4px; }
   .stats .val { color: var(--fg); }
   .stats .val.ok { color: var(--ok); }
+  .stats .val.warn { color: var(--warn); }
 
-  .help { position: absolute; bottom: 12px; left: 12px;
-    background: rgba(13, 16, 21, 0.85); border: 1px solid var(--border);
-    border-radius: 8px; padding: 8px 12px; font-size: 11px; color: var(--muted);
-    max-width: 360px; line-height: 1.6; }
-  .help kbd { font-family: var(--mono); background: var(--panel);
-    border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px;
-    color: var(--fg); }
+  .caption { position: absolute; bottom: 10px; left: 12px; right: 12px;
+    background: rgba(13, 16, 21, 0.86); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 14px; font-size: 11px; color: var(--muted);
+    line-height: 1.55; max-width: 720px; margin: 0 auto; }
+  .caption .step { color: var(--info); font-family: var(--mono); font-size: 10px;
+    margin-right: 8px; }
+  .caption code { font-family: var(--mono); color: var(--fg);
+    background: rgba(96, 165, 250, 0.08); padding: 1px 4px; border-radius: 3px; }
+  .caption .pill { display: inline-block; padding: 1px 6px; border-radius: 3px;
+    background: var(--panel); border: 1px solid var(--border); font-size: 10px;
+    color: var(--muted); margin: 0 3px; font-family: var(--mono); }
 
   .approve { position: absolute; pointer-events: auto;
     background: var(--panel); border: 1px solid var(--warn); color: var(--warn);
-    border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 11px;
+    border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 10px;
     font-family: var(--mono); cursor: pointer; transform: translate(-50%, -50%);
     box-shadow: 0 0 24px rgba(251, 191, 36, 0.25); }
   .approve:hover { background: var(--warn); color: var(--bg); }
 
   .tag { display: inline-block; padding: 1px 6px; border-radius: 3px;
     background: var(--panel); border: 1px solid var(--border); font-size: 10px;
-    color: var(--muted); margin-right: 4px; }
+    color: var(--muted); margin-right: 4px; font-family: var(--mono); }
   .tag.high { color: var(--hot); border-color: var(--hot); }
   .tag.medium { color: var(--warn); border-color: var(--warn); }
   .tag.low { color: var(--muted); }
+
+  footer { position: fixed; bottom: 4px; right: 8px; font-size: 10px;
+    color: var(--muted-2); font-family: var(--mono); }
+  footer a { color: var(--muted-2); }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>switchboard<span class="dot">.</span> agentic payments demo</h1>
+  <h1><span class="name">switchboard</span> · agent payments lab</h1>
   <div class="crumbs">
-    <a href="./index.html">← protocol explorer</a> ·
-    <a href="https://github.com/kcolbchain/switchboard">github</a>
+    <a href="./index.html">protocol explorer</a> ·
+    <span>vanilla canvas, no build</span>
   </div>
 </header>
+
+<div class="scene-bar" id="sceneBar"></div>
 
 <div class="layout">
 
   <aside class="left">
-    <h2>Selected agent</h2>
+    <h2 id="sceneLabel">Scene</h2>
+    <div class="scene-title" id="sceneTitle">—</div>
+    <div class="scene-desc" id="sceneDesc"></div>
+
+    <h2>Inspector</h2>
     <div id="info" class="agent-info">
       <div class="empty">hover an agent to inspect</div>
     </div>
 
     <h2>Legend</h2>
     <div class="legend">
-      <div><span class="dot" style="background: var(--agentic)"></span>agentic wallet — auto-pays</div>
-      <div><span class="dot" style="background: var(--hitl)"></span>human-in-the-loop — gates each spend</div>
-      <div><span class="dot" style="background: var(--treasury)"></span>treasury — high balance, low velocity</div>
-      <div style="margin-top:8px;color:var(--fg)">states</div>
-      <div>glowing — active, ready to transact</div>
-      <div>frosted — passive, low budget left</div>
-      <div>pulsing — paying / awaiting confirmation</div>
-      <div>locked ring — needs human approval</div>
-    </div>
-
-    <h2>How to play</h2>
-    <div class="legend">
-      <div><kbd>hover</kbd> reveal signature gradient</div>
-      <div><kbd>click</kbd> agent sends payment to its top-priority target</div>
-      <div><kbd>shift+click</kbd> open channel between two agents</div>
-      <div><kbd>space</kbd> pause / resume the world</div>
+      <div><span class="dot" style="background: var(--agentic)"></span><span class="row-key">agentic</span> — auto-pays</div>
+      <div><span class="dot" style="background: var(--hitl)"></span><span class="row-key">human-in-loop</span> — gates spend</div>
+      <div><span class="dot" style="background: var(--treasury)"></span><span class="row-key">treasury</span> — high balance, low velocity</div>
+      <div><span class="dot" style="background: var(--provider)"></span><span class="row-key">provider</span> — sells work</div>
+      <div><span class="dot" style="background: var(--oracle)"></span><span class="row-key">oracle</span> — sells data</div>
     </div>
   </aside>
 
@@ -144,44 +166,45 @@
     <canvas id="canvas"></canvas>
     <div class="stats">
       <div><span class="label">tick</span><span id="tick" class="val">0</span></div>
+      <div><span class="label">scene-time</span><span id="sceneTime" class="val">0s</span></div>
       <div><span class="label">jobs</span><span id="jobs" class="val ok">0</span></div>
-      <div><span class="label">budget left</span><span id="budget" class="val">100%</span></div>
       <div><span class="label">paused</span><span id="paused" class="val">no</span></div>
     </div>
-    <div class="help">
-      Each circle is an agent. Inner-core brightness = balance. Outer-ring color = wallet type. Hover reveals each agent's unique signature gradient — the visual stand-in for the PQ signature it would attach to a <code>PaymentOffer</code> / <code>PaymentProof</code>. Yellow rings = human-in-the-loop gate (click <em>approve</em> to release).
+    <div class="caption" id="caption">
+      <span class="step">—</span> Pick a scene above to begin.
     </div>
   </div>
 
   <aside class="right">
     <h2>Activity log</h2>
-    <div id="log" class="log">
-      <div class="row"><span class="t">000</span><span class="m">world started, 7 agents online.</span></div>
-    </div>
+    <div id="log" class="log"></div>
   </aside>
 
 </div>
 
+<footer><a href="https://github.com/kcolbchain/switchboard">source</a></footer>
+
 <script>
 (() => {
+  // ─── canvas + state ───────────────────────────────────────────────────────
   const cvs = document.getElementById("canvas");
   const ctx = cvs.getContext("2d");
   const infoEl = document.getElementById("info");
   const logEl = document.getElementById("log");
   const tickEl = document.getElementById("tick");
   const jobsEl = document.getElementById("jobs");
-  const budgetEl = document.getElementById("budget");
+  const sceneTimeEl = document.getElementById("sceneTime");
   const pausedEl = document.getElementById("paused");
+  const captionEl = document.getElementById("caption");
 
   let DPR = window.devicePixelRatio || 1;
   let W = 0, H = 0;
-  let mouse = { x: -1, y: -1, down: false, shift: false };
+  let mouse = { x: -1, y: -1, shift: false };
   let hoverId = null;
   let paused = false;
   let tick = 0;
+  let sceneTick = 0;
   let jobs = 0;
-  let totalSpent = 0;
-  const TOTAL_BUDGET = 200;
 
   function resize() {
     const rect = cvs.parentElement.getBoundingClientRect();
@@ -189,86 +212,67 @@
     cvs.width = W * DPR; cvs.height = H * DPR;
     cvs.style.width = W + "px"; cvs.style.height = H + "px";
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    layout();
+    if (currentScene) currentScene.layout();
   }
   window.addEventListener("resize", resize);
 
-  // ─── agent model ──────────────────────────────────────────────────────────
-  // Each agent has a "signature hue" — the visual stand-in for its PQ pubkey.
-  // No two agents share a hue; hover reveals the gradient as if showing the
-  // signing material on the wire.
-  const AGENTS = [
-    { id:"alice",   name:"Alice",   role:"researcher",     wallet:"agentic",  hue: 195, balance: 8.0, dailyCap: 12.0, priority:"medium" },
-    { id:"bob",     name:"Bob",     role:"data-broker",    wallet:"agentic",  hue: 145, balance: 5.0, dailyCap:  8.0, priority:"high"   },
-    { id:"chen",    name:"Chen",    role:"oracle",         wallet:"treasury", hue: 270, balance:50.0, dailyCap: 80.0, priority:"low"    },
-    { id:"deva",    name:"Deva",    role:"trader",         wallet:"hitl",     hue:  40, balance: 3.0, dailyCap: 20.0, priority:"high"   },
-    { id:"eli",     name:"Eli",     role:"inference-svc",  wallet:"agentic",  hue: 320, balance: 2.5, dailyCap:  6.0, priority:"medium" },
-    { id:"fina",    name:"Fina",    role:"settlement-hub", wallet:"treasury", hue: 230, balance:80.0, dailyCap: 90.0, priority:"low"    },
-    { id:"gus",     name:"Gus",     role:"market-maker",   wallet:"hitl",     hue:   8, balance: 4.5, dailyCap: 25.0, priority:"high"   },
-  ];
-
-  // Annotate at runtime so we can lay them out + animate.
-  AGENTS.forEach(a => {
-    a.spent = 0;
-    a.state = "active";              // active | passive | paying | awaitingApproval
-    a.glowPhase = Math.random() * Math.PI * 2;
-    a.radius = a.wallet === "treasury" ? 46 : 34;
-    a.pos = { x: 0, y: 0 };
-    a.target = { x: 0, y: 0 };
-    a.queue = [];                    // pending purchases (for flavor)
-  });
-
-  function layout() {
-    // Position agents in a loose ring with treasuries on the outside.
-    const cx = W / 2, cy = H / 2;
-    const N = AGENTS.length;
-    AGENTS.forEach((a, i) => {
-      const r = (Math.min(W, H) * (a.wallet === "treasury" ? 0.38 : 0.28));
-      const angle = (i / N) * Math.PI * 2 - Math.PI / 2;
-      a.pos.x = cx + Math.cos(angle) * r;
-      a.pos.y = cy + Math.sin(angle) * r;
-      a.target.x = a.pos.x; a.target.y = a.pos.y;
-    });
+  // ─── agent registry ───────────────────────────────────────────────────────
+  // Each agent has a unique signature hue — the visual stand-in for its
+  // PQ public key. Hover reveals the conic gradient.
+  function makeAgent(o) {
+    return Object.assign({
+      id: "", name: "", role: "",
+      wallet: "agentic",      // agentic | hitl | treasury | provider | oracle
+      hue: 0,
+      balance: 5.0, dailyCap: 10.0, spent: 0,
+      priority: "medium",
+      state: "active",         // active | passive | paying | awaitingApproval | listening
+      radius: 32,
+      glowPhase: Math.random() * Math.PI * 2,
+      pos: { x: 0, y: 0 },
+      pinned: false,           // contracts/escrow rendered specially
+      shape: "circle",         // circle | hex (for contract / escrow)
+      meta: {},
+      _approveBtn: null,
+    }, o);
   }
 
-  // ─── payment packets ──────────────────────────────────────────────────────
-  // Each packet is a moving point: PaymentOffer (payer → payee), then on
-  // arrival a PaymentProof flies back. Visually it's a comet.
+  const A = {
+    alice:  makeAgent({ id: "alice",   name: "Alice",   role: "researcher",        wallet: "agentic",  hue: 195, balance: 8.0,  dailyCap: 12 }),
+    bob:    makeAgent({ id: "bob",     name: "Bob",     role: "data buyer",        wallet: "agentic",  hue: 145, balance: 6.0,  dailyCap: 10 }),
+    chen:   makeAgent({ id: "chen",    name: "Chen",    role: "price oracle",      wallet: "oracle",   hue: 295, balance: 30,   dailyCap: 80, radius: 38 }),
+    deva:   makeAgent({ id: "deva",    name: "Deva",    role: "trader",            wallet: "hitl",     hue:  40, balance: 4.0,  dailyCap: 25 }),
+    eli:    makeAgent({ id: "eli",     name: "Eli",     role: "inference service", wallet: "provider", hue: 152, balance: 1.0,  dailyCap: 50, radius: 36 }),
+    fina:   makeAgent({ id: "fina",    name: "Fina",    role: "treasury",          wallet: "treasury", hue: 250, balance: 80,   dailyCap: 90, radius: 44 }),
+    gus:    makeAgent({ id: "gus",     name: "Gus",     role: "image-gen service", wallet: "provider", hue:   8, balance: 0.5,  dailyCap: 40, radius: 36 }),
+    hana:   makeAgent({ id: "hana",    name: "Hana",    role: "embed service",     wallet: "provider", hue: 330, balance: 0.8,  dailyCap: 40, radius: 36 }),
+    iris:   makeAgent({ id: "iris",    name: "Iris",    role: "buyer",             wallet: "agentic",  hue: 180, balance: 6,    dailyCap: 12 }),
+    juno:   makeAgent({ id: "juno",    name: "Juno",    role: "buyer",             wallet: "agentic",  hue:  90, balance: 5,    dailyCap: 10 }),
+    escrow: makeAgent({ id: "escrow",  name: "Escrow",  role: "AgentEscrow.sol",   wallet: "contract", hue: 220, balance: 0, dailyCap: 999, radius: 30, shape: "hex" }),
+  };
+  const ALL = Object.values(A);
+
+  // ─── packets ──────────────────────────────────────────────────────────────
+  // Visual abstraction over PaymentOffer / PaymentProof / generic messages.
   const packets = [];
-
-  function emitPacket(fromId, toId, amount, kind /* offer | proof */) {
-    const from = AGENTS.find(a => a.id === fromId);
-    const to   = AGENTS.find(a => a.id === toId);
-    if (!from || !to) return;
-    packets.push({
-      from, to, amount, kind,
+  function emit(fromId, toId, opts = {}) {
+    const from = A[fromId], to = A[toId];
+    if (!from || !to) return null;
+    const p = {
+      from, to,
+      amount: opts.amount ?? 0,
+      kind: opts.kind ?? "offer",   // offer | proof | request | bid | refund | data | stream
+      label: opts.label ?? "",
+      speed: opts.speed ?? 0.014,
       t: 0,
-      speed: 0.012,                  // fraction of trip per tick
       trail: [],
-    });
+      onArrive: opts.onArrive || null,
+    };
+    packets.push(p);
+    return p;
   }
 
-  function spawnApproval(packet) {
-    // For HITL payer: render an Approve button at the agent.
-    const a = packet.from;
-    a.state = "awaitingApproval";
-    const btn = document.createElement("button");
-    btn.className = "approve";
-    btn.textContent = "approve " + packet.amount.toFixed(2) + " USDC →";
-    btn.style.left = (cvs.getBoundingClientRect().left + a.pos.x) + "px";
-    btn.style.top  = (cvs.getBoundingClientRect().top  + a.pos.y - a.radius - 24) + "px";
-    document.body.appendChild(btn);
-    btn.addEventListener("click", () => {
-      a.state = "paying";
-      btn.remove();
-      log(`<span class="warn">${a.name}</span> approved → packet released`);
-      emitPacket(a.id, packet.to.id, packet.amount, "offer");
-    });
-    a._approveBtn = btn;
-    log(`<span class="warn">${a.name}</span> awaiting human approval to spend ${packet.amount.toFixed(2)} USDC`);
-  }
-
-  // ─── interactions ─────────────────────────────────────────────────────────
+  // ─── interaction ──────────────────────────────────────────────────────────
   cvs.addEventListener("mousemove", e => {
     const r = cvs.getBoundingClientRect();
     mouse.x = e.clientX - r.left;
@@ -276,324 +280,831 @@
     hoverId = pickAgent(mouse.x, mouse.y);
     renderInfo();
   });
-  cvs.addEventListener("mouseleave", () => {
-    mouse.x = -1; mouse.y = -1; hoverId = null; renderInfo();
-  });
-  cvs.addEventListener("click", e => {
-    if (!hoverId) return;
-    const a = AGENTS.find(x => x.id === hoverId);
-    initiatePayment(a, e.shiftKey);
+  cvs.addEventListener("mouseleave", () => { hoverId = null; renderInfo(); });
+  cvs.addEventListener("click", () => {
+    if (!hoverId || !currentScene.onAgentClick) return;
+    currentScene.onAgentClick(A[hoverId]);
   });
   window.addEventListener("keydown", e => {
-    if (e.code === "Space") { paused = !paused; pausedEl.textContent = paused ? "yes" : "no"; }
-    mouse.shift = e.shiftKey;
+    if (e.code === "Space") { paused = !paused; pausedEl.textContent = paused ? "yes" : "no"; e.preventDefault(); }
+    if (e.key === "r" && currentScene) selectScene(currentScene.id, true);
   });
-  window.addEventListener("keyup", e => { mouse.shift = e.shiftKey; });
 
   function pickAgent(x, y) {
-    for (const a of AGENTS) {
+    for (const a of ALL) {
+      if (!a._visible) continue;
       const dx = x - a.pos.x, dy = y - a.pos.y;
-      if (dx*dx + dy*dy <= a.radius * a.radius) return a.id;
+      if (dx*dx + dy*dy <= (a.radius + 6) * (a.radius + 6)) return a.id;
     }
     return null;
   }
 
-  function initiatePayment(payer, openChannel) {
-    if (payer.state === "awaitingApproval") return;
-    // pick the target by priority + neighbor distance
-    const candidates = AGENTS
-      .filter(t => t.id !== payer.id)
-      .map(t => ({
-        t,
-        score: priorityScore(payer, t),
-        dist: Math.hypot(t.pos.x - payer.pos.x, t.pos.y - payer.pos.y),
-      }))
-      .sort((a, b) => b.score - a.score || a.dist - b.dist);
-    const payee = candidates[0]?.t;
-    if (!payee) return;
-
-    const amount = 0.25 + Math.random() * 1.25;   // 0.25–1.5 USDC
-    if (payer.balance < amount) {
-      log(`<span class="hot">${payer.name}</span> too low to spend (${payer.balance.toFixed(2)} USDC)`);
-      payer.state = "passive";
-      return;
-    }
-    if (payer.spent + amount > payer.dailyCap) {
-      log(`<span class="hot">${payer.name}</span> blocked: would exceed daily cap`);
-      return;
-    }
-
-    if (payer.wallet === "hitl") {
-      spawnApproval({ from: payer, to: payee, amount });
-    } else {
-      payer.state = "paying";
-      emitPacket(payer.id, payee.id, amount, "offer");
-      log(`${payer.name} → ${payee.name}: offer ${amount.toFixed(2)} USDC`);
-    }
-  }
-
-  function priorityScore(payer, candidate) {
-    let s = 0;
-    if (candidate.priority === "high")   s += 3;
-    if (candidate.priority === "medium") s += 1;
-    if (candidate.wallet === "treasury") s -= 1;   // don't drain treasuries
-    if (candidate.state === "passive")   s -= 2;
-    return s + Math.random() * 0.5;
-  }
-
-  // ─── tick + draw loop ─────────────────────────────────────────────────────
-  function step() {
-    if (!paused) tick++;
-    // refresh agent state classifications
-    for (const a of AGENTS) {
-      if (a.state === "awaitingApproval") continue;
-      const ratio = a.balance / a.dailyCap;
-      if (ratio < 0.15) a.state = "passive";
-      else if (a.state !== "paying") a.state = "active";
-      a.glowPhase += 0.05;
-    }
-
-    if (!paused) {
-      for (let i = packets.length - 1; i >= 0; i--) {
-        const p = packets[i];
-        p.t += p.speed;
-        p.trail.push({ x: lerp(p.from.pos.x, p.to.pos.x, p.t),
-                       y: lerp(p.from.pos.y, p.to.pos.y, p.t),
-                       age: 0 });
-        if (p.trail.length > 16) p.trail.shift();
-        p.trail.forEach(pt => pt.age++);
-        if (p.t >= 1) {
-          packets.splice(i, 1);
-          if (p.kind === "offer") {
-            // payee receives, accepts, payer balance moves on the spot, send back proof.
-            p.from.balance -= p.amount;
-            p.from.spent += p.amount;
-            p.to.balance   += p.amount;
-            totalSpent     += p.amount;
-            jobs++;
-            jobsEl.textContent = jobs;
-            const left = Math.max(0, 100 - (totalSpent / TOTAL_BUDGET) * 100);
-            budgetEl.textContent = left.toFixed(0) + "%";
-            budgetEl.classList.toggle("ok", left > 30);
-            log(`<span class="ok">${p.to.name}</span> ← ${p.from.name}: ${p.amount.toFixed(2)} USDC settled; proof returning`);
-            emitPacket(p.to.id, p.from.id, p.amount, "proof");
-          } else {
-            p.from.state = "active";   // payee is fine
-            p.to.state   = "active";   // payer back to normal
-          }
-        }
-      }
-    }
-
-    draw();
-    requestAnimationFrame(step);
-    if (tick % 30 === 0) tickEl.textContent = tick;
-  }
-
-  function lerp(a, b, t) { return a + (b - a) * t; }
-
   // ─── drawing ──────────────────────────────────────────────────────────────
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function hsla(h, s, l, a) { return `hsla(${h}, ${s}%, ${l}%, ${a})`; }
+
+  function walletColor(w) {
+    switch (w) {
+      case "agentic":  return "#7dd3fc";
+      case "hitl":     return "#fbbf24";
+      case "treasury": return "#a78bfa";
+      case "provider": return "#34d399";
+      case "oracle":   return "#f0abfc";
+      case "contract": return "#60a5fa";
+      default:         return "#8a93a3";
+    }
+  }
+
   function draw() {
     ctx.clearRect(0, 0, W, H);
     drawGrid();
-    drawChannels();
+    if (currentScene.drawUnderlay) currentScene.drawUnderlay(ctx, W, H);
+    if (currentScene.drawChannels) currentScene.drawChannels(ctx);
+    else drawDefaultChannels(ctx);
     for (const p of packets) drawPacket(p);
-    for (const a of AGENTS) drawAgent(a);
+    for (const a of ALL) if (a._visible) drawAgent(a);
+    if (currentScene.drawOverlay) currentScene.drawOverlay(ctx, W, H);
   }
 
   function drawGrid() {
     ctx.save();
-    ctx.strokeStyle = "rgba(35, 39, 47, 0.6)";
+    ctx.strokeStyle = "rgba(35, 39, 47, 0.4)";
     ctx.lineWidth = 1;
     const step = 40;
-    for (let x = 0; x < W; x += step) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-    }
-    for (let y = 0; y < H; y += step) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    }
+    for (let x = 0; x < W; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
     ctx.restore();
   }
 
-  function drawChannels() {
-    // Thin lines between active agents to suggest the substrate.
+  function drawDefaultChannels(ctx) {
     ctx.save();
     ctx.strokeStyle = "rgba(96, 165, 250, 0.04)";
     ctx.lineWidth = 1;
-    for (let i = 0; i < AGENTS.length; i++) {
-      for (let j = i+1; j < AGENTS.length; j++) {
+    const v = ALL.filter(a => a._visible);
+    for (let i = 0; i < v.length; i++)
+      for (let j = i+1; j < v.length; j++) {
         ctx.beginPath();
-        ctx.moveTo(AGENTS[i].pos.x, AGENTS[i].pos.y);
-        ctx.lineTo(AGENTS[j].pos.x, AGENTS[j].pos.y);
+        ctx.moveTo(v[i].pos.x, v[i].pos.y);
+        ctx.lineTo(v[j].pos.x, v[j].pos.y);
         ctx.stroke();
       }
-    }
     ctx.restore();
-  }
-
-  function walletColor(w) {
-    if (w === "agentic")  return "#7dd3fc";
-    if (w === "hitl")     return "#fbbf24";
-    if (w === "treasury") return "#a78bfa";
-    return "#8a93a3";
   }
 
   function drawAgent(a) {
     const { x, y } = a.pos, r = a.radius;
     const hovered = (a.id === hoverId);
-    const balanceRatio = Math.min(1, a.balance / a.dailyCap);
+    const balanceRatio = Math.min(1, a.balance / Math.max(1, a.dailyCap));
 
-    // outer halo when active
-    if (a.state === "active" || a.state === "paying") {
+    // halo
+    if (a.state === "active" || a.state === "paying" || a.state === "listening") {
       const pulse = 0.5 + 0.5 * Math.sin(a.glowPhase);
       const haloR = r + 14 + (a.state === "paying" ? 8 * pulse : 4 * pulse);
       const g = ctx.createRadialGradient(x, y, r, x, y, haloR);
       g.addColorStop(0, "rgba(255,255,255,0)");
-      const c = hsla(a.hue, 80, 60, 0.35 * (a.state === "paying" ? 1 : 0.55));
-      g.addColorStop(1, c.replace(/[\d.]+\)$/, "0)"));
+      const c = hsla(a.hue, 80, 60, 0.32 * (a.state === "paying" ? 1 : 0.55));
       g.addColorStop(0.7, c);
+      g.addColorStop(1, c.replace(/[\d.]+\)$/, "0)"));
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(x, y, haloR, 0, Math.PI*2); ctx.fill();
     }
 
-    // signature gradient — only when hovered
+    // hover: signature gradient
     if (hovered) {
       const ang = (tick * 0.04) % (Math.PI * 2);
       const sigR = r + 26;
-      // conic-ish via segmented arcs
       for (let i = 0; i < 60; i++) {
         const a0 = ang + (i / 60) * Math.PI * 2;
         const a1 = ang + ((i+1) / 60) * Math.PI * 2;
         const hue = (a.hue + i * 6) % 360;
-        ctx.beginPath();
-        ctx.arc(x, y, sigR, a0, a1);
+        ctx.beginPath(); ctx.arc(x, y, sigR, a0, a1);
         ctx.strokeStyle = hsla(hue, 90, 65, 0.55);
-        ctx.lineWidth = 4;
-        ctx.stroke();
+        ctx.lineWidth = 4; ctx.stroke();
       }
     }
 
-    // body: frosted glass for passive, glowing core for active
+    // body
+    if (a.shape === "hex") drawHexBody(a, balanceRatio);
+    else drawCircleBody(a, balanceRatio);
+
+    // HITL lock dot
+    if (a.wallet === "hitl") {
+      ctx.fillStyle = "rgba(251, 191, 36, 0.9)";
+      ctx.beginPath(); ctx.arc(x, y - r - 6, 3, 0, Math.PI*2); ctx.fill();
+    }
+
+    // awaitingApproval ring
+    if (a.state === "awaitingApproval") {
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.9)";
+      ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.arc(x, y, r + 8, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // listening (oracle / marketplace)
+    if (a.state === "listening") {
+      ctx.strokeStyle = hsla(a.hue, 85, 65, 0.55);
+      ctx.lineWidth = 1.5; ctx.setLineDash([2, 6]);
+      ctx.beginPath(); ctx.arc(x, y, r + 14, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // labels
+    ctx.fillStyle = hovered ? "rgba(231, 233, 238, 0.95)" : "rgba(231, 233, 238, 0.62)";
+    ctx.font = "11px ui-monospace, Menlo, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(a.name, x, y + r + 16);
+    if (a.role && hovered) {
+      ctx.fillStyle = "rgba(138, 147, 163, 0.85)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.fillText(a.role, x, y + r + 30);
+    }
+  }
+
+  function drawCircleBody(a, balanceRatio) {
+    const { x, y } = a.pos, r = a.radius;
     ctx.save();
     if (a.state === "passive") {
-      // tinted glass — low alpha fill + subtle border
       const g = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r);
       g.addColorStop(0, hsla(a.hue, 40, 70, 0.22));
       g.addColorStop(1, hsla(a.hue, 40, 30, 0.08));
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)";
-      ctx.lineWidth = 1; ctx.stroke();
+      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)"; ctx.lineWidth = 1; ctx.stroke();
     } else {
-      // glowing core — inner brightness scaled by balance
       const inner = ctx.createRadialGradient(x, y, 1, x, y, r);
       inner.addColorStop(0,  hsla(a.hue, 95, 70, 0.95 * (0.35 + 0.65 * balanceRatio)));
       inner.addColorStop(0.6, hsla(a.hue, 85, 50, 0.55 * (0.4 + 0.6 * balanceRatio)));
       inner.addColorStop(1,  hsla(a.hue, 60, 30, 0.85));
       ctx.fillStyle = inner;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-      // wallet-type ring
       ctx.strokeStyle = walletColor(a.wallet);
       ctx.lineWidth = a.wallet === "treasury" ? 2.4 : 1.6;
       ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
     }
     ctx.restore();
+  }
 
-    // HITL lock indicator
-    if (a.wallet === "hitl") {
-      const lockY = y - r - 6;
-      ctx.fillStyle = "rgba(251, 191, 36, 0.9)";
-      ctx.beginPath(); ctx.arc(x, lockY, 3, 0, Math.PI*2); ctx.fill();
+  function drawHexBody(a, balanceRatio) {
+    const { x, y } = a.pos, r = a.radius;
+    ctx.save();
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const ang = -Math.PI/2 + i * Math.PI / 3;
+      const px = x + Math.cos(ang) * r;
+      const py = y + Math.sin(ang) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
-
-    // awaitingApproval ring
-    if (a.state === "awaitingApproval") {
-      ctx.strokeStyle = "rgba(251, 191, 36, 0.9)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.arc(x, y, r + 8, 0, Math.PI*2); ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // name label
-    ctx.fillStyle = hovered ? "rgba(231, 233, 238, 0.95)" : "rgba(231, 233, 238, 0.6)";
-    ctx.font = "11px ui-monospace, Menlo, monospace";
-    ctx.textAlign = "center";
-    ctx.fillText(a.name, x, y + r + 16);
+    ctx.closePath();
+    const inner = ctx.createRadialGradient(x, y, 1, x, y, r);
+    inner.addColorStop(0,  hsla(a.hue, 50, 50, 0.45));
+    inner.addColorStop(1,  hsla(a.hue, 30, 25, 0.85));
+    ctx.fillStyle = inner; ctx.fill();
+    ctx.strokeStyle = walletColor(a.wallet); ctx.lineWidth = 1.6; ctx.stroke();
+    // little lock icon
+    ctx.strokeStyle = hsla(a.hue, 60, 80, 0.7);
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.rect(x - 5, y - 2, 10, 8);
+    ctx.moveTo(x - 3, y - 2); ctx.lineTo(x - 3, y - 5);
+    ctx.arc(x, y - 5, 3, Math.PI, 0);
+    ctx.lineTo(x + 3, y - 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawPacket(p) {
+    const x = lerp(p.from.pos.x, p.to.pos.x, p.t);
+    const y = lerp(p.from.pos.y, p.to.pos.y, p.t);
+    p.trail.push({ x, y });
+    if (p.trail.length > 18) p.trail.shift();
+
     // trail
     p.trail.forEach((pt, i) => {
-      const alpha = (i / p.trail.length) * 0.7;
-      const hue = p.kind === "offer" ? p.from.hue : p.to.hue;
+      const alpha = (i / p.trail.length) * 0.65;
+      const hue = packetHue(p);
       ctx.fillStyle = hsla(hue, 90, 70, alpha);
       ctx.beginPath(); ctx.arc(pt.x, pt.y, 2, 0, Math.PI*2); ctx.fill();
     });
     // head
-    const x = lerp(p.from.pos.x, p.to.pos.x, p.t);
-    const y = lerp(p.from.pos.y, p.to.pos.y, p.t);
-    ctx.fillStyle = p.kind === "offer" ? "#e7e9ee" : "#34d399";
-    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2); ctx.fill();
-    // halo on the head
+    ctx.fillStyle = packetHeadColor(p);
+    ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI*2); ctx.fill();
+    // halo
     const g = ctx.createRadialGradient(x, y, 1, x, y, 14);
-    const hue = p.kind === "offer" ? p.from.hue : 140;
-    g.addColorStop(0, hsla(hue, 90, 70, 0.6));
-    g.addColorStop(1, hsla(hue, 90, 70, 0));
+    g.addColorStop(0, hsla(packetHue(p), 90, 70, 0.6));
+    g.addColorStop(1, hsla(packetHue(p), 90, 70, 0));
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI*2); ctx.fill();
+    // label
+    if (p.label) {
+      ctx.fillStyle = "rgba(231, 233, 238, 0.7)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(p.label, x, y - 10);
+    }
   }
 
-  function hsla(h, s, l, a) {
-    return `hsla(${h}, ${s}%, ${l}%, ${a})`;
+  function packetHue(p) {
+    switch (p.kind) {
+      case "proof":   return 140;
+      case "refund":  return 0;
+      case "bid":     return 50;
+      case "request": return 210;
+      case "data":    return 295;
+      case "stream":  return p.from.hue;
+      default:        return p.from.hue;
+    }
+  }
+  function packetHeadColor(p) {
+    switch (p.kind) {
+      case "proof":  return "#34d399";
+      case "refund": return "#f87171";
+      case "bid":    return "#fbbf24";
+      case "data":   return "#f0abfc";
+      default:       return "#e7e9ee";
+    }
   }
 
-  // ─── side-panel renders ──────────────────────────────────────────────────
+  // ─── tick loop ────────────────────────────────────────────────────────────
+  function step() {
+    if (!paused) { tick++; sceneTick++; }
+    sceneTimeEl.textContent = (sceneTick / 60).toFixed(1) + "s";
+    tickEl.textContent = tick;
+
+    // glow phase + auto state
+    for (const a of ALL) {
+      if (!a._visible) continue;
+      if (a.state !== "awaitingApproval" && a.state !== "listening" && a.state !== "paying") {
+        const ratio = a.balance / Math.max(1, a.dailyCap);
+        if (ratio < 0.10 && a.wallet !== "contract" && a.wallet !== "provider" && a.wallet !== "oracle") a.state = "passive";
+        else a.state = "active";
+      }
+      a.glowPhase += 0.05;
+    }
+
+    // packets
+    if (!paused) {
+      for (let i = packets.length - 1; i >= 0; i--) {
+        const p = packets[i];
+        p.t += p.speed;
+        if (p.t >= 1) {
+          packets.splice(i, 1);
+          if (p.onArrive) p.onArrive(p);
+        }
+      }
+    }
+
+    if (!paused && currentScene && currentScene.tick) currentScene.tick(sceneTick);
+
+    draw();
+    requestAnimationFrame(step);
+  }
+
+  // ─── side panels ──────────────────────────────────────────────────────────
   function renderInfo() {
     if (!hoverId) {
       infoEl.innerHTML = `<div class="empty">hover an agent to inspect</div>`;
       return;
     }
-    const a = AGENTS.find(x => x.id === hoverId);
-    const pct = Math.min(100, (a.spent / a.dailyCap) * 100);
-    const over = a.spent > a.dailyCap * 0.9;
+    const a = A[hoverId];
+    const pct = Math.min(100, (a.spent / Math.max(1, a.dailyCap)) * 100);
+    const overCls = pct > 90 ? "over" : pct > 60 ? "warn" : "";
     infoEl.innerHTML = `
       <div class="name">${a.name}</div>
       <div class="role">${a.role}</div>
       <dl>
         <dt>wallet</dt><dd>${a.wallet}</dd>
         <dt>balance</dt><dd>${a.balance.toFixed(2)} USDC</dd>
-        <dt>daily cap</dt><dd>${a.dailyCap.toFixed(2)} USDC</dd>
-        <dt>spent today</dt><dd>${a.spent.toFixed(2)} USDC</dd>
+        <dt>daily cap</dt><dd>${a.dailyCap.toFixed(0)} USDC</dd>
+        <dt>spent</dt><dd>${a.spent.toFixed(2)} USDC</dd>
         <dt>priority</dt><dd><span class="tag ${a.priority}">${a.priority}</span></dd>
         <dt>state</dt><dd>${a.state}</dd>
         <dt>sig hue</dt><dd>h${a.hue}°</dd>
       </dl>
-      <div class="bar ${over ? "over" : ""}"><div style="width:${pct}%"></div></div>
+      <div class="bar ${overCls}"><div style="width:${pct}%"></div></div>
     `;
   }
 
   function log(html) {
     const row = document.createElement("div");
     row.className = "row";
-    row.innerHTML = `<span class="t">${String(tick).padStart(3, "0")}</span><span class="m">${html}</span>`;
+    const t = String(sceneTick).padStart(4, "0");
+    row.innerHTML = `<span class="t">${t}</span><span class="m">${html}</span>`;
     logEl.prepend(row);
-    while (logEl.children.length > 60) logEl.lastChild.remove();
+    while (logEl.children.length > 80) logEl.lastChild.remove();
   }
+
+  function setCaption(step, html) {
+    captionEl.innerHTML = `<span class="step">${step}</span>${html}`;
+  }
+
+  // ─── HITL approval button helper ──────────────────────────────────────────
+  function showApprove(agent, label, onApprove) {
+    if (agent._approveBtn) return;
+    agent.state = "awaitingApproval";
+    const btn = document.createElement("button");
+    btn.className = "approve";
+    btn.textContent = label;
+    const r = cvs.getBoundingClientRect();
+    btn.style.left = (r.left + agent.pos.x) + "px";
+    btn.style.top  = (r.top  + agent.pos.y - agent.radius - 24) + "px";
+    document.body.appendChild(btn);
+    btn.addEventListener("click", () => {
+      btn.remove();
+      agent._approveBtn = null;
+      agent.state = "active";
+      onApprove();
+    });
+    agent._approveBtn = btn;
+  }
+  function clearApprovals() {
+    for (const a of ALL) {
+      if (a._approveBtn) { a._approveBtn.remove(); a._approveBtn = null; }
+    }
+  }
+
+  // ─── scenes ───────────────────────────────────────────────────────────────
+  let currentScene = null;
+  const SCENES = {};
+
+  function setVisible(ids) {
+    for (const a of ALL) a._visible = false;
+    for (const id of ids) if (A[id]) A[id]._visible = true;
+  }
+  function ring(ids, cx, cy, r, startAng = -Math.PI/2) {
+    ids.forEach((id, i) => {
+      const ang = startAng + (i / ids.length) * Math.PI * 2;
+      A[id].pos.x = cx + Math.cos(ang) * r;
+      A[id].pos.y = cy + Math.sin(ang) * r;
+    });
+  }
+  function row(ids, y, x0, x1) {
+    ids.forEach((id, i) => {
+      const t = ids.length === 1 ? 0.5 : i / (ids.length - 1);
+      A[id].pos.x = lerp(x0, x1, t);
+      A[id].pos.y = y;
+    });
+  }
+
+  // — Scene 1: x402 paywall —————————————————————————————————————————————
+  SCENES.x402 = {
+    id: "x402",
+    name: "HTTP-402 paywall",
+    short: "01",
+    desc: "An <code>x402</code>-style paywall. Caller hits a paid endpoint, gets back <code>402 Payment Required</code> with an <code>accepts[]</code> envelope, signs an <code>X-Payment-Proof</code> header, retries, and is served. Off-chain HTTP, on-chain settlement on the bottom rail.",
+    enter() {
+      setVisible(["bob", "eli"]);
+      A.bob.balance = 6; A.bob.spent = 0;
+      A.eli.balance = 1;
+      this.layout(); this.phase = 0; this.cool = 0;
+      setCaption("step 1 / 4", "<code>GET /inference</code> — <strong>Bob</strong> calls <strong>Eli</strong>'s endpoint cold, no <code>X-Payment-Proof</code> header attached.");
+      log(`<span class="info">x402</span> scene loaded`);
+    },
+    layout() {
+      A.bob.pos = { x: W * 0.28, y: H * 0.5 };
+      A.eli.pos = { x: W * 0.72, y: H * 0.5 };
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.phase === 0 && t % 220 === 30) {
+        emit("bob", "eli", { kind: "request", label: "GET /infer", speed: 0.018 });
+        log(`Bob → Eli: <code>GET /inference</code>`);
+        this.phase = 1; this.cool = 60;
+      } else if (this.phase === 1) {
+        emit("eli", "bob", { kind: "request", label: "402 + accepts[]", speed: 0.018 });
+        log(`Eli → Bob: <span class="warn">402 Payment Required</span> · 0.001 USDC`);
+        setCaption("step 2 / 4", "Eli returns <code>402 Payment Required</code> with an <code>accepts[]</code> envelope describing the price and recipient.");
+        this.phase = 2; this.cool = 80;
+      } else if (this.phase === 2) {
+        emit("bob", "eli", { kind: "offer", label: "X-Payment-Proof", amount: 0.001, speed: 0.018,
+          onArrive: () => { A.bob.balance -= 0.001; A.eli.balance += 0.001; A.bob.spent += 0.001; }});
+        log(`Bob → Eli: <code>X-Payment-Proof</code> 0.001 USDC`);
+        setCaption("step 3 / 4", "Bob signs an <code>X-Payment-Proof</code> header and retries. Payment settles on-chain in the background.");
+        this.phase = 3; this.cool = 80;
+      } else if (this.phase === 3) {
+        emit("eli", "bob", { kind: "proof", label: "200 OK", speed: 0.018 });
+        log(`Eli → Bob: <span class="ok">200 OK</span> · inference result`);
+        setCaption("step 4 / 4", "Eli verifies the proof, serves <code>200 OK</code> with the inference result. Loop repeats — every paid call costs Bob 0.001 USDC.");
+        jobs++; jobsEl.textContent = jobs;
+        this.phase = 0; this.cool = 140;
+      }
+    },
+    onAgentClick(a) {
+      if (a.id === "bob" && this.phase === 0) { this.cool = 0; }
+    },
+  };
+
+  // — Scene 2: Escrow (happy + refund) ————————————————————————————————————
+  SCENES.escrow = {
+    id: "escrow",
+    name: "Escrow + refund",
+    short: "02",
+    desc: "Trust-minimized A2A via <code>AgentEscrow.sol</code>. Payer locks funds, payee delivers, payer confirms → release. If payee goes silent past <code>timeout_blocks + challenge_period</code>, payer reclaims.",
+    enter() {
+      setVisible(["alice", "gus", "escrow", "deva", "hana"]);
+      A.alice.balance = 10; A.gus.balance = 1;
+      A.deva.balance = 10; A.hana.balance = 0.5;
+      this.layout();
+      this.phase = 0; this.cool = 60; this.block = 0; this.refundBlock = 0;
+      setCaption("step 1 / 5", "Two parallel flows. <strong>Alice → Gus</strong> follows the happy path. <strong>Deva → Hana</strong> will demonstrate the refund path.");
+      log(`<span class="info">escrow</span> scene loaded · two parallel flows`);
+    },
+    layout() {
+      A.escrow.pos = { x: W * 0.5,  y: H * 0.5 };
+      A.alice.pos  = { x: W * 0.18, y: H * 0.3 };
+      A.gus.pos    = { x: W * 0.82, y: H * 0.3 };
+      A.deva.pos   = { x: W * 0.18, y: H * 0.75 };
+      A.hana.pos   = { x: W * 0.82, y: H * 0.75 };
+    },
+    drawChannels(ctx) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(96, 165, 250, 0.18)";
+      ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+      [["alice","escrow"],["gus","escrow"],["deva","escrow"],["hana","escrow"]].forEach(([a,b]) => {
+        ctx.beginPath();
+        ctx.moveTo(A[a].pos.x, A[a].pos.y);
+        ctx.lineTo(A[b].pos.x, A[b].pos.y);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]); ctx.restore();
+    },
+    drawOverlay(ctx, W, H) {
+      // block counter near the escrow contract
+      ctx.fillStyle = "rgba(138, 147, 163, 0.85)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("block #" + this.block, A.escrow.pos.x, A.escrow.pos.y + A.escrow.radius + 16);
+      // refund-path countdown if relevant
+      if (this.phase >= 3 && this.phase < 6) {
+        const remaining = Math.max(0, this.refundBlock - this.block);
+        ctx.fillStyle = remaining ? "rgba(248, 113, 113, 0.9)" : "rgba(52, 211, 153, 0.9)";
+        ctx.fillText(remaining ? `refund in ${remaining} blocks` : "refund window open",
+          (A.deva.pos.x + A.hana.pos.x) / 2, (A.deva.pos.y + A.hana.pos.y) / 2 - 10);
+      }
+    },
+    tick(t) {
+      if (t % 30 === 0) this.block++;
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.phase === 0) {
+        // Alice locks 2.5 in escrow
+        emit("alice", "escrow", { kind: "offer", label: "lock 2.5", amount: 2.5, speed: 0.014,
+          onArrive: () => { A.alice.balance -= 2.5; A.escrow.balance += 2.5; }});
+        log(`Alice → Escrow: <code>createPayment(request_id, gus, 2.5 USDC)</code>`);
+        setCaption("step 2 / 5", "<strong>Alice</strong> calls <code>createPayment()</code>, locking 2.5 USDC in the <span class=\"pill\">Escrow</span> contract.");
+        this.phase = 1; this.cool = 80;
+      } else if (this.phase === 1) {
+        // Gus delivers work (data packet to Alice)
+        emit("gus", "alice", { kind: "data", label: "deliverable", speed: 0.016 });
+        log(`Gus → Alice: deliverable submitted`);
+        setCaption("step 3 / 5", "<strong>Gus</strong> performs the work off-chain and delivers the artifact.");
+        this.phase = 2; this.cool = 80;
+      } else if (this.phase === 2) {
+        // Alice confirms, escrow releases to Gus
+        emit("alice", "escrow", { kind: "request", label: "confirm", speed: 0.018,
+          onArrive: () => {
+            emit("escrow", "gus", { kind: "proof", label: "released 2.5", amount: 2.5, speed: 0.018,
+              onArrive: () => { A.escrow.balance -= 2.5; A.gus.balance += 2.5; jobs++; jobsEl.textContent = jobs; }});
+          }});
+        log(`Alice → Escrow: <code>confirmPayment(request_id)</code> · <span class="ok">released to Gus</span>`);
+        setCaption("step 4 / 5", "Alice calls <code>confirmPayment()</code> → escrow releases 2.5 USDC to Gus.");
+        this.phase = 3; this.cool = 100;
+        // Kick off refund-path scenario
+        this.refundBlock = this.block + 20;
+        emit("deva", "escrow", { kind: "offer", label: "lock 1.0", amount: 1.0, speed: 0.014,
+          onArrive: () => { A.deva.balance -= 1.0; A.escrow.balance += 1.0; }});
+        log(`Deva → Escrow: <code>createPayment(..., hana, 1.0 USDC)</code>`);
+      } else if (this.phase === 3 && this.block >= this.refundBlock) {
+        log(`<span class="warn">Hana silent</span> — refund window opens at block ${this.block}`);
+        setCaption("step 5 / 5", "Deva's counterparty <strong>Hana</strong> went silent past <code>timeout_blocks + challenge_period</code>. Deva reclaims via <code>requestRefund()</code>.");
+        this.phase = 4; this.cool = 60;
+      } else if (this.phase === 4) {
+        emit("deva", "escrow", { kind: "request", label: "requestRefund", speed: 0.018,
+          onArrive: () => {
+            emit("escrow", "deva", { kind: "refund", label: "refunded 1.0", amount: 1.0, speed: 0.018,
+              onArrive: () => { A.escrow.balance -= 1.0; A.deva.balance += 1.0; }});
+          }});
+        log(`Escrow → Deva: <span class="hot">refunded 1.0 USDC</span>`);
+        this.phase = 5; this.cool = 180;
+      } else if (this.phase === 5) {
+        this.phase = 0; this.cool = 60;
+        A.alice.balance = 10; A.gus.balance = 1;
+        A.deva.balance = 10; A.hana.balance = 0.5;
+      }
+    },
+  };
+
+  // — Scene 3: Streaming MPP ————————————————————————————————————————————
+  SCENES.stream = {
+    id: "stream",
+    name: "Streaming micropayments",
+    short: "03",
+    desc: "Multi-party / streaming pay: Alice opens a budget-capped session with Eli, and pays per chunk as inference tokens stream back. Like x402's <code>STREAMING</code> scheme — small, fast, capped.",
+    enter() {
+      setVisible(["alice", "eli"]);
+      A.alice.balance = 5; A.alice.spent = 0; A.alice.dailyCap = 5;
+      A.eli.balance = 0;
+      this.layout();
+      this.tokensServed = 0;
+      this.budget = 5.0;
+      setCaption("step 1 / 2", "Session opened. Cap is 5 USDC. Each chunk = 0.02 USDC. Alice's balance drains as Eli's grows; session auto-closes at cap.");
+      log(`<span class="info">stream</span> scene loaded · cap 5.00 USDC, 0.02 USDC/chunk`);
+    },
+    layout() {
+      A.alice.pos = { x: W * 0.22, y: H * 0.5 };
+      A.eli.pos   = { x: W * 0.78, y: H * 0.5 };
+    },
+    drawOverlay(ctx, W, H) {
+      // progress bar between them
+      const x = (A.alice.pos.x + A.eli.pos.x) / 2;
+      const y = (A.alice.pos.y + A.eli.pos.y) / 2 - 80;
+      const w = 220;
+      const pct = Math.min(1, A.alice.spent / Math.max(0.01, this.budget));
+      ctx.fillStyle = "rgba(13, 16, 21, 0.85)";
+      ctx.strokeStyle = "rgba(35, 39, 47, 0.9)";
+      ctx.fillRect(x - w/2, y, w, 22);
+      ctx.strokeRect(x - w/2, y, w, 22);
+      ctx.fillStyle = pct < 0.85 ? "rgba(52, 211, 153, 0.75)" : "rgba(248, 113, 113, 0.85)";
+      ctx.fillRect(x - w/2 + 2, y + 2, (w - 4) * pct, 18);
+      ctx.fillStyle = "rgba(231, 233, 238, 0.85)";
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`session ${A.alice.spent.toFixed(2)} / ${this.budget.toFixed(2)} USDC · ${this.tokensServed} chunks`, x, y - 6);
+    },
+    tick(t) {
+      if (A.alice.spent >= this.budget) {
+        if (!this.closed) {
+          this.closed = true;
+          log(`<span class="warn">session closed at cap</span> · ${this.tokensServed} chunks`);
+          setCaption("step 2 / 2", `Cap reached — session auto-closes. Total served: <strong>${this.tokensServed}</strong> chunks for <strong>${A.alice.spent.toFixed(2)} USDC</strong>.`);
+        }
+        if (t % 240 === 0) {
+          A.alice.spent = 0; A.alice.balance = 5; A.eli.balance = 0;
+          this.tokensServed = 0; this.closed = false;
+        }
+        return;
+      }
+      if (t % 8 === 0) {
+        emit("alice", "eli", { kind: "stream", label: "", amount: 0.02, speed: 0.04,
+          onArrive: () => {
+            A.alice.balance -= 0.02; A.alice.spent += 0.02;
+            A.eli.balance += 0.02; this.tokensServed++;
+            if (this.tokensServed % 25 === 0) jobs++; jobsEl.textContent = jobs;
+          }});
+      }
+    },
+  };
+
+  // — Scene 4: AI compute auction ——————————————————————————————————————————
+  SCENES.auction = {
+    id: "auction",
+    name: "AI compute auction",
+    short: "04",
+    desc: "Marketplace flow. <strong>Iris</strong> broadcasts a job (transcribe 10 minutes of audio). <strong>Eli</strong>, <strong>Gus</strong>, and <strong>Hana</strong> bid. Lowest bid wins; payment goes through escrow.",
+    enter() {
+      setVisible(["iris", "eli", "gus", "hana", "escrow"]);
+      A.iris.balance = 12; A.iris.spent = 0;
+      A.eli.balance = 1; A.gus.balance = 1; A.hana.balance = 1;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      this.bids = [];
+      A.eli.state = "listening"; A.gus.state = "listening"; A.hana.state = "listening";
+      setCaption("step 1 / 4", "Iris is about to broadcast a job to the listening providers.");
+      log(`<span class="info">auction</span> scene loaded`);
+    },
+    layout() {
+      A.iris.pos = { x: W * 0.2, y: H * 0.5 };
+      A.escrow.pos = { x: W * 0.55, y: H * 0.75 };
+      ring(["eli", "gus", "hana"], W * 0.72, H * 0.5, 130, -Math.PI/2);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.phase === 0) {
+        ["eli","gus","hana"].forEach(id => emit("iris", id, { kind: "request", label: "RFQ", speed: 0.02 }));
+        log(`Iris broadcasts RFQ to ${3} providers`);
+        setCaption("step 2 / 4", "RFQ fans out. Providers price the job and respond with bids.");
+        this.phase = 1; this.cool = 70;
+      } else if (this.phase === 1) {
+        const bids = { eli: 1.20, gus: 0.90, hana: 1.05 };
+        Object.entries(bids).forEach(([id, price], i) => {
+          setTimeout(() => {
+            emit(id, "iris", { kind: "bid", label: `${price.toFixed(2)} USDC`, speed: 0.02,
+              onArrive: () => this.bids.push({ id, price }) });
+            log(`<span class="warn">${A[id].name}</span> bids ${price.toFixed(2)} USDC`);
+          }, i * 400);
+        });
+        this.phase = 2; this.cool = 120;
+      } else if (this.phase === 2) {
+        const winner = this.bids.sort((a,b) => a.price - b.price)[0];
+        if (!winner) { this.cool = 30; return; }
+        this.winner = winner;
+        ["eli","gus","hana"].forEach(id => { if (id !== winner.id) A[id].state = "passive"; });
+        log(`<span class="ok">${A[winner.id].name} wins</span> at ${winner.price.toFixed(2)} USDC`);
+        setCaption("step 3 / 4", `<strong>${A[winner.id].name}</strong> wins the auction. Iris locks funds in escrow.`);
+        emit("iris", "escrow", { kind: "offer", label: "lock " + winner.price.toFixed(2),
+          amount: winner.price, speed: 0.018,
+          onArrive: () => { A.iris.balance -= winner.price; A.escrow.balance += winner.price; }});
+        this.phase = 3; this.cool = 100;
+      } else if (this.phase === 3) {
+        // delivery + release
+        const w = this.winner;
+        emit(w.id, "iris", { kind: "data", label: "transcript", speed: 0.018 });
+        setTimeout(() => {
+          emit("iris", "escrow", { kind: "request", label: "confirm", speed: 0.02,
+            onArrive: () => {
+              emit("escrow", w.id, { kind: "proof", label: `released ${w.price.toFixed(2)}`, speed: 0.02,
+                onArrive: () => {
+                  A.escrow.balance -= w.price; A[w.id].balance += w.price;
+                  jobs++; jobsEl.textContent = jobs;
+                }});
+            }});
+        }, 1200);
+        setCaption("step 4 / 4", `Provider delivers → Iris confirms → escrow releases ${w.price.toFixed(2)} USDC. Losing bids cost nothing.`);
+        this.phase = 4; this.cool = 220;
+      } else if (this.phase === 4) {
+        // reset
+        this.bids = []; this.winner = null;
+        ["eli","gus","hana"].forEach(id => { A[id].state = "listening"; A[id].balance = 1; });
+        A.iris.balance = 12;
+        this.phase = 0; this.cool = 60;
+      }
+    },
+  };
+
+  // — Scene 5: HITL gate ——————————————————————————————————————————————————
+  SCENES.hitl = {
+    id: "hitl",
+    name: "Human-in-the-loop gate",
+    short: "05",
+    desc: "Risky spend? <strong>Deva</strong> is a HITL wallet. Any spend above a threshold raises an <strong>Approve</strong> button — release requires a human click. Small spends pass automatically.",
+    enter() {
+      setVisible(["deva", "eli", "gus"]);
+      A.deva.balance = 50; A.deva.spent = 0; A.deva.dailyCap = 80;
+      A.eli.balance = 1; A.gus.balance = 1;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      setCaption("step 1 / 3", "Click <strong>Deva</strong> to initiate a spend. Small purchases pass; large ones raise an <strong>Approve</strong> button.");
+      log(`<span class="info">hitl</span> scene loaded · threshold = 5 USDC`);
+    },
+    layout() {
+      A.deva.pos = { x: W * 0.5, y: H * 0.7 };
+      A.eli.pos  = { x: W * 0.3, y: H * 0.3 };
+      A.gus.pos  = { x: W * 0.7, y: H * 0.3 };
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.phase === 0 && t % 200 === 50) {
+        const target = Math.random() < 0.5 ? "eli" : "gus";
+        const amount = Math.random() < 0.5 ? 1.5 : 12;       // mix small/large
+        if (amount >= 5) {
+          showApprove(A.deva, `approve ${amount.toFixed(2)} USDC`, () => {
+            emit("deva", target, { kind: "offer", label: `${amount.toFixed(2)} USDC`,
+              amount, speed: 0.018,
+              onArrive: () => { A.deva.balance -= amount; A[target].balance += amount;
+                jobs++; jobsEl.textContent = jobs; }});
+            log(`<span class="ok">approved</span> · ${amount.toFixed(2)} USDC → ${A[target].name}`);
+          });
+          log(`<span class="warn">gate</span> · ${amount.toFixed(2)} USDC > 5 USDC threshold — awaiting human`);
+          setCaption("step 2 / 3", "Above-threshold spend. Click <strong>Approve</strong> to release.");
+        } else {
+          emit("deva", target, { kind: "offer", label: `${amount.toFixed(2)} USDC`,
+            amount, speed: 0.018,
+            onArrive: () => { A.deva.balance -= amount; A[target].balance += amount;
+              jobs++; jobsEl.textContent = jobs; }});
+          log(`auto-pay · ${amount.toFixed(2)} USDC → ${A[target].name}`);
+          setCaption("step 3 / 3", "Sub-threshold spend passes automatically.");
+        }
+        this.cool = 220;
+      }
+    },
+    onAgentClick(a) {
+      if (a.id === "deva" && this.cool > 100) this.cool = 0;
+    },
+  };
+
+  // — Scene 6: Treasury rebalance ————————————————————————————————————————
+  SCENES.fanout = {
+    id: "fanout",
+    name: "Treasury rebalance",
+    short: "06",
+    desc: "Fan-out from one balance source. <strong>Fina</strong> watches her agentic wallets; if one drops below a floor, she refills it. A common pattern for fleets of autonomous agents.",
+    enter() {
+      setVisible(["fina", "alice", "bob", "iris", "juno"]);
+      A.fina.balance = 80; A.fina.dailyCap = 100;
+      A.alice.balance = 0.5; A.alice.dailyCap = 4;
+      A.bob.balance   = 1.2; A.bob.dailyCap   = 4;
+      A.iris.balance  = 0.3; A.iris.dailyCap  = 4;
+      A.juno.balance  = 3.5; A.juno.dailyCap  = 4;
+      this.layout();
+      this.cool = 30;
+      setCaption("step 1 / 2", "Fleet wallets running low (frosted = below floor). Treasury detects on its sweep tick.");
+      log(`<span class="info">fanout</span> scene loaded · floor = 1.0 USDC`);
+    },
+    layout() {
+      A.fina.pos = { x: W * 0.5, y: H * 0.5 };
+      ring(["alice","bob","iris","juno"], W * 0.5, H * 0.5, Math.min(W, H) * 0.32);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (t % 30 === 0) {
+        let refilled = 0;
+        ["alice","bob","iris","juno"].forEach(id => {
+          if (A[id].balance < 1.0) {
+            const top = 3.5 - A[id].balance;
+            emit("fina", id, { kind: "offer", label: `+${top.toFixed(2)}`, amount: top, speed: 0.02,
+              onArrive: () => { A.fina.balance -= top; A[id].balance += top; }});
+            log(`Fina → ${A[id].name}: top up ${top.toFixed(2)} USDC`);
+            refilled++;
+          }
+        });
+        if (refilled) setCaption("step 2 / 2", `Treasury fans out ${refilled} top-up payment(s). Recipients brighten back to active.`);
+        this.cool = 180;
+        // simulate continued spending
+        ["alice","bob","iris","juno"].forEach(id => { A[id].balance = Math.max(0, A[id].balance - 0.7); });
+      }
+    },
+  };
+
+  // — Scene 7: On-chain oracle pull ——————————————————————————————————————————
+  SCENES.oracle = {
+    id: "oracle",
+    name: "On-chain oracle pull",
+    short: "07",
+    desc: "AI-on-chain pattern. <strong>Chen</strong> sells signed price quotes. <strong>Alice</strong>, <strong>Bob</strong>, and <strong>Iris</strong> pull on demand and pay per-query. Signed responses fold into the PQ-signed-envelope work tracked in <a href=\"https://github.com/kcolbchain/switchboard/issues/33\">#33</a>.",
+    enter() {
+      setVisible(["chen", "alice", "bob", "iris"]);
+      A.chen.balance = 12;
+      A.alice.balance = 6; A.bob.balance = 6; A.iris.balance = 6;
+      A.alice.spent = 0; A.bob.spent = 0; A.iris.spent = 0;
+      this.layout();
+      this.cool = 30;
+      setCaption("step 1 / 2", "Three buyers pull from one oracle, asynchronously. Each query costs 0.05 USDC; the oracle returns a signed quote.");
+      log(`<span class="info">oracle</span> scene loaded · 0.05 USDC / query`);
+    },
+    layout() {
+      A.chen.pos = { x: W * 0.5, y: H * 0.5 };
+      ring(["alice","bob","iris"], W * 0.5, H * 0.5, Math.min(W, H) * 0.32);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      // each buyer pulls at its own cadence
+      const buyers = [
+        { id: "alice", every: 90 },
+        { id: "bob",   every: 130 },
+        { id: "iris",  every: 70 },
+      ];
+      buyers.forEach(b => {
+        if (t % b.every === 0 && A[b.id].balance > 0.1) {
+          emit(b.id, "chen", { kind: "request", label: "quote?", speed: 0.022,
+            onArrive: () => {
+              emit("chen", b.id, { kind: "data", label: "signed quote · 0.05 USDC",
+                amount: 0.05, speed: 0.022,
+                onArrive: () => {
+                  A[b.id].balance -= 0.05; A[b.id].spent += 0.05;
+                  A.chen.balance  += 0.05;
+                  jobs++; jobsEl.textContent = jobs;
+                }});
+            }});
+          log(`${A[b.id].name} ⇄ Chen: quote pulled · 0.05 USDC`);
+        }
+      });
+      setCaption("step 2 / 2", `Asynchronous pulls; each response is a signed envelope. With <a href="https://github.com/kcolbchain/switchboard/issues/37">PQ-4</a> live, buyers verify <em>before</em> paying.`);
+    },
+  };
+
+  // ─── scene registry & switcher ────────────────────────────────────────────
+  const SCENE_ORDER = ["x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle"];
+
+  function selectScene(id, force) {
+    if (!force && currentScene && currentScene.id === id) return;
+    packets.length = 0;
+    clearApprovals();
+    sceneTick = 0;
+    for (const s of ALL) { s.state = "active"; s.spent = 0; }
+    currentScene = SCENES[id];
+    currentScene.enter();
+    // header
+    document.getElementById("sceneTitle").textContent = currentScene.name;
+    document.getElementById("sceneDesc").innerHTML   = currentScene.desc;
+    document.querySelectorAll("#sceneBar button").forEach(b => {
+      b.classList.toggle("active", b.dataset.scene === id);
+    });
+    log(`<span class="seg">— scene switched to <strong>${currentScene.name}</strong> —</span>`);
+  }
+
+  const sceneBar = document.getElementById("sceneBar");
+  SCENE_ORDER.forEach(id => {
+    const s = SCENES[id];
+    const b = document.createElement("button");
+    b.dataset.scene = id;
+    b.innerHTML = `<span class="num">${s.short}</span>${s.name}`;
+    b.addEventListener("click", () => selectScene(id));
+    sceneBar.appendChild(b);
+  });
 
   // ─── go ───────────────────────────────────────────────────────────────────
   resize();
-  layout();
+  selectScene("x402");
   requestAnimationFrame(step);
-
-  // small ambient action so the canvas isn't dead on load
-  setInterval(() => {
-    if (paused) return;
-    const eligible = AGENTS.filter(a => a.state === "active" && a.balance > 1);
-    if (!eligible.length) return;
-    const a = eligible[Math.floor(Math.random() * eligible.length)];
-    if (Math.random() < 0.4) initiatePayment(a, false);
-  }, 2200);
 })();
 </script>
 
