@@ -266,6 +266,12 @@
       <div class="empty">hover an agent to inspect</div>
     </div>
 
+    <div id="ctlPanel" class="ctl-panel" style="display:none">
+      <h2>Simulation controls</h2>
+      <div id="ctlList" class="ctl-list"></div>
+      <button id="ctlReset" class="ctl-btn">Restart scene</button>
+    </div>
+
     <h2>Shapes</h2>
     <div class="legend">
       <div><span class="shape sq"></span><span class="row-key">human</span> — Patty, Abhi, Tridib</div>
@@ -328,6 +334,7 @@
   let DPR = window.devicePixelRatio || 1;
   let W = 0, H = 0;
   let mouse = { x: -1, y: -1, shift: false };
+  let lastClient = { x: -1, y: -1 };       // last cursor position in client coords (for live tooltip)
   let hoverId = null;
   let paused = false;
   let tick = 0;
@@ -427,6 +434,7 @@
     const r = cvs.getBoundingClientRect();
     mouse.x = e.clientX - r.left;
     mouse.y = e.clientY - r.top;
+    lastClient.x = e.clientX; lastClient.y = e.clientY;
     const prevHover = hoverId;
     hoverId = pickAgent(mouse.x, mouse.y);
     if (hoverId && hoverId !== prevHover) {
@@ -436,10 +444,11 @@
       a._ripples.push({ t: 0, r: a.radius });
     }
     renderInfo();
-    renderTooltip(e.clientX, e.clientY);
+    renderTooltip(lastClient.x, lastClient.y);
   });
   cvs.addEventListener("mouseleave", () => {
-    hoverId = null; renderInfo();
+    hoverId = null; lastClient.x = -1; lastClient.y = -1;
+    renderInfo();
     ttEl.classList.remove("show");
   });
   cvs.addEventListener("click", () => {
@@ -840,6 +849,17 @@
     if (!paused && currentScene && currentScene.tick) currentScene.tick(sceneTick);
 
     draw();
+
+    // Tooltip + inspector live-refresh while a hover is active. Without this,
+    // a tooltip pinned on Patty wouldn't show her balance dropping after a
+    // packet arrives — the user would have to wiggle the mouse to refresh.
+    // No throttle — innerHTML update of a small card is cheap and the user
+    // wants instant feedback.
+    if (hoverId) {
+      renderInfo();
+      if (lastClient.x >= 0) renderTooltip(lastClient.x, lastClient.y);
+    }
+
     requestAnimationFrame(step);
   }
 
