@@ -144,6 +144,34 @@
     background: rgba(96, 165, 250, 0.18); border: none;
     box-shadow: 0 0 0 1px var(--accent); }
 
+  /* Per-scene simulation controls */
+  .ctl-panel { margin-top: 4px; }
+  .ctl-list { display: flex; flex-direction: column; gap: 8px;
+    font-family: var(--mono); font-size: 11px; margin-bottom: 8px; }
+  .ctl-row { display: flex; flex-direction: column; gap: 2px; }
+  .ctl-row label { color: var(--muted); display: flex; justify-content: space-between; }
+  .ctl-row .val { color: var(--fg); }
+  .ctl-row input[type=range] { width: 100%; accent-color: var(--accent); }
+  .ctl-row .preset { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+  .ctl-row .preset button { background: rgba(255,255,255,0.04); color: var(--muted);
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 4px;
+    padding: 3px 8px; font: inherit; font-size: 10px; cursor: pointer; }
+  .ctl-row .preset button:hover { color: var(--fg); border-color: var(--accent); }
+  .ctl-row .preset button.active { background: rgba(96,165,250,0.12);
+    color: var(--fg); border-color: var(--accent); }
+  .ctl-btn { width: 100%; background: rgba(96,165,250,0.08);
+    color: var(--accent); border: 1px solid rgba(96,165,250,0.3);
+    border-radius: 6px; padding: 6px; font: inherit; font-size: 11px; cursor: pointer; }
+  .ctl-btn:hover { background: rgba(96,165,250,0.16); }
+  .why-card { background: rgba(125, 211, 252, 0.06);
+    border: 1px solid rgba(125, 211, 252, 0.18); border-radius: 6px;
+    padding: 9px 11px; font-size: 11px; line-height: 1.55; color: var(--fg);
+    margin-bottom: 10px; }
+  .why-card .lbl { color: var(--info); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.05em; text-transform: uppercase; display: block; margin-bottom: 3px; }
+  .why-card ul { margin: 4px 0 0 0; padding-left: 16px; color: var(--muted); }
+  .why-card li { margin-bottom: 2px; }
+
   .log { font-family: var(--mono); font-size: 10px; line-height: 1.5; }
   .log .row { padding: 3px 0; border-bottom: 1px dashed var(--border);
     display: flex; gap: 6px; }
@@ -1055,6 +1083,14 @@
     name: "Escrow + refund",
     short: "02",
     desc: "Trust-minimized A2A via <code>AgentEscrow.sol</code>. Payer locks funds, payee delivers, payer confirms → release. If payee goes silent past <code>timeout_blocks + challenge_period</code>, payer reclaims.",
+    why: `An <strong>agentic payment escrow</strong> is the only on-chain primitive that interoperates cleanly across every other rail in this lab:
+      <ul>
+        <li><strong>x402 paywalls</strong> use it to settle off-chain proofs without trusting the merchant.</li>
+        <li><strong>Streaming MPP</strong> uses it to anchor session caps in code, not a vendor's promise.</li>
+        <li><strong>Marketplaces</strong> (auction, taxi, delivery) use it so bidders commit no funds until a counterparty is chosen, and a refund path exists for the unhappy case.</li>
+        <li><strong>PQ-signed envelopes</strong> need a settlement layer that verifies signatures before releasing — escrow is the natural place to enforce that.</li>
+      </ul>
+      Built once in 200 lines of Solidity, reused across every higher-level pattern. The alternative is a per-merchant centralized escrow service — exactly what crypto was supposed to remove.`,
     enter() {
       setVisible(["alice", "gus", "escrow", "deva", "hana"]);
       A.alice.balance = 10; A.gus.balance = 1;
@@ -1210,77 +1246,184 @@
   };
 
   // — Scene 4: AI compute auction ——————————————————————————————————————————
+  // Reworked: better placement, scrubbable bid + budget sliders in the
+  // sidebar, three scenario presets. Each phase is broken into smaller
+  // event beats so the user can follow what is happening.
   SCENES.auction = {
     id: "auction",
     name: "AI compute auction",
     short: "04",
-    desc: "Marketplace flow. <strong>Iris</strong> broadcasts a job (transcribe 10 minutes of audio). <strong>Abhi</strong>, <strong>Tridib</strong>, and <strong>Hana</strong> bid. Lowest bid wins; payment goes through escrow.",
+    desc: "Marketplace flow. <strong>Iris</strong> posts a transcription job. <strong>Abhi</strong>, <strong>Tridib</strong>, and <strong>Hana</strong> bid. Cheapest valid bid wins; payment goes through escrow. Drag the sliders below to change bid prices or Iris's budget — watch the outcome change.",
+    why: "Marketplaces today batch up bids on a centralized server and only emit one event when a winner is picked. Agents need <strong>granular events</strong> (each RFQ, each bid, the validation outcome) so they can react in-flight — drop out, re-bid, or refuse a winner whose signature doesn't validate. Switchboard models the marketplace as a sequence of small signed packets, not a single API call.",
+    controls: [
+      { id: "scenario", type: "preset", label: "Scenario",
+        default: "cheapestWins",
+        options: [
+          { label: "Cheapest wins",  value: "cheapestWins",  applyPreset: true },
+          { label: "All over budget", value: "overBudget",   applyPreset: true },
+          { label: "Tie",              value: "tie",           applyPreset: true },
+        ]},
+      { id: "budget",   type: "range", label: "Iris's max budget", min: 0.40, max: 3.00, step: 0.05, default: 1.50, suffix: "USDC", decimals: 2 },
+      { id: "bid_eli",  type: "range", label: "Abhi's bid",       min: 0.30, max: 3.00, step: 0.05, default: 1.20, suffix: "USDC", decimals: 2 },
+      { id: "bid_gus",  type: "range", label: "Tridib's bid",     min: 0.30, max: 3.00, step: 0.05, default: 0.90, suffix: "USDC", decimals: 2 },
+      { id: "bid_hana", type: "range", label: "Hana's bid",       min: 0.30, max: 3.00, step: 0.05, default: 1.05, suffix: "USDC", decimals: 2 },
+    ],
+    applyPreset(name) {
+      // Mutate the slider values + the live UI so the user sees the change.
+      const set = (id, v) => {
+        this.ctl[id] = v;
+        const input = document.getElementById("ctl-" + id);
+        const valEl = document.getElementById("ctl-" + id + "-val");
+        if (input) input.value = v;
+        if (valEl) valEl.textContent = v.toFixed(2) + " USDC";
+      };
+      if (name === "cheapestWins") {
+        set("budget", 1.50); set("bid_eli", 1.20); set("bid_gus", 0.90); set("bid_hana", 1.05);
+      } else if (name === "overBudget") {
+        set("budget", 0.80); set("bid_eli", 1.20); set("bid_gus", 1.10); set("bid_hana", 1.05);
+      } else if (name === "tie") {
+        set("budget", 1.50); set("bid_eli", 1.00); set("bid_gus", 1.00); set("bid_hana", 1.20);
+      }
+      selectScene("auction", true);   // restart with new params
+    },
     enter() {
       setVisible(["iris", "eli", "gus", "hana", "escrow"]);
-      A.iris.balance = 12; A.iris.spent = 0;
-      A.eli.balance = 1; A.gus.balance = 1; A.hana.balance = 1;
+      A.iris.balance = this.ctl.budget * 4; A.iris.spent = 0;
+      A.eli.balance = 0; A.gus.balance = 0; A.hana.balance = 0;
       this.layout();
       this.phase = 0; this.cool = 60;
-      this.bids = [];
+      this.bids = []; this.winner = null;
       A.eli.state = "listening"; A.gus.state = "listening"; A.hana.state = "listening";
-      setCaption("step 1 / 4", "Iris is about to broadcast a job to the listening providers.");
-      log(`<span class="info">auction</span> scene loaded`);
+      setCaption("event 1", "Iris drafts an RFQ for the job. Three providers are <em>listening</em> (dashed outer ring).");
+      log(`<span class="info">auction</span> scene loaded · budget ${this.ctl.budget.toFixed(2)} USDC`);
     },
     layout() {
-      A.iris.pos = { x: W * 0.2, y: H * 0.5 };
-      A.escrow.pos = { x: W * 0.55, y: H * 0.75 };
-      ring(["eli", "gus", "hana"], W * 0.72, H * 0.5, 130, -Math.PI/2);
+      // Clean placement: Iris on the left, providers stacked vertically on
+      // the right with comfortable spacing, escrow tucked at the bottom.
+      A.iris.pos   = { x: W * 0.22, y: H * 0.5  };
+      A.eli.pos    = { x: W * 0.72, y: H * 0.22 };
+      A.gus.pos    = { x: W * 0.78, y: H * 0.5  };
+      A.hana.pos   = { x: W * 0.72, y: H * 0.78 };
+      A.escrow.pos = { x: W * 0.46, y: H * 0.82 };
+    },
+    drawOverlay(ctx, W, H) {
+      // Show each provider's current bid floating above them.
+      const providers = [
+        { id: "eli",  bid: this.ctl.bid_eli  },
+        { id: "gus",  bid: this.ctl.bid_gus  },
+        { id: "hana", bid: this.ctl.bid_hana },
+      ];
+      ctx.save();
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      providers.forEach(p => {
+        const a = A[p.id];
+        const overBudget = p.bid > this.ctl.budget;
+        ctx.fillStyle = overBudget ? "rgba(248, 113, 113, 0.85)" : "rgba(231, 233, 238, 0.75)";
+        ctx.fillText(`bid: ${p.bid.toFixed(2)} USDC${overBudget ? " · over cap" : ""}`,
+                     a.pos.x, a.pos.y - a.radius - 14);
+      });
+      // Iris's budget callout
+      ctx.fillStyle = "rgba(125, 211, 252, 0.85)";
+      ctx.fillText(`budget ≤ ${this.ctl.budget.toFixed(2)} USDC`,
+                   A.iris.pos.x, A.iris.pos.y - A.iris.radius - 14);
+      ctx.restore();
     },
     tick(t) {
       if (this.cool > 0) { this.cool--; return; }
-      if (this.phase === 0) {
-        ["eli","gus","hana"].forEach(id => emit("iris", id, { kind: "request", label: "RFQ", speed: 0.02 }));
-        log(`Iris broadcasts RFQ to ${3} providers`);
-        setCaption("step 2 / 4", "RFQ fans out. Providers price the job and respond with bids.");
-        this.phase = 1; this.cool = 70;
-      } else if (this.phase === 1) {
-        const bids = { eli: 1.20, gus: 0.90, hana: 1.05 };
-        Object.entries(bids).forEach(([id, price], i) => {
+      switch (this.phase) {
+        case 0: {
+          // event 2: Iris broadcasts the RFQ to each provider, one packet each
+          // for clearer beat-by-beat visualization.
+          ["eli","gus","hana"].forEach((id, i) => {
+            setTimeout(() => emit("iris", id, { kind: "request", label: "RFQ", speed: 0.026 }), i * 220);
+          });
+          log(`Iris broadcasts RFQ to 3 providers`);
+          setCaption("event 2", "RFQ packet leaves Iris three times — one per provider. Each provider's agent receives, prices the job, prepares a signed bid.");
+          this.phase = 1; this.cool = 90;
+          break;
+        }
+        case 1: {
+          // event 3: each provider returns a bid, staggered so they're individually readable
+          const bids = { eli: this.ctl.bid_eli, gus: this.ctl.bid_gus, hana: this.ctl.bid_hana };
+          Object.entries(bids).forEach(([id, price], i) => {
+            setTimeout(() => {
+              emit(id, "iris", { kind: "bid", label: `${price.toFixed(2)} USDC`, speed: 0.026,
+                onArrive: () => this.bids.push({ id, price }) });
+              log(`<span class="warn">${A[id].name}</span> bids ${price.toFixed(2)} USDC`);
+            }, i * 480);
+          });
+          setCaption("event 3", "Each provider signs and sends a bid back. Iris's agent collects them, verifies signatures, sorts by price.");
+          this.phase = 2; this.cool = 160;
+          break;
+        }
+        case 2: {
+          // event 4: pick a winner (or fail)
+          const valid = this.bids.filter(b => b.price <= this.ctl.budget);
+          if (valid.length === 0) {
+            log(`<span class="hot">no valid bids</span> · all over Iris's ${this.ctl.budget.toFixed(2)} USDC cap`);
+            setCaption("event 4 · abort", `Every bid exceeded Iris's budget cap. Auction aborts — <strong>no escrow lock</strong>, no commitment. Iris keeps her funds.`);
+            ["eli","gus","hana"].forEach(id => A[id].state = "passive");
+            this.phase = 5; this.cool = 220;
+            break;
+          }
+          valid.sort((a, b) => a.price - b.price);
+          // Tie? same lowest price — first-seen wins
+          const lowest = valid[0].price;
+          const tied = valid.filter(b => Math.abs(b.price - lowest) < 1e-9);
+          this.winner = tied[0];
+          ["eli","gus","hana"].forEach(id => { if (id !== this.winner.id) A[id].state = "passive"; });
+          if (tied.length > 1) {
+            log(`<span class="info">tie at ${lowest.toFixed(2)} USDC</span> · ${A[this.winner.id].name} wins on first-seen rule`);
+            setCaption("event 4 · tie-break", `Tie at ${lowest.toFixed(2)} USDC between ${tied.map(b => A[b.id].name).join(" + ")}. First-seen-wins: <strong>${A[this.winner.id].name}</strong>.`);
+          } else {
+            log(`<span class="ok">${A[this.winner.id].name} wins</span> at ${lowest.toFixed(2)} USDC`);
+            setCaption("event 4", `<strong>${A[this.winner.id].name}</strong> wins at ${lowest.toFixed(2)} USDC. Losing providers go passive — losing a bid costs them nothing.`);
+          }
+          this.phase = 3; this.cool = 100;
+          break;
+        }
+        case 3: {
+          // event 5: Iris locks funds in escrow
+          const w = this.winner;
+          emit("iris", "escrow", { kind: "offer", label: "lock " + w.price.toFixed(2),
+            amount: w.price, speed: 0.022,
+            onArrive: () => { A.iris.balance -= w.price; A.escrow.balance += w.price; }});
+          log(`Iris → Escrow: lock ${w.price.toFixed(2)} USDC for ${A[w.id].name}`);
+          setCaption("event 5", `Iris locks ${w.price.toFixed(2)} USDC in escrow against the winning bid. No funds leave Iris's wallet without the contract guarantee.`);
+          this.phase = 4; this.cool = 130;
+          break;
+        }
+        case 4: {
+          // event 6 + 7: delivery, confirm, release — separate beats
+          const w = this.winner;
+          emit(w.id, "iris", { kind: "data", label: "transcript", speed: 0.022 });
+          log(`${A[w.id].name} → Iris: transcript delivered`);
+          setCaption("event 6", `<strong>${A[w.id].name}</strong> performs the work and delivers a signed artifact to Iris.`);
           setTimeout(() => {
-            emit(id, "iris", { kind: "bid", label: `${price.toFixed(2)} USDC`, speed: 0.02,
-              onArrive: () => this.bids.push({ id, price }) });
-            log(`<span class="warn">${A[id].name}</span> bids ${price.toFixed(2)} USDC`);
-          }, i * 400);
-        });
-        this.phase = 2; this.cool = 120;
-      } else if (this.phase === 2) {
-        const winner = this.bids.sort((a,b) => a.price - b.price)[0];
-        if (!winner) { this.cool = 30; return; }
-        this.winner = winner;
-        ["eli","gus","hana"].forEach(id => { if (id !== winner.id) A[id].state = "passive"; });
-        log(`<span class="ok">${A[winner.id].name} wins</span> at ${winner.price.toFixed(2)} USDC`);
-        setCaption("step 3 / 4", `<strong>${A[winner.id].name}</strong> wins the auction. Iris locks funds in escrow.`);
-        emit("iris", "escrow", { kind: "offer", label: "lock " + winner.price.toFixed(2),
-          amount: winner.price, speed: 0.018,
-          onArrive: () => { A.iris.balance -= winner.price; A.escrow.balance += winner.price; }});
-        this.phase = 3; this.cool = 100;
-      } else if (this.phase === 3) {
-        // delivery + release
-        const w = this.winner;
-        emit(w.id, "iris", { kind: "data", label: "transcript", speed: 0.018 });
-        setTimeout(() => {
-          emit("iris", "escrow", { kind: "request", label: "confirm", speed: 0.02,
-            onArrive: () => {
-              emit("escrow", w.id, { kind: "proof", label: `released ${w.price.toFixed(2)}`, speed: 0.02,
-                onArrive: () => {
-                  A.escrow.balance -= w.price; A[w.id].balance += w.price;
-                  jobs++; jobsEl.textContent = jobs;
-                }});
-            }});
-        }, 1200);
-        setCaption("step 4 / 4", `Provider delivers → Iris confirms → escrow releases ${w.price.toFixed(2)} USDC. Losing bids cost nothing.`);
-        this.phase = 4; this.cool = 220;
-      } else if (this.phase === 4) {
-        // reset
-        this.bids = []; this.winner = null;
-        ["eli","gus","hana"].forEach(id => { A[id].state = "listening"; A[id].balance = 1; });
-        A.iris.balance = 12;
-        this.phase = 0; this.cool = 60;
+            emit("iris", "escrow", { kind: "request", label: "confirm", speed: 0.026,
+              onArrive: () => {
+                emit("escrow", w.id, { kind: "proof", label: `released ${w.price.toFixed(2)}`, speed: 0.024,
+                  onArrive: () => {
+                    A.escrow.balance -= w.price; A[w.id].balance += w.price;
+                    jobs++; jobsEl.textContent = jobs;
+                  }});
+                log(`Escrow released ${w.price.toFixed(2)} USDC to ${A[w.id].name}`);
+                setCaption("event 7", `Iris confirms → escrow releases. Winner credited; losers untouched. The protocol completes in ${this.bids.length + 4} signed packets total.`);
+              }});
+          }, 1400);
+          this.phase = 5; this.cool = 260;
+          break;
+        }
+        case 5: {
+          // reset loop
+          this.bids = []; this.winner = null;
+          ["eli","gus","hana"].forEach(id => { A[id].state = "listening"; A[id].balance = 0; });
+          A.iris.balance = this.ctl.budget * 4; A.iris.spent = 0;
+          A.escrow.balance = 0;
+          this.phase = 0; this.cool = 100;
+          break;
+        }
       }
     },
   };
@@ -2231,6 +2374,11 @@
     sceneTick = 0;
     for (const s of ALL) { s.state = "active"; s.spent = 0; }
     currentScene = SCENES[id];
+    // Initialize ctl bag from declared controls (if any) before enter() runs.
+    currentScene.ctl = {};
+    (currentScene.controls || []).forEach(c => {
+      currentScene.ctl[c.id] = c.default;
+    });
     currentScene.enter();
     // header
     document.getElementById("sceneTitle").textContent = currentScene.name;
@@ -2238,7 +2386,72 @@
     document.querySelectorAll("#sceneBar button").forEach(b => {
       b.classList.toggle("active", b.dataset.scene === id);
     });
+    renderControls(currentScene);
+    renderWhyCard(currentScene);
     log(`<span class="seg">— scene switched to <strong>${currentScene.name}</strong> —</span>`);
+  }
+
+  function renderControls(scene) {
+    const panel = document.getElementById("ctlPanel");
+    const list = document.getElementById("ctlList");
+    const resetBtn = document.getElementById("ctlReset");
+    if (!scene.controls || scene.controls.length === 0) {
+      panel.style.display = "none";
+      list.innerHTML = "";
+      return;
+    }
+    panel.style.display = "block";
+    list.innerHTML = "";
+    scene.controls.forEach(c => {
+      const row = document.createElement("div"); row.className = "ctl-row";
+      if (c.type === "range") {
+        const valSpan = `<span class="val" id="ctl-${c.id}-val">${scene.ctl[c.id].toFixed(c.decimals ?? 2)}${c.suffix ? " " + c.suffix : ""}</span>`;
+        row.innerHTML = `<label>${c.label}${valSpan}</label>
+          <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${scene.ctl[c.id]}" id="ctl-${c.id}">`;
+        list.appendChild(row);
+        const input = row.querySelector("input");
+        input.addEventListener("input", () => {
+          const v = parseFloat(input.value);
+          scene.ctl[c.id] = v;
+          document.getElementById(`ctl-${c.id}-val`).textContent =
+            v.toFixed(c.decimals ?? 2) + (c.suffix ? " " + c.suffix : "");
+          if (scene.onCtlChange) scene.onCtlChange(c.id, v);
+        });
+      } else if (c.type === "preset") {
+        row.innerHTML = `<label>${c.label}</label><div class="preset" id="preset-${c.id}"></div>`;
+        list.appendChild(row);
+        const wrap = row.querySelector(".preset");
+        c.options.forEach(opt => {
+          const b = document.createElement("button");
+          b.textContent = opt.label;
+          b.dataset.value = opt.value;
+          if (opt.value === scene.ctl[c.id]) b.classList.add("active");
+          b.addEventListener("click", () => {
+            scene.ctl[c.id] = opt.value;
+            wrap.querySelectorAll("button").forEach(x => x.classList.toggle("active", x.dataset.value === opt.value));
+            if (scene.onCtlChange) scene.onCtlChange(c.id, opt.value);
+            if (opt.applyPreset && scene.applyPreset) scene.applyPreset(opt.value);
+          });
+          wrap.appendChild(b);
+        });
+      }
+    });
+    resetBtn.onclick = () => selectScene(scene.id, true);
+  }
+
+  function renderWhyCard(scene) {
+    // Detach any previous why-card before re-mounting.
+    const existing = document.getElementById("whyCard");
+    if (existing) existing.remove();
+    if (!scene.why) return;
+    const aside = document.querySelector("aside.left");
+    const card = document.createElement("div");
+    card.className = "why-card";
+    card.id = "whyCard";
+    card.innerHTML = `<span class="lbl">why this matters</span>${scene.why}`;
+    // Insert directly after the scene description block.
+    const descEl = document.getElementById("sceneDesc");
+    descEl.parentNode.insertBefore(card, descEl.nextSibling);
   }
 
   // Group scene-bar by category for readability.

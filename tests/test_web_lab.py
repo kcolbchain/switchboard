@@ -247,3 +247,39 @@ def test_sara_added_as_human(lab_script: str) -> None:
     """Split-bill scene now uses Sara instead of an AI agent."""
     assert 'name: "Sara"' in lab_script
     assert 'kind: "human"' in lab_script   # at least one explicit human kind
+
+
+# ─── scene-controls + live tooltip + why-card ──────────────────────────────
+
+def test_scene_controls_mechanism(lab_script: str) -> None:
+    """Scenes can declare controls; renderer mounts them in #ctlPanel."""
+    assert "renderControls" in lab_script
+    assert "scene.ctl" in lab_script
+    # auction scene declares the new controls
+    assert 'id: "scenario"' in lab_script
+    assert 'id: "bid_eli"' in lab_script
+    assert 'id: "bid_gus"' in lab_script
+    assert 'id: "bid_hana"' in lab_script
+
+
+def test_auction_has_scenario_presets(lab_script: str) -> None:
+    """Three documented scenarios available as preset buttons."""
+    for preset in ('"cheapestWins"', '"overBudget"', '"tie"'):
+        assert preset in lab_script, f"auction preset {preset} missing"
+
+
+def test_tooltip_live_refresh(lab_script: str) -> None:
+    """rAF loop should refresh tooltip while hover is active."""
+    assert "lastClient" in lab_script
+    # The live-refresh hook is inside step(); ensure renderTooltip is called
+    # from inside the loop body, not just from the mousemove handler.
+    step_block = lab_script.split("function step()")[1].split("function renderInfo()")[0]
+    assert "renderTooltip" in step_block, "renderTooltip not called from step() loop"
+
+
+def test_why_card_supported(lab_script: str) -> None:
+    """Scenes can declare a why-card; renderer mounts it under the desc."""
+    assert "renderWhyCard" in lab_script
+    assert "why-card" in lab_script
+    # Escrow scene + auction scene both publish a why
+    assert 'why: "' in lab_script or 'why: `' in lab_script
