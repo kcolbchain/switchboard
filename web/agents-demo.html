@@ -532,6 +532,21 @@
   function lerp(a, b, t) { return a + (b - a) * t; }
   function hsla(h, s, l, a) { return `hsla(${h}, ${s}%, ${l}%, ${a})`; }
 
+  // Pull theme tokens once per frame and cache. Sampled inside draw().
+  let _ink = "#0b0d10";
+  let _shadowInk = "rgba(0,0,0,0.55)";
+  let _bg = "#0b0d10";
+  function refreshThemeColors() {
+    const css = getComputedStyle(document.documentElement);
+    _ink       = css.getPropertyValue("--ink").trim()        || _ink;
+    _shadowInk = css.getPropertyValue("--shadow-ink").trim() || _shadowInk;
+    _bg        = css.getPropertyValue("--bg").trim()         || _bg;
+  }
+  function inkColor()    { return _ink; }
+  function shadowInk()   { return _shadowInk; }
+  function bgColor()     { return _bg; }
+  function hitlColor()   { return getComputedStyle(document.documentElement).getPropertyValue("--hitl").trim() || "#fbbf24"; }
+
   function walletColor(w) {
     switch (w) {
       case "agentic":  return "#7dd3fc";
@@ -546,6 +561,7 @@
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
+    refreshThemeColors();
     drawGrid();
     if (currentScene.drawUnderlay) currentScene.drawUnderlay(ctx, W, H);
     if (currentScene.drawChannels) currentScene.drawChannels(ctx);
@@ -596,61 +612,64 @@
   function drawAgent(a) {
     const { x, y } = a.pos;
     const hovered = (a.id === hoverId);
-    // hover scale-up: smooth ease toward 1.12 when hovered, 1.0 otherwise
-    a._hoverEase = (a._hoverEase ?? 1) + ((hovered ? 1.12 : 1.0) - (a._hoverEase ?? 1)) * 0.18;
+    // hover scale-up: smooth ease toward 1.10 when hovered, 1.0 otherwise
+    a._hoverEase = (a._hoverEase ?? 1) + ((hovered ? 1.10 : 1.0) - (a._hoverEase ?? 1)) * 0.18;
     const r = a.radius * a._hoverEase;
     const balanceRatio = Math.min(1, a.balance / Math.max(1, a.dailyCap));
 
-    // hover ripples — expanding rings, fade as they grow
+    // hover ripples — neobrutalist: solid stroke rings, no fade-to-zero
     if (a._ripples) {
       for (let i = a._ripples.length - 1; i >= 0; i--) {
         const rp = a._ripples[i];
-        rp.t += 0.04;
+        rp.t += 0.05;
         if (rp.t >= 1) { a._ripples.splice(i, 1); continue; }
-        const rr = a.radius + rp.t * 50;
-        ctx.strokeStyle = hsla(a.hue, 90, 65, (1 - rp.t) * 0.5);
-        ctx.lineWidth = 2 * (1 - rp.t);
+        const rr = a.radius + rp.t * 44;
+        ctx.strokeStyle = hsla(a.hue, 80, 55, (1 - rp.t) * 0.7);
+        ctx.lineWidth = 2.5 * (1 - rp.t * 0.4);
         ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI*2); ctx.stroke();
       }
     }
 
-    // halo
-    if (a.state === "active" || a.state === "paying" || a.state === "listening") {
-      const pulse = 0.5 + 0.5 * Math.sin(a.glowPhase);
-      const haloR = r + 14 + (a.state === "paying" ? 8 * pulse : 4 * pulse);
-      const g = ctx.createRadialGradient(x, y, r, x, y, haloR);
-      g.addColorStop(0, "rgba(255,255,255,0)");
-      const c = hsla(a.hue, 80, 60, 0.32 * (a.state === "paying" ? 1 : 0.55));
-      g.addColorStop(0.7, c);
-      g.addColorStop(1, c.replace(/[\d.]+\)$/, "0)"));
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(x, y, haloR, 0, Math.PI*2); ctx.fill();
-    }
-
-    // hover: signature gradient
+    // hover: signature ring — solid arc segments, hard transitions
     if (hovered) {
       const ang = (tick * 0.04) % (Math.PI * 2);
-      const sigR = r + 26;
-      for (let i = 0; i < 60; i++) {
-        const a0 = ang + (i / 60) * Math.PI * 2;
-        const a1 = ang + ((i+1) / 60) * Math.PI * 2;
-        const hue = (a.hue + i * 6) % 360;
+      const sigR = r + 16;
+      for (let i = 0; i < 16; i++) {
+        const a0 = ang + (i / 16) * Math.PI * 2;
+        const a1 = ang + ((i + 0.7) / 16) * Math.PI * 2;
+        const hue = (a.hue + i * 22) % 360;
         ctx.beginPath(); ctx.arc(x, y, sigR, a0, a1);
-        ctx.strokeStyle = hsla(hue, 90, 65, 0.55);
-        ctx.lineWidth = 4; ctx.stroke();
+        ctx.strokeStyle = hsla(hue, 85, 55, 0.85);
+        ctx.lineWidth = 5;
+        ctx.lineCap = "butt";
+        ctx.stroke();
       }
     }
 
-    // body — dispatch on shape
+    // body — dispatch on shape; each body draws its own hard-edged shadow
     if (a.shape === "hex") drawHexBody(a, balanceRatio);
     else if (a.shape === "octagon") drawOctagonBody(a, balanceRatio);
     else if (a.shape === "squircle") drawSquircleBody(a, balanceRatio);
     else drawCircleBody(a, balanceRatio);
 
-    // HITL lock dot
+    // active-state indicator — small filled square on top-right corner
+    // (replaces the soft halo). One block-shadow language across all states.
+    if (a.state === "active" || a.state === "paying" || a.state === "listening") {
+      const pulse = a.state === "paying" ? (0.5 + 0.5 * Math.sin(a.glowPhase * 2)) : 1;
+      const sx = x + r * 0.65, sy = y - r * 0.65;
+      ctx.fillStyle = hsla(a.hue, 85, 55, pulse);
+      ctx.fillRect(sx - 3, sy - 3, 6, 6);
+      ctx.strokeStyle = inkColor();
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(sx - 3, sy - 3, 6, 6);
+    }
+
+    // HITL lock — stamped square instead of soft dot
     if (a.wallet === "hitl") {
-      ctx.fillStyle = "rgba(251, 191, 36, 0.9)";
-      ctx.beginPath(); ctx.arc(x, y - r - 6, 3, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = hitlColor();
+      ctx.fillRect(x - 4, y - r - 9, 8, 6);
+      ctx.strokeStyle = inkColor(); ctx.lineWidth = 1.5;
+      ctx.strokeRect(x - 4, y - r - 9, 8, 6);
     }
 
     // awaitingApproval ring
@@ -681,101 +700,115 @@
     }
   }
 
+  // ─── neobrutalist body renderers ──────────────────────────────────────────
+  // All four shapes share a language:
+  //   1. Hard offset block-shadow (no blur)
+  //   2. Solid two-tone fill (top half lighter, bottom half tonal)
+  //   3. Thick ink outline (3px)
+  //   4. Wallet-color accent inset bar at the bottom of the body
+  //   5. Passive state = desaturated solid fill, same outline
+  // The fills use HSL stops at fixed lightness, so brightness doesn't
+  // depend on balance — balance is reflected in a tiny inset bar instead.
+  function brutFills(a, balanceRatio) {
+    const sat = a.state === "passive" ? 25 : 80;
+    const light1 = a.state === "passive" ? 55 : 60;   // top half / hi
+    const light2 = a.state === "passive" ? 42 : 38;   // bottom half / lo
+    return {
+      hi: `hsl(${a.hue}, ${sat}%, ${light1}%)`,
+      lo: `hsl(${a.hue}, ${sat}%, ${light2}%)`,
+      accent: walletColor(a.wallet),
+    };
+  }
+
   function drawCircleBody(a, balanceRatio) {
     const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
+    const { hi, lo, accent } = brutFills(a, balanceRatio);
     ctx.save();
-    if (a.state === "passive") {
-      const g = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r);
-      g.addColorStop(0, hsla(a.hue, 40, 70, 0.22));
-      g.addColorStop(1, hsla(a.hue, 40, 30, 0.08));
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)"; ctx.lineWidth = 1; ctx.stroke();
-    } else {
-      const inner = ctx.createRadialGradient(x, y, 1, x, y, r);
-      inner.addColorStop(0,  hsla(a.hue, 95, 70, 0.95 * (0.35 + 0.65 * balanceRatio)));
-      inner.addColorStop(0.6, hsla(a.hue, 85, 50, 0.55 * (0.4 + 0.6 * balanceRatio)));
-      inner.addColorStop(1,  hsla(a.hue, 60, 30, 0.85));
-      ctx.fillStyle = inner;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-      ctx.strokeStyle = walletColor(a.wallet);
-      ctx.lineWidth = a.wallet === "treasury" ? 2.4 : 1.6;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
-    }
+    // hard offset block-shadow
+    ctx.fillStyle = shadowInk();
+    ctx.beginPath(); ctx.arc(x + 4, y + 4, r, 0, Math.PI * 2); ctx.fill();
+    // two-tone solid fill (split horizontally)
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = hi; ctx.fillRect(x - r, y - r, r * 2, r);
+    ctx.fillStyle = lo; ctx.fillRect(x - r, y,      r * 2, r);
+    ctx.restore();
+    // accent inset bar (bottom)
+    ctx.save();
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = accent;
+    ctx.fillRect(x - r, y + r - 5, r * 2, 5);
+    ctx.restore();
+    // thick ink outline
+    ctx.strokeStyle = inkColor();
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
   }
 
   function drawSquircleBody(a, balanceRatio) {
-    // Soft rounded square — the "human-operated agent" silhouette.
+    // Rounded square — humans. Brutalist: hard shadow, two-tone fill,
+    // thick ink outline, ink silhouette of head + shoulders.
     const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
-    ctx.save();
-    const w = r * 1.8, h = r * 1.8, rr = r * 0.55;
+    const { hi, lo, accent } = brutFills(a, balanceRatio);
+    const w = r * 1.8, h = r * 1.8, rr = r * 0.35;
     const x0 = x - w / 2, y0 = y - h / 2;
-    if (a.state === "passive") {
-      const g = ctx.createLinearGradient(x0, y0, x0, y0 + h);
-      g.addColorStop(0, hsla(a.hue, 40, 70, 0.20));
-      g.addColorStop(1, hsla(a.hue, 40, 30, 0.06));
-      ctx.fillStyle = g;
-      roundedRectPath(ctx, x0, y0, w, h, rr);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)"; ctx.lineWidth = 1;
-      roundedRectPath(ctx, x0, y0, w, h, rr); ctx.stroke();
-    } else {
-      const g = ctx.createLinearGradient(x0, y0, x0, y0 + h);
-      g.addColorStop(0, hsla(a.hue, 90, 70, 0.85 * (0.35 + 0.65 * balanceRatio)));
-      g.addColorStop(0.6, hsla(a.hue, 80, 50, 0.55 * (0.4 + 0.6 * balanceRatio)));
-      g.addColorStop(1, hsla(a.hue, 60, 30, 0.85));
-      ctx.fillStyle = g;
-      roundedRectPath(ctx, x0, y0, w, h, rr); ctx.fill();
-      ctx.strokeStyle = walletColor(a.wallet);
-      ctx.lineWidth = 1.6;
-      roundedRectPath(ctx, x0, y0, w, h, rr); ctx.stroke();
-    }
-    // tiny "person" glyph — head + shoulders silhouette
-    ctx.fillStyle = "rgba(11, 13, 16, 0.55)";
-    ctx.beginPath(); ctx.arc(x, y - r * 0.18, r * 0.18, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(x - r * 0.34, y + r * 0.32);
-    ctx.quadraticCurveTo(x, y + r * 0.06, x + r * 0.34, y + r * 0.32);
-    ctx.lineTo(x + r * 0.34, y + r * 0.42);
-    ctx.lineTo(x - r * 0.34, y + r * 0.42);
-    ctx.closePath(); ctx.fill();
+    ctx.save();
+    // block-shadow
+    ctx.fillStyle = shadowInk();
+    roundedRectPath(ctx, x0 + 4, y0 + 4, w, h, rr); ctx.fill();
+    // two-tone fill (top / bottom split)
+    roundedRectPath(ctx, x0, y0, w, h, rr); ctx.clip();
+    ctx.fillStyle = hi; ctx.fillRect(x0, y0,        w, h / 2);
+    ctx.fillStyle = lo; ctx.fillRect(x0, y0 + h / 2, w, h / 2);
+    // accent inset bar
+    ctx.fillStyle = accent;
+    ctx.fillRect(x0, y0 + h - 5, w, 5);
     ctx.restore();
+    // person glyph in ink — sharp, no curves on the body
+    ctx.save();
+    ctx.fillStyle = inkColor();
+    ctx.beginPath(); ctx.arc(x, y - r * 0.18, r * 0.20, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(x - r * 0.36, y + r * 0.05, r * 0.72, r * 0.35);
+    ctx.restore();
+    // thick ink outline
+    ctx.strokeStyle = inkColor();
+    ctx.lineWidth = 3;
+    roundedRectPath(ctx, x0, y0, w, h, rr); ctx.stroke();
   }
 
   function drawOctagonBody(a, balanceRatio) {
-    // Eight-sided — the "autonomous / bot" silhouette.
+    // Eight-sided — bots. Brutalist: hard shadow, two-tone, ink circuit
+    // grid (no soft fills, no radial gradients).
     const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
+    const { hi, lo, accent } = brutFills(a, balanceRatio);
     ctx.save();
-    octagonPath(ctx, x, y, r);
-    if (a.state === "passive") {
-      const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
-      g.addColorStop(0, hsla(a.hue, 40, 65, 0.22));
-      g.addColorStop(1, hsla(a.hue, 40, 30, 0.06));
-      ctx.fillStyle = g; ctx.fill();
-      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)"; ctx.lineWidth = 1; ctx.stroke();
-    } else {
-      const g = ctx.createRadialGradient(x, y, 1, x, y, r);
-      g.addColorStop(0,  hsla(a.hue, 95, 70, 0.95 * (0.35 + 0.65 * balanceRatio)));
-      g.addColorStop(0.6, hsla(a.hue, 85, 50, 0.55 * (0.4 + 0.6 * balanceRatio)));
-      g.addColorStop(1,  hsla(a.hue, 60, 30, 0.85));
-      ctx.fillStyle = g; ctx.fill();
-      ctx.strokeStyle = walletColor(a.wallet);
-      ctx.lineWidth = a.wallet === "treasury" ? 2.2 : 1.6;
-      ctx.stroke();
-    }
-    // tiny circuit hint — two horizontal traces
-    ctx.strokeStyle = "rgba(11, 13, 16, 0.45)";
-    ctx.lineWidth = 1.2;
+    // block-shadow
+    ctx.fillStyle = shadowInk();
+    octagonPath(ctx, x + 4, y + 4, r); ctx.fill();
+    // two-tone fill
+    octagonPath(ctx, x, y, r); ctx.save(); ctx.clip();
+    ctx.fillStyle = hi; ctx.fillRect(x - r, y - r, r * 2, r);
+    ctx.fillStyle = lo; ctx.fillRect(x - r, y,     r * 2, r);
+    // accent inset bar
+    ctx.fillStyle = accent;
+    ctx.fillRect(x - r, y + r - 5, r * 2, 5);
+    ctx.restore();
+    // ink circuit grid
+    ctx.strokeStyle = inkColor();
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(x - r * 0.4, y - r * 0.1); ctx.lineTo(x + r * 0.4, y - r * 0.1);
-    ctx.moveTo(x - r * 0.4, y + r * 0.16); ctx.lineTo(x + r * 0.4, y + r * 0.16);
+    ctx.moveTo(x - r * 0.42, y - r * 0.12); ctx.lineTo(x + r * 0.42, y - r * 0.12);
+    ctx.moveTo(x - r * 0.42, y + r * 0.16); ctx.lineTo(x + r * 0.42, y + r * 0.16);
     ctx.stroke();
-    ctx.fillStyle = "rgba(11, 13, 16, 0.7)";
-    [-0.3, 0, 0.3].forEach(t => {
-      ctx.beginPath(); ctx.arc(x + r * t, y - r * 0.1, 1.3, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x + r * t, y + r * 0.16, 1.3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = inkColor();
+    [-0.32, 0, 0.32].forEach(t => {
+      ctx.fillRect(x + r * t - 1.4, y - r * 0.12 - 1.4, 2.8, 2.8);
+      ctx.fillRect(x + r * t - 1.4, y + r * 0.16 - 1.4, 2.8, 2.8);
     });
+    // outline
+    ctx.strokeStyle = inkColor(); ctx.lineWidth = 3;
+    octagonPath(ctx, x, y, r); ctx.stroke();
     ctx.restore();
   }
 
@@ -800,32 +833,49 @@
   }
 
   function drawHexBody(a, balanceRatio) {
+    // Hex — contracts. Brutalist: hard shadow, two-tone, thick outline,
+    // ink lock glyph for actual escrow contracts.
     const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
+    const { hi, lo, accent } = brutFills(a, balanceRatio);
+    const hexPath = () => {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const ang = -Math.PI / 2 + i * Math.PI / 3;
+        const px = x + Math.cos(ang) * r, py = y + Math.sin(ang) * r;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    };
     ctx.save();
+    // block-shadow
+    ctx.fillStyle = shadowInk();
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
-      const ang = -Math.PI/2 + i * Math.PI / 3;
-      const px = x + Math.cos(ang) * r;
-      const py = y + Math.sin(ang) * r;
+      const ang = -Math.PI / 2 + i * Math.PI / 3;
+      const px = x + 4 + Math.cos(ang) * r, py = y + 4 + Math.sin(ang) * r;
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
-    ctx.closePath();
-    const inner = ctx.createRadialGradient(x, y, 1, x, y, r);
-    inner.addColorStop(0,  hsla(a.hue, 60, 55, 0.5));
-    inner.addColorStop(1,  hsla(a.hue, 35, 28, 0.85));
-    ctx.fillStyle = inner; ctx.fill();
-    ctx.strokeStyle = walletColor(a.wallet); ctx.lineWidth = 1.6; ctx.stroke();
-    // Only draw the lock glyph for actual escrow contracts, not repo nodes.
+    ctx.closePath(); ctx.fill();
+    // two-tone fill
+    hexPath(); ctx.save(); ctx.clip();
+    ctx.fillStyle = hi; ctx.fillRect(x - r, y - r, r * 2, r);
+    ctx.fillStyle = lo; ctx.fillRect(x - r, y,     r * 2, r);
+    ctx.fillStyle = accent;
+    ctx.fillRect(x - r, y + r - 5, r * 2, 5);
+    ctx.restore();
+    // ink lock glyph on escrow contracts
     if (a.id === "escrow" || a.id === "aeo_repo") {
-      ctx.strokeStyle = hsla(a.hue, 60, 80, 0.7);
-      ctx.lineWidth = 1.4;
+      ctx.fillStyle = inkColor();
+      ctx.fillRect(x - 6, y - 2, 12, 9);
+      ctx.strokeStyle = inkColor(); ctx.lineWidth = 1.8;
       ctx.beginPath();
-      ctx.rect(x - 5, y - 2, 10, 8);
-      ctx.moveTo(x - 3, y - 2); ctx.lineTo(x - 3, y - 5);
-      ctx.arc(x, y - 5, 3, Math.PI, 0);
-      ctx.lineTo(x + 3, y - 2);
-      ctx.stroke();
+      ctx.moveTo(x - 3, y - 2); ctx.lineTo(x - 3, y - 6);
+      ctx.arc(x, y - 6, 3, Math.PI, 0);
+      ctx.lineTo(x + 3, y - 2); ctx.stroke();
     }
+    // outline
+    ctx.strokeStyle = inkColor(); ctx.lineWidth = 3;
+    hexPath(); ctx.stroke();
     ctx.restore();
   }
 
