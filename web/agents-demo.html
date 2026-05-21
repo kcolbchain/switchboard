@@ -2305,75 +2305,195 @@
     },
   };
 
-  // — Scene 11: Café walk-up ——————————————————————————————————————————————
+  // — Scene 11: Café walk-by + pre-order ————————————————————————————————————
+  // The story: Patty walks down the street in Siolim. Her agent detects
+  // Work-In-Progress (Abhi's coffee place) coming up, pings it for a
+  // signed menu, pays for a latte, and the shop starts brewing while
+  // Patty's still 30 paces away. By the time she arrives the cup is on
+  // the counter — zero wait. This is the everyday case for agentic
+  // payments: the agent does the slow part while the human keeps walking.
   SCENES.cafe = {
     id: "cafe",
-    name: "Café walk-up",
+    name: "Café walk-by",
     short: "11",
-    desc: "Smallest possible flow. <strong>Patty</strong> walks up to <strong>Abhi</strong>'s espresso bar. The shop's POS agent (Aroma) does a proximity handshake with Patty, picks a latte off the signed menu, pays 4.50 USDC, takes the cup. Abhi is the human; Aroma is the bot surface he runs.",
+    desc: "<strong>Patty</strong> is walking down the street in <strong>Siolim</strong>. Her agent detects <strong>Work-In-Progress</strong> (Abhi's coffee place) coming up, pings the shop, picks a latte off the signed menu, pays 4.50 USDC, and the shop starts brewing while Patty's still walking. By the time she arrives, the cup is ready — zero wait at the counter.",
+    why: "This is the everyday case for agentic payments. The shop's queue today serializes the slowest step (human + payment) onto the customer's wait time. Letting the buyer's <em>agent</em> handle the order + payment in parallel with the walk collapses the wait to zero — the human never queues, the shop never idles. Same primitives as scene 01 (x402 paywall), no special infrastructure.",
     enter() {
       setVisible(["bob", "eli", "cafe"]);
       A.bob.balance = 20; A.bob.spent = 0;
-      A.cafe.balance = 0; A.eli.balance = 0;
+      A.cafe.balance = 0;
       this.layout();
-      this.phase = 0; this.cool = 50;
-      setCaption("step 1 / 5", "<strong>Patty</strong> approaches <strong>Abhi</strong>'s café. Aroma POS handshakes with Patty's agent; Abhi watches from behind the counter.");
-      log(`<span class="info">cafe</span> scene loaded · Abhi's espresso bar`);
+      this.phase = 0; this.cool = 30;
+      this.walkT = 0;            // 0 → 1 over the whole walk
+      this.brewT = 0;            // 0 → 1 brewing progress
+      this.brewing = false; this.ready = false; this.handover = false;
+      A.bob.pos = { ...this.start };
+      setCaption("event 1 · walking", "<strong>Patty</strong> walks east down the street. Her agent is scanning for nearby shops she's preauthorized.");
+      log(`<span class="info">cafe</span> scene loaded · Work-In-Progress, Siolim`);
     },
     layout() {
-      A.bob.pos  = { x: W * 0.22, y: H * 0.6 };
-      A.cafe.pos = { x: W * 0.66, y: H * 0.55 };
-      A.eli.pos  = { x: W * 0.82, y: H * 0.4  };
+      // Patty walks horizontally past the shop.
+      this.start  = { x: W * 0.08, y: H * 0.62 };
+      this.detect = { x: W * 0.32, y: H * 0.62 };   // proximity ping point
+      this.arrive = { x: W * 0.58, y: H * 0.62 };   // shop counter
+      this.shopPos = { x: W * 0.62, y: H * 0.50 };
+      this.abhiPos = { x: W * 0.78, y: H * 0.40 };
+      A.cafe.pos = { ...this.shopPos };
+      A.eli.pos  = { ...this.abhiPos };
     },
     drawUnderlay(ctx, W, H) {
-      // counter rectangle behind the cafe
+      // street — single horizontal road
       ctx.save();
-      const x = W * 0.62, y = H * 0.35, w = W * 0.26, h = H * 0.32;
-      const g = ctx.createLinearGradient(x, y, x, y + h);
-      g.addColorStop(0, "rgba(251, 191, 36, 0.06)");
-      g.addColorStop(1, "rgba(251, 191, 36, 0.0)");
-      ctx.fillStyle = g;
-      ctx.strokeStyle = "rgba(251, 191, 36, 0.25)";
-      ctx.lineWidth = 1;
-      ctx.fillRect(x, y, w, h);
-      ctx.strokeRect(x, y, w, h);
-      ctx.fillStyle = "rgba(231, 233, 238, 0.5)";
-      ctx.font = "10px ui-monospace, Menlo, monospace";
-      ctx.fillText("ABHI'S  ·  espresso bar", x + 10, y + 16);
+      ctx.strokeStyle = "rgba(96, 165, 250, 0.18)";
+      ctx.lineWidth = 30;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(W * 0.02, this.start.y);
+      ctx.lineTo(W * 0.98, this.start.y);
+      ctx.stroke();
+      // sidewalk centerline
+      ctx.strokeStyle = "rgba(231, 233, 238, 0.18)";
+      ctx.lineWidth = 1.5; ctx.setLineDash([8, 8]);
+      ctx.beginPath();
+      ctx.moveTo(W * 0.02, this.start.y);
+      ctx.lineTo(W * 0.98, this.start.y);
+      ctx.stroke(); ctx.setLineDash([]);
       ctx.restore();
+
+      // shopfront — neobrutalist block above the sidewalk
+      ctx.save();
+      const sx = W * 0.50, sy = H * 0.32, sw = W * 0.28, sh = H * 0.20;
+      ctx.fillStyle = shadowInk();
+      ctx.fillRect(sx + 5, sy + 5, sw, sh);                  // hard offset shadow
+      ctx.fillStyle = "rgba(251, 191, 36, 0.18)";
+      ctx.fillRect(sx, sy, sw, sh);
+      ctx.strokeStyle = inkColor(); ctx.lineWidth = 2;
+      ctx.strokeRect(sx, sy, sw, sh);
+      // shop sign band
+      ctx.fillStyle = "rgba(251, 191, 36, 0.4)";
+      ctx.fillRect(sx, sy, sw, 22);
+      ctx.strokeStyle = inkColor(); ctx.lineWidth = 1.5;
+      ctx.strokeRect(sx, sy, sw, 22);
+      ctx.fillStyle = inkColor();
+      ctx.font = "bold 11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("WORK-IN-PROGRESS  ·  Siolim", sx + sw / 2, sy + 15);
+      // ready indicator on the counter
+      if (this.ready && !this.handover) {
+        ctx.fillStyle = "rgba(52, 211, 153, 0.9)";
+        ctx.fillRect(sx + sw / 2 - 28, sy + sh - 18, 56, 14);
+        ctx.strokeStyle = inkColor(); ctx.lineWidth = 1.4;
+        ctx.strokeRect(sx + sw / 2 - 28, sy + sh - 18, 56, 14);
+        ctx.fillStyle = inkColor();
+        ctx.font = "bold 9px ui-monospace, Menlo, monospace";
+        ctx.fillText("☕ READY", sx + sw / 2, sy + sh - 8);
+      } else if (this.brewing) {
+        // brewing progress bar
+        const bw = 56, bh = 6;
+        const bx = sx + sw / 2 - bw / 2, by = sy + sh - 14;
+        ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = "rgba(251, 191, 36, 0.85)";
+        ctx.fillRect(bx, by, bw * this.brewT, bh);
+        ctx.strokeStyle = inkColor(); ctx.lineWidth = 1;
+        ctx.strokeRect(bx, by, bw, bh);
+        ctx.fillStyle = "rgba(231, 233, 238, 0.85)";
+        ctx.font = "9px ui-monospace, Menlo, monospace";
+        ctx.fillText("brewing…", sx + sw / 2, by - 4);
+      }
+      ctx.restore();
+    },
+    drawOverlay(ctx, W, H) {
+      // proximity detection pulse on Patty when she crosses the detect line
+      if (this.phase >= 1 && this.phase <= 4 && !this.ready) {
+        const r = 18 + (Math.sin(tick * 0.18) + 1) * 6;
+        ctx.strokeStyle = "rgba(125, 211, 252, 0.5)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(A.bob.pos.x, A.bob.pos.y, r, 0, Math.PI * 2); ctx.stroke();
+      }
     },
     tick(t) {
       if (this.cool > 0) { this.cool--; return; }
+
+      // continuous walk — Patty advances each tick regardless of phase
+      // until she reaches the shop. Phases gate the agentic events.
+      const walkSpeed = 0.0028;
+      if (!this.handover) {
+        this.walkT = Math.min(1, this.walkT + walkSpeed);
+        A.bob.pos = {
+          x: lerp(this.start.x, this.arrive.x, this.walkT),
+          y: this.start.y,
+        };
+      }
+      // brewing progresses while brewing is true
+      if (this.brewing && this.brewT < 1) {
+        this.brewT = Math.min(1, this.brewT + 0.012);
+        if (this.brewT >= 1 && !this.ready) {
+          this.ready = true;
+          log(`<span class="ok">latte ready</span> · counter signal armed`);
+        }
+      }
+      const reachedDetect = A.bob.pos.x >= this.detect.x;
+      const reachedShop   = A.bob.pos.x >= this.arrive.x - 6;
+
       switch (this.phase) {
         case 0:
-          emit("bob", "cafe", { kind: "request", label: "hello", speed: 0.03 });
-          emit("cafe", "bob", { kind: "data",    label: "menu (signed)", speed: 0.03 });
-          log(`handshake complete · Aroma sent signed menu`);
-          setCaption("step 2 / 5", "Aroma sends a PQ-signed menu. Patty's agent picks: latte 4.50 USDC.");
-          this.phase = 1; this.cool = 70;
+          if (reachedDetect) {
+            emit("bob", "cafe", { kind: "request", label: "proximity ping", speed: 0.034 });
+            log(`Patty's agent → Work-In-Progress: proximity ping (~30m)`);
+            setCaption("event 2 · ping", "Patty crosses the proximity threshold. Her agent pings <strong>Work-In-Progress</strong> with a signed handshake.");
+            this.phase = 1; this.cool = 40;
+          }
           break;
         case 1:
-          emit("bob", "cafe", { kind: "offer", label: "latte · 4.50", amount: 4.5, speed: 0.022 });
-          setCaption("step 3 / 5", "Order placed. Aroma confirms availability and pricing.");
-          this.phase = 2; this.cool = 80;
+          emit("cafe", "bob", { kind: "data", label: "menu (signed)", speed: 0.034 });
+          log(`Work-In-Progress → Patty's agent: PQ-signed menu`);
+          setCaption("event 3 · menu", "Shop sends a PQ-signed menu. Patty's agent matches against her usual: latte, oat milk, 4.50 USDC.");
+          this.phase = 2; this.cool = 60;
           break;
         case 2:
-          emit("bob", "cafe", { kind: "offer", label: "X-Payment-Proof", amount: 4.5, speed: 0.022,
+          emit("bob", "cafe", { kind: "offer", label: "latte · 4.50",
+            amount: 4.5, speed: 0.028,
             onArrive: () => { A.bob.balance -= 4.5; A.cafe.balance += 4.5; } });
-          log(`Patty pays 4.50 USDC via <code>X-Payment-Proof</code>`);
-          setCaption("step 4 / 5", "Payment settles. Aroma starts the latte.");
-          this.phase = 3; this.cool = 110;
+          log(`Patty's agent → Work-In-Progress: order + <code>X-Payment-Proof</code> 4.50 USDC`);
+          setCaption("event 4 · pre-order", "Order + payment go in one packet while Patty's still 30 paces away. <strong>She hasn't slowed down.</strong>");
+          this.phase = 3; this.cool = 80;
           break;
         case 3:
-          emit("cafe", "bob", { kind: "data", label: "☕ ready", speed: 0.022 });
-          log(`<span class="ok">latte handed over</span> · receipt signed`);
-          setCaption("step 5 / 5", "Cup handover. Receipt is a PQ-signed proof — Patty leaves without touching the phone.");
-          jobs++; jobsEl.textContent = jobs;
-          this.phase = 4; this.cool = 200;
+          this.brewing = true;
+          log(`Work-In-Progress: payment verified · barista briefed · brewing`);
+          setCaption("event 5 · brewing", "Shop verifies the signed proof, kicks off the brew. Patty keeps walking; progress bar on the counter fills.");
+          this.phase = 4; this.cool = 60;
           break;
         case 4:
+          // wait for both: cup ready AND Patty at the counter
+          if (this.ready && reachedShop) {
+            emit("cafe", "bob", { kind: "data", label: "☕ ready", speed: 0.030 });
+            log(`<span class="ok">handover</span> · cup handed to Patty · receipt PQ-signed`);
+            setCaption("event 6 · handover", "Patty arrives — the latte is already on the counter. Hand-off is one signed packet; she takes the cup and keeps walking.");
+            this.handover = true; this.phase = 5; this.cool = 80;
+            jobs++; jobsEl.textContent = jobs;
+          } else if (this.ready) {
+            setCaption("event 5 · brewing", `Latte ready before Patty arrives. ${Math.round((this.arrive.x - A.bob.pos.x))} px to walk.`);
+          } else if (reachedShop) {
+            setCaption("event 5 · arrives early", "Patty arrived before the brew finished — she waits a couple seconds (still a win vs queueing in line).");
+          }
+          break;
+        case 5:
+          // Patty continues past the shop briefly so the handover reads
+          if (A.bob.pos.x < W * 0.78) {
+            this.walkT = Math.min(1, this.walkT + 0.002);
+            A.bob.pos.x = lerp(this.start.x, this.arrive.x, this.walkT);
+          } else {
+            this.phase = 6; this.cool = 160;
+          }
+          break;
+        case 6:
           A.bob.balance = 20; A.cafe.balance = 0;
-          this.phase = 0; this.cool = 60;
+          this.walkT = 0; this.brewT = 0;
+          this.brewing = false; this.ready = false; this.handover = false;
+          A.bob.pos = { ...this.start };
+          this.phase = 0; this.cool = 100;
           break;
       }
     },
