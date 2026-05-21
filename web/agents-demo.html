@@ -232,6 +232,31 @@
   .stats .val.ok { color: var(--ok); }
   .stats .val.warn { color: var(--warn); }
 
+  /* Transport bar — step-by-step playback controls pinned top-right */
+  .transport { position: absolute; top: 18px; right: 20px; z-index: 2;
+    background: var(--glass);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    border: 1px solid var(--glass-stroke);
+    border-radius: 999px; padding: 4px 8px;
+    display: flex; align-items: center; gap: 2px; }
+  .transport button { background: transparent; color: var(--muted);
+    border: 1px solid transparent; border-radius: 999px;
+    width: 28px; height: 28px; padding: 0; cursor: pointer;
+    font: inherit; font-size: 14px; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: color 0.15s, background 0.15s, border-color 0.15s; }
+  .transport button:hover { color: var(--fg); background: rgba(96, 165, 250, 0.08);
+    border-color: var(--accent); }
+  .transport .speed { display: inline-flex; align-items: center; gap: 5px;
+    margin-left: 4px; padding-left: 8px;
+    border-left: 1px solid var(--glass-stroke);
+    color: var(--muted); font-size: 11px; }
+  .transport .speed select { background: transparent; color: var(--fg);
+    border: 1px solid var(--glass-stroke); border-radius: 999px;
+    padding: 2px 6px; font: inherit; font-size: 11px;
+    font-family: var(--mono); cursor: pointer; }
+
   .caption { position: absolute; bottom: 18px; left: 20px; right: 20px; z-index: 2;
     background: rgba(13, 16, 21, 0.6);
     backdrop-filter: blur(12px) saturate(140%);
@@ -360,7 +385,22 @@
       <div><span class="label">tick</span><span id="tick" class="val">0</span></div>
       <div><span class="label">scene-time</span><span id="sceneTime" class="val">0s</span></div>
       <div><span class="label">jobs</span><span id="jobs" class="val ok">0</span></div>
-      <div><span class="label">paused</span><span id="paused" class="val">no</span></div>
+      <div><span class="label">event</span><span id="phaseLabel" class="val">—</span></div>
+    </div>
+
+    <div class="transport" id="transport">
+      <button id="btnRestart" title="restart scene (r)">↻</button>
+      <button id="btnPlayPause" title="play / pause (space)">⏸</button>
+      <button id="btnStep" title="step to next event">⏭</button>
+      <span class="speed">
+        <label for="speedSel">speed</label>
+        <select id="speedSel" title="playback rate">
+          <option value="0.5">½×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </select>
+      </span>
     </div>
     <div class="caption" id="caption">
       <span class="step">—</span> Pick a scene above to begin.
@@ -387,7 +427,6 @@
   const tickEl = document.getElementById("tick");
   const jobsEl = document.getElementById("jobs");
   const sceneTimeEl = document.getElementById("sceneTime");
-  const pausedEl = document.getElementById("paused");
   const captionEl = document.getElementById("caption");
 
   let DPR = window.devicePixelRatio || 1;
@@ -399,6 +438,8 @@
   let tick = 0;
   let sceneTick = 0;
   let jobs = 0;
+  let speedMul = 1;                        // playback rate (0.5 / 1 / 2 / 4)
+  let stepWatcher = null;                  // { startPhase, scene } when stepping
 
   function resize() {
     const rect = cvs.parentElement.getBoundingClientRect();
@@ -515,9 +556,34 @@
     currentScene.onAgentClick(A[hoverId]);
   });
   window.addEventListener("keydown", e => {
-    if (e.code === "Space") { paused = !paused; pausedEl.textContent = paused ? "yes" : "no"; e.preventDefault(); }
+    if (e.code === "Space") { paused = !paused; updateTransportUI(); e.preventDefault(); }
     if (e.key === "r" && currentScene) selectScene(currentScene.id, true);
+    if (e.key === "n" || e.code === "ArrowRight") stepOneEvent();
   });
+
+  // ─── transport bar wiring ─────────────────────────────────────────────────
+  const btnRestart   = document.getElementById("btnRestart");
+  const btnPlayPause = document.getElementById("btnPlayPause");
+  const btnStep      = document.getElementById("btnStep");
+  const speedSel     = document.getElementById("speedSel");
+  const phaseLabel   = document.getElementById("phaseLabel");
+
+  function updateTransportUI() {
+    btnPlayPause.textContent = paused ? "▶" : "⏸";
+    btnPlayPause.title = paused ? "play (space)" : "pause (space)";
+  }
+  function stepOneEvent() {
+    if (!currentScene) return;
+    stepWatcher = { startPhase: currentScene.phase, scene: currentScene };
+    currentScene.cool = 0;       // jump the gate to the next phase transition
+    paused = false;
+    updateTransportUI();
+  }
+  btnRestart.addEventListener("click",   () => currentScene && selectScene(currentScene.id, true));
+  btnPlayPause.addEventListener("click", () => { paused = !paused; updateTransportUI(); });
+  btnStep.addEventListener("click",      stepOneEvent);
+  speedSel.addEventListener("change",    () => { speedMul = parseFloat(speedSel.value) || 1; });
+  updateTransportUI();
 
   function pickAgent(x, y) {
     for (const a of ALL) {
@@ -932,10 +998,19 @@
   }
 
   // ─── tick loop ────────────────────────────────────────────────────────────
+  // speedMul is applied by running the scene's tick() multiple times per
+  // animation frame at 2× / 4×, or skipping every other frame at 0.5×.
+  let _halfStep = false;
   function step() {
-    if (!paused) { tick++; sceneTick++; }
+    let advance = !paused;
+    if (advance && speedMul < 1) { _halfStep = !_halfStep; advance = _halfStep; }
+    const innerLoops = (paused || speedMul < 1) ? 1 : Math.max(1, Math.round(speedMul));
+    if (advance) { tick++; sceneTick++; }
     sceneTimeEl.textContent = (sceneTick / 60).toFixed(1) + "s";
     tickEl.textContent = tick;
+    if (currentScene && typeof currentScene.phase === "number") {
+      phaseLabel.textContent = String(currentScene.phase);
+    }
 
     // glow phase + auto state
     for (const a of ALL) {
@@ -960,7 +1035,17 @@
       }
     }
 
-    if (!paused && currentScene && currentScene.tick) currentScene.tick(sceneTick);
+    if (advance && currentScene && currentScene.tick) {
+      for (let i = 0; i < innerLoops; i++) currentScene.tick(sceneTick);
+    }
+
+    // Step-mode watcher: re-pause once the current scene's `phase` changes.
+    if (stepWatcher && currentScene === stepWatcher.scene &&
+        currentScene.phase !== stepWatcher.startPhase) {
+      paused = true;
+      stepWatcher = null;
+      updateTransportUI();
+    }
 
     draw();
 
