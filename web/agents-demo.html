@@ -6,21 +6,41 @@
 <title>agent payments — interactive lab</title>
 <meta name="description" content="Interactive canvas lab of agent-to-agent payment patterns: HTTP-402 paywalls, on-chain escrow, streaming micropayments, AI compute auctions, human-in-the-loop, treasury rebalance, oracle pull." />
 <style>
-  :root {
+  :root,
+  :root[data-theme="dark"] {
     --bg: #0b0d10; --panel: #13161b; --panel-2: #0f1216; --border: #23272f;
     --fg: #e7e9ee; --muted: #8a93a3; --muted-2: #5a6270;
     --accent: #60a5fa; --ok: #34d399; --warn: #fbbf24; --hot: #f87171; --info: #7dd3fc;
     --agentic: #7dd3fc; --hitl: #fbbf24; --treasury: #a78bfa; --provider: #34d399; --oracle: #f0abfc;
+    --bg-grad-1: #11161d; --bg-grad-2: #0b0d10; --bg-grad-3: #131922;
+    --glass: rgba(15, 18, 22, 0.55);
+    --glass-stroke: rgba(255, 255, 255, 0.06);
+    --grid-dot: rgba(180, 196, 222, 0.18);
+    --ink: #0b0d10;            /* stamp ink for neobrutalist outlines */
+    --shadow-ink: rgba(0, 0, 0, 0.55);
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f3ec; --panel: #ffffff; --panel-2: #fbf9f2; --border: #d8d4c8;
+    --fg: #1a1a1a; --muted: #5a5a5a; --muted-2: #9a958a;
+    --accent: #1e40af; --ok: #047857; --warn: #b45309; --hot: #b91c1c; --info: #0e7490;
+    --agentic: #0e7490; --hitl: #b45309; --treasury: #6d28d9; --provider: #047857; --oracle: #a21caf;
+    --bg-grad-1: #efece2; --bg-grad-2: #f5f3ec; --bg-grad-3: #e8e4d6;
+    --glass: rgba(255, 255, 255, 0.7);
+    --glass-stroke: rgba(0, 0, 0, 0.08);
+    --grid-dot: rgba(60, 56, 48, 0.25);
+    --ink: #1a1a1a;
+    --shadow-ink: rgba(0, 0, 0, 0.18);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background:
-    radial-gradient(1200px 800px at 20% 0%, #11161d 0%, #0b0d10 60%),
-    radial-gradient(900px 600px at 100% 100%, #131922 0%, #0b0d10 60%);
+    radial-gradient(1200px 800px at 20% 0%, var(--bg-grad-1) 0%, var(--bg-grad-2) 60%),
+    radial-gradient(900px 600px at 100% 100%, var(--bg-grad-3) 0%, var(--bg-grad-2) 60%);
     background-attachment: fixed;
     color: var(--fg);
     font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    overflow: hidden; }
+    overflow: hidden;
+    transition: background 0.25s ease, color 0.25s ease; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
@@ -33,7 +53,7 @@
   header { padding: 12px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     display: flex; justify-content: space-between; align-items: center; gap: 12px;
     flex-wrap: wrap;
-    background: rgba(13, 16, 21, 0.55);
+    background: var(--glass);
     backdrop-filter: blur(14px) saturate(140%);
     -webkit-backdrop-filter: blur(14px) saturate(140%); }
   header h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--muted);
@@ -65,6 +85,15 @@
   .sb-char.scrambling::before { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
   .sb-tag { color: var(--muted); font-weight: 400; font-size: 12px; }
 
+  /* Theme toggle button — small icon-only square next to crumbs */
+  .theme-btn { background: transparent; color: var(--muted);
+    border: 1px solid var(--glass-stroke); border-radius: 6px;
+    width: 26px; height: 26px; cursor: pointer; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    font: inherit; font-size: 13px; line-height: 1;
+    transition: color 0.15s, border-color 0.15s, background 0.15s; }
+  .theme-btn:hover { color: var(--fg); border-color: var(--accent); background: rgba(96,165,250,0.08); }
+
   .scene-bar { display: flex; gap: 6px; padding: 8px 18px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     background: rgba(13, 16, 21, 0.55);
@@ -95,11 +124,11 @@
     height: calc(100vh - 95px); gap: 0; }
 
   aside { padding: 16px 16px 18px 16px; overflow-y: auto;
-    background: rgba(15, 18, 22, 0.55);
+    background: var(--glass);
     backdrop-filter: blur(14px) saturate(140%);
     -webkit-backdrop-filter: blur(14px) saturate(140%);
-    border-right: 1px solid rgba(255, 255, 255, 0.04); }
-  aside.right { border-right: none; border-left: 1px solid rgba(255, 255, 255, 0.04); }
+    border-right: 1px solid var(--glass-stroke); }
+  aside.right { border-right: none; border-left: 1px solid var(--glass-stroke); }
   aside::-webkit-scrollbar { width: 6px; }
   aside::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 3px; }
   aside::-webkit-scrollbar-track { background: transparent; }
@@ -274,9 +303,11 @@
     </span>
     <span class="sb-tag">· agent payments lab</span>
   </h1>
-  <div class="crumbs">
-    <a href="./index.html">protocol explorer</a> ·
+  <div class="crumbs" style="display:flex;align-items:center;gap:10px">
+    <a href="./index.html">protocol explorer</a>
+    <span>·</span>
     <span>vanilla canvas, no build</span>
+    <button id="themeBtn" class="theme-btn" title="toggle theme" aria-label="toggle theme">☾</button>
   </div>
 </header>
 
@@ -530,15 +561,20 @@
     const step = 36;
     const cx = W / 2, cy = H / 2;
     const maxD = Math.hypot(cx, cy);
+    // Sample the token once per frame, not per dot.
+    const gridDot = getComputedStyle(document.documentElement)
+                    .getPropertyValue("--grid-dot").trim() || "rgba(180,196,222,0.18)";
+    ctx.fillStyle = gridDot;
     for (let x = step; x < W; x += step) {
       for (let y = step; y < H; y += step) {
-        const d = Math.hypot(x - cx, y - cy) / maxD;   // 0 center → 1 corner
-        const alpha = 0.18 * (1 - d * 0.65);
-        if (alpha <= 0.01) continue;
-        ctx.fillStyle = `rgba(180, 196, 222, ${alpha})`;
+        const d = Math.hypot(x - cx, y - cy) / maxD;
+        const fade = 1 - d * 0.65;
+        if (fade <= 0.05) continue;
+        ctx.globalAlpha = fade;
         ctx.beginPath(); ctx.arc(x, y, 0.9, 0, Math.PI * 2); ctx.fill();
       }
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
@@ -2491,6 +2527,22 @@
     b.title = "Open the scene template — fork, drop in, send a PR";
     sceneBar.appendChild(b);
   }
+
+  // ─── theme toggle (light / dark) ──────────────────────────────────────────
+  const themeBtn = document.getElementById("themeBtn");
+  function applyTheme(name) {
+    document.documentElement.setAttribute("data-theme", name);
+    themeBtn.textContent = name === "light" ? "☀" : "☾";
+    themeBtn.title = name === "light" ? "switch to dark" : "switch to light";
+    try { localStorage.setItem("swb.theme", name); } catch (e) {}
+  }
+  let savedTheme = "dark";
+  try { savedTheme = localStorage.getItem("swb.theme") || "dark"; } catch (e) {}
+  applyTheme(savedTheme);
+  themeBtn.addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme") || "dark";
+    applyTheme(cur === "dark" ? "light" : "dark");
+  });
 
   // ─── split-flap "switchboard" title ───────────────────────────────────────
   const SB_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789-_/";
