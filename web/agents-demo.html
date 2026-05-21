@@ -82,7 +82,14 @@
   .scene-bar button.active { background: rgba(96, 165, 250, 0.12);
     color: var(--fg); border-color: rgba(96, 165, 250, 0.5); }
   .scene-bar button .num { color: var(--muted-2); font-family: var(--mono); font-size: 11px; }
-  .scene-bar .sep { width: 1px; height: 16px; background: rgba(255, 255, 255, 0.08); margin: 0 2px; }
+  .scene-bar .sep { width: 1px; height: 16px; background: rgba(255, 255, 255, 0.08); margin: 0 4px; }
+  .scene-bar .add-scene { color: var(--muted); border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 999px; padding: 5px 11px; font-size: 11.5px;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s, background 0.15s; }
+  .scene-bar .add-scene:hover { color: var(--fg); border-color: var(--accent);
+    background: rgba(96, 165, 250, 0.08); text-decoration: none; }
+  .scene-bar .add-scene .plus { color: var(--accent); font-size: 14px; line-height: 1; }
 
   .layout { display: grid; grid-template-columns: 250px 1fr 300px;
     height: calc(100vh - 95px); gap: 0; }
@@ -123,9 +130,19 @@
   .empty { color: var(--muted-2); font-style: italic; font-size: 11px; }
 
   .legend { font-size: 11px; color: var(--muted); line-height: 1.8; }
+  .legend.small { line-height: 1.5; }
   .legend .dot { display: inline-block; width: 7px; height: 7px;
-    border-radius: 50%; vertical-align: 1px; margin-right: 6px; }
+    border-radius: 50%; vertical-align: 1px; margin-right: 7px; }
   .legend .row-key { color: var(--fg); }
+  .legend .shape { display: inline-block; width: 11px; height: 11px;
+    vertical-align: -1px; margin-right: 7px; border: 1px solid var(--muted-2); }
+  .legend .shape.sq { border-radius: 4px; background: rgba(125, 211, 252, 0.15); border-color: var(--agentic); }
+  .legend .shape.oc { clip-path: polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+    background: rgba(52, 211, 153, 0.18); border: none;
+    box-shadow: 0 0 0 1px var(--provider); }
+  .legend .shape.hx { clip-path: polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    background: rgba(96, 165, 250, 0.18); border: none;
+    box-shadow: 0 0 0 1px var(--accent); }
 
   .log { font-family: var(--mono); font-size: 10px; line-height: 1.5; }
   .log .row { padding: 3px 0; border-bottom: 1px dashed var(--border);
@@ -174,20 +191,32 @@
     color: var(--muted); margin: 0 3px; font-family: var(--mono); }
 
   .tt { position: fixed; pointer-events: none; z-index: 50;
-    background: rgba(13, 16, 21, 0.94); border: 1px solid var(--border);
-    border-radius: 6px; padding: 8px 10px; font-size: 11px; min-width: 180px;
+    background: rgba(13, 16, 21, 0.88);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px; padding: 9px 11px; font-size: 11px; min-width: 220px; max-width: 260px;
     opacity: 0; transform: translateY(-2px);
     transition: opacity 0.12s, transform 0.12s;
-    box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+    box-shadow: 0 12px 38px rgba(0,0,0,0.55); }
   .tt.show { opacity: 1; transform: translateY(0); }
-  .tt .ttname { font-weight: 600; font-size: 12px; color: var(--fg); }
-  .tt .ttrole { color: var(--muted); font-size: 10px; margin-bottom: 6px; }
-  .tt .ttkind { display: inline-block; padding: 1px 5px; border-radius: 3px;
-    border: 1px solid; font-size: 10px; font-family: var(--mono); margin-bottom: 6px; }
-  .tt dl { margin: 4px 0 0 0; display: grid; grid-template-columns: auto 1fr;
-    gap: 2px 8px; font-family: var(--mono); font-size: 10px; }
+  .tt .ttname { font-weight: 600; font-size: 12px; color: var(--fg); letter-spacing: 0.01em; }
+  .tt .ttrole { color: var(--muted); font-size: 10px; margin-bottom: 8px; }
+  .tt .ttrow { display: flex; gap: 5px; margin-bottom: 4px; flex-wrap: wrap; }
+  .tt .ttkind { display: inline-block; padding: 1px 6px; border-radius: 999px;
+    border: 1px solid currentColor; font-size: 9.5px; font-family: var(--mono);
+    line-height: 1.4; letter-spacing: 0.02em; }
+  .tt .ttdesc { color: var(--muted); font-size: 10px; margin-bottom: 8px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(255,255,255,0.06); }
+  .tt .ttproto-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  .tt .ttproto { display: inline-block; padding: 1px 6px; border-radius: 3px;
+    background: rgba(96, 165, 250, 0.10); border: 1px solid rgba(96, 165, 250, 0.25);
+    color: var(--info); font-size: 9.5px; font-family: var(--mono); }
+  .tt .ttproto.muted { background: transparent; border-color: var(--border); color: var(--muted-2); }
+  .tt dl { margin: 0; display: grid; grid-template-columns: auto 1fr;
+    gap: 2px 10px; font-family: var(--mono); font-size: 10px; }
   .tt dt { color: var(--muted-2); }
-  .tt dd { margin: 0; color: var(--fg); }
+  .tt dd { margin: 0; color: var(--fg); text-align: right; }
 
   .approve { position: absolute; pointer-events: auto;
     background: var(--panel); border: 1px solid var(--warn); color: var(--warn);
@@ -237,14 +266,26 @@
       <div class="empty">hover an agent to inspect</div>
     </div>
 
-    <h2>Legend</h2>
+    <h2>Shapes</h2>
     <div class="legend">
-      <div><span class="dot" style="background: var(--agentic)"></span><span class="row-key">agentic</span> — auto-pays</div>
-      <div><span class="dot" style="background: var(--hitl)"></span><span class="row-key">human-in-loop</span> — gates spend</div>
-      <div><span class="dot" style="background: var(--treasury)"></span><span class="row-key">treasury</span> — high balance, low velocity</div>
-      <div><span class="dot" style="background: var(--provider)"></span><span class="row-key">provider</span> — sells work</div>
-      <div><span class="dot" style="background: var(--oracle)"></span><span class="row-key">oracle</span> — sells data</div>
-      <div><span class="dot" style="background: var(--accent)"></span><span class="row-key">contract / repo</span> — hex shape</div>
+      <div><span class="shape sq"></span><span class="row-key">human</span> — Patty, Abhi, Tridib</div>
+      <div><span class="shape oc"></span><span class="row-key">bot</span> — autonomous agents</div>
+      <div><span class="shape hx"></span><span class="row-key">contract</span> — on-chain entities</div>
+    </div>
+
+    <h2>Wallet types</h2>
+    <div class="legend">
+      <div><span class="dot" style="background: var(--agentic)"></span><span class="row-key">agentic</span> · auto-pays</div>
+      <div><span class="dot" style="background: var(--hitl)"></span><span class="row-key">HITL</span> · gates spend</div>
+      <div><span class="dot" style="background: var(--treasury)"></span><span class="row-key">treasury</span> · funds fleets</div>
+      <div><span class="dot" style="background: var(--provider)"></span><span class="row-key">provider</span> · sells work</div>
+      <div><span class="dot" style="background: var(--oracle)"></span><span class="row-key">oracle</span> · sells data</div>
+    </div>
+
+    <h2>Developers</h2>
+    <div class="legend small">
+      Rip this apart — every scene is ~150 lines.
+      <a href="https://github.com/kcolbchain/switchboard/blob/main/web/SCENES.md" target="_blank" rel="noopener" style="color:var(--accent)">scene template ↗</a>
     </div>
   </aside>
 
@@ -307,9 +348,15 @@
   // Each agent has a unique signature hue — the visual stand-in for its
   // PQ public key. Hover reveals the conic gradient.
   function makeAgent(o) {
+    // Derive shape from kind if shape not provided.
+    const kind = o.kind || (o.wallet === "contract" ? "contract" :
+                            ["hitl","treasury"].includes(o.wallet) ? "human" : "bot");
+    const shape = o.shape || ({ human: "squircle", bot: "octagon", contract: "hex" }[kind]);
     return Object.assign({
       id: "", name: "", role: "",
-      wallet: "agentic",      // agentic | hitl | treasury | provider | oracle
+      kind,                    // human | bot | contract
+      shape,                   // squircle | octagon | hex (drives geometry)
+      wallet: "agentic",       // agentic | hitl | treasury | provider | oracle | contract
       hue: 0,
       balance: 5.0, dailyCap: 10.0, spent: 0,
       priority: "medium",
@@ -317,33 +364,38 @@
       radius: 32,
       glowPhase: Math.random() * Math.PI * 2,
       pos: { x: 0, y: 0 },
-      pinned: false,           // contracts/escrow rendered specially
-      shape: "circle",         // circle | hex (for contract / escrow)
+      protocols: [],           // ["x402","MPP","ZAP","escrow",...]
+      sigAlg: "ml-dsa-65",     // post-quantum default per docs/post-quantum.md
+      lastSeen: 0,             // bumped on every emit() to/from this agent
       meta: {},
       _approveBtn: null,
     }, o);
   }
 
   const A = {
-    alice:  makeAgent({ id: "alice",   name: "Alice",   role: "researcher",        wallet: "agentic",  hue: 195, balance: 8.0,  dailyCap: 12 }),
-    bob:    makeAgent({ id: "bob",     name: "Patty",   role: "data buyer",        wallet: "agentic",  hue: 145, balance: 6.0,  dailyCap: 10 }),
-    chen:   makeAgent({ id: "chen",    name: "Chen",    role: "price oracle",      wallet: "oracle",   hue: 295, balance: 30,   dailyCap: 80, radius: 38 }),
-    deva:   makeAgent({ id: "deva",    name: "Deva",    role: "trader",            wallet: "hitl",     hue:  40, balance: 4.0,  dailyCap: 25 }),
-    eli:    makeAgent({ id: "eli",     name: "Abhi",    role: "inference service", wallet: "provider", hue: 152, balance: 1.0,  dailyCap: 50, radius: 36 }),
-    fina:   makeAgent({ id: "fina",    name: "Fina",    role: "treasury",          wallet: "treasury", hue: 250, balance: 80,   dailyCap: 90, radius: 44 }),
-    gus:    makeAgent({ id: "gus",     name: "Tridib",  role: "image-gen service", wallet: "provider", hue:   8, balance: 0.5,  dailyCap: 40, radius: 36 }),
-    hana:   makeAgent({ id: "hana",    name: "Hana",    role: "embed service",     wallet: "provider", hue: 330, balance: 0.8,  dailyCap: 40, radius: 36 }),
-    iris:   makeAgent({ id: "iris",    name: "Iris",    role: "buyer",             wallet: "agentic",  hue: 180, balance: 6,    dailyCap: 12 }),
-    juno:   makeAgent({ id: "juno",    name: "Juno",    role: "buyer",             wallet: "agentic",  hue:  90, balance: 5,    dailyCap: 10 }),
-    escrow: makeAgent({ id: "escrow",  name: "Escrow",  role: "AgentEscrow.sol",   wallet: "contract", hue: 220, balance: 0, dailyCap: 999, radius: 30, shape: "hex" }),
+    // ── humans (Patty, Abhi, Tridib are the three protagonists) ──
+    bob:    makeAgent({ id: "bob",     name: "Patty",   role: "buyer · the user",       kind: "human", wallet: "agentic", hue: 195, balance: 6.0, dailyCap: 25, protocols: ["x402","MPP","escrow"], sigAlg: "hybrid (ecdsa+ml-dsa-65)" }),
+    eli:    makeAgent({ id: "eli",     name: "Abhi",    role: "service operator",       kind: "human", wallet: "provider",hue: 152, balance: 1.0, dailyCap: 50, radius: 36, protocols: ["x402","MPP","escrow"], sigAlg: "hybrid (ecdsa+ml-dsa-65)" }),
+    gus:    makeAgent({ id: "gus",     name: "Tridib",  role: "merchant / restaurateur",kind: "human", wallet: "provider",hue:   8, balance: 0.5, dailyCap: 40, radius: 36, protocols: ["x402","escrow"], sigAlg: "hybrid (ecdsa+ml-dsa-65)" }),
+    sara:   makeAgent({ id: "sara",    name: "Sara",    role: "friend at the bill",     kind: "human", wallet: "agentic", hue:  90, balance: 8, dailyCap: 15, protocols: ["x402"], sigAlg: "ml-dsa-65" }),
+    deva:   makeAgent({ id: "deva",    name: "Deva",    role: "discretionary trader",   kind: "human", wallet: "hitl",    hue:  40, balance: 4.0, dailyCap: 25, protocols: ["x402","escrow"], sigAlg: "hybrid (ecdsa+ml-dsa-65)" }),
+    driver: makeAgent({ id: "driver",  name: "Sai",     role: "taxi driver",            kind: "human", wallet: "provider",hue: 180, balance: 0,  dailyCap: 200, protocols: ["x402","escrow"], sigAlg: "ml-dsa-65" }),
+    rider:  makeAgent({ id: "rider",   name: "Kiran",   role: "delivery rider",         kind: "human", wallet: "provider",hue: 115, balance: 0,  dailyCap: 200, radius: 30, protocols: ["x402","escrow"], sigAlg: "ml-dsa-65" }),
 
-    // ── service agents for real-world use-case scenes ──
-    driver:  makeAgent({ id: "driver",  name: "Sai",      role: "taxi driver",         wallet: "provider", hue: 180, balance: 0,  dailyCap: 200, radius: 32 }),
-    dispatch:makeAgent({ id: "dispatch",name: "Dispatch", role: "ride-share matcher",  wallet: "contract", hue: 215, balance: 0,  dailyCap: 999, radius: 28, shape: "hex" }),
-    cafe:    makeAgent({ id: "cafe",    name: "Aroma",    role: "café POS",            wallet: "provider", hue:  28, balance: 0,  dailyCap: 200, radius: 34 }),
-    rest:    makeAgent({ id: "rest",    name: "Spice Hub",role: "restaurant",          wallet: "provider", hue:   8, balance: 0,  dailyCap: 200, radius: 34 }),
-    rider:   makeAgent({ id: "rider",   name: "Kiran",    role: "delivery rider",      wallet: "provider", hue: 115, balance: 0,  dailyCap: 200, radius: 30 }),
-    merchant:makeAgent({ id: "merchant",name: "Tridib's", role: "merchant (bill)",     wallet: "provider", hue:  60, balance: 0,  dailyCap: 999, radius: 36 }),
+    // ── bots / autonomous AI agents ──
+    alice:  makeAgent({ id: "alice",   name: "Alice",   role: "researcher AI",          kind: "bot", wallet: "agentic", hue: 200, balance: 8.0, dailyCap: 12, protocols: ["x402","MPP","ZAP"], sigAlg: "ml-dsa-65" }),
+    iris:   makeAgent({ id: "iris",    name: "Iris",    role: "buyer agent",            kind: "bot", wallet: "agentic", hue: 175, balance: 6, dailyCap: 12, protocols: ["x402","MPP"], sigAlg: "ml-dsa-65" }),
+    juno:   makeAgent({ id: "juno",    name: "Juno",    role: "buyer agent",            kind: "bot", wallet: "agentic", hue:  90, balance: 5, dailyCap: 10, protocols: ["x402"], sigAlg: "ml-dsa-65" }),
+    chen:   makeAgent({ id: "chen",    name: "Chen",    role: "price oracle",           kind: "bot", wallet: "oracle",  hue: 295, balance: 30, dailyCap: 80, radius: 38, protocols: ["x402","signed-data"], sigAlg: "ml-dsa-65" }),
+    fina:   makeAgent({ id: "fina",    name: "Fina",    role: "treasury algo",          kind: "bot", wallet: "treasury",hue: 250, balance: 80, dailyCap: 90, radius: 42, protocols: ["batch-escrow","x402"], sigAlg: "threshold + ml-dsa-65" }),
+    hana:   makeAgent({ id: "hana",    name: "Hana",    role: "embed service",          kind: "bot", wallet: "provider",hue: 330, balance: 0.8, dailyCap: 40, radius: 32, protocols: ["x402","ZAP"], sigAlg: "ml-dsa-65" }),
+    cafe:   makeAgent({ id: "cafe",    name: "Aroma POS", role: "Abhi's café surface",  kind: "bot", wallet: "provider",hue:  28, balance: 0, dailyCap: 200, radius: 32, protocols: ["x402"], sigAlg: "ml-dsa-65" }),
+    rest:   makeAgent({ id: "rest",    name: "Spice Hub POS", role: "Tridib's kitchen", kind: "bot", wallet: "provider",hue:   8, balance: 0, dailyCap: 200, radius: 32, protocols: ["x402","escrow"], sigAlg: "ml-dsa-65" }),
+    merchant:makeAgent({id: "merchant",name: "Bistro POS",   role: "merchant surface",  kind: "bot", wallet: "provider",hue:  60, balance: 0, dailyCap: 999, radius: 32, protocols: ["x402","escrow"], sigAlg: "ml-dsa-65" }),
+
+    // ── contracts / on-chain entities (hex) ──
+    escrow:  makeAgent({ id: "escrow",  name: "Escrow",   role: "AgentEscrow.sol",        kind: "contract", wallet: "contract", hue: 220, balance: 0, dailyCap: 999, radius: 30, protocols: ["escrow"], sigAlg: "ecdsa-secp256k1" }),
+    dispatch:makeAgent({ id: "dispatch",name: "Dispatch", role: "ride-share matcher",     kind: "contract", wallet: "contract", hue: 215, balance: 0, dailyCap: 999, radius: 28, protocols: ["matcher"], sigAlg: "ecdsa-secp256k1" }),
   };
   const ALL = Object.values(A);
 
@@ -353,6 +405,8 @@
   function emit(fromId, toId, opts = {}) {
     const from = A[fromId], to = A[toId];
     if (!from || !to) return null;
+    from.lastSeen = tick;
+    to.lastSeen = tick;
     const p = {
       from, to,
       amount: opts.amount ?? 0,
@@ -514,8 +568,10 @@
       }
     }
 
-    // body
+    // body — dispatch on shape
     if (a.shape === "hex") drawHexBody(a, balanceRatio);
+    else if (a.shape === "octagon") drawOctagonBody(a, balanceRatio);
+    else if (a.shape === "squircle") drawSquircleBody(a, balanceRatio);
     else drawCircleBody(a, balanceRatio);
 
     // HITL lock dot
@@ -553,7 +609,7 @@
   }
 
   function drawCircleBody(a, balanceRatio) {
-    const { x, y } = a.pos, r = a.radius;
+    const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
     ctx.save();
     if (a.state === "passive") {
       const g = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r);
@@ -576,8 +632,102 @@
     ctx.restore();
   }
 
+  function drawSquircleBody(a, balanceRatio) {
+    // Soft rounded square — the "human-operated agent" silhouette.
+    const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
+    ctx.save();
+    const w = r * 1.8, h = r * 1.8, rr = r * 0.55;
+    const x0 = x - w / 2, y0 = y - h / 2;
+    if (a.state === "passive") {
+      const g = ctx.createLinearGradient(x0, y0, x0, y0 + h);
+      g.addColorStop(0, hsla(a.hue, 40, 70, 0.20));
+      g.addColorStop(1, hsla(a.hue, 40, 30, 0.06));
+      ctx.fillStyle = g;
+      roundedRectPath(ctx, x0, y0, w, h, rr);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)"; ctx.lineWidth = 1;
+      roundedRectPath(ctx, x0, y0, w, h, rr); ctx.stroke();
+    } else {
+      const g = ctx.createLinearGradient(x0, y0, x0, y0 + h);
+      g.addColorStop(0, hsla(a.hue, 90, 70, 0.85 * (0.35 + 0.65 * balanceRatio)));
+      g.addColorStop(0.6, hsla(a.hue, 80, 50, 0.55 * (0.4 + 0.6 * balanceRatio)));
+      g.addColorStop(1, hsla(a.hue, 60, 30, 0.85));
+      ctx.fillStyle = g;
+      roundedRectPath(ctx, x0, y0, w, h, rr); ctx.fill();
+      ctx.strokeStyle = walletColor(a.wallet);
+      ctx.lineWidth = 1.6;
+      roundedRectPath(ctx, x0, y0, w, h, rr); ctx.stroke();
+    }
+    // tiny "person" glyph — head + shoulders silhouette
+    ctx.fillStyle = "rgba(11, 13, 16, 0.55)";
+    ctx.beginPath(); ctx.arc(x, y - r * 0.18, r * 0.18, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.34, y + r * 0.32);
+    ctx.quadraticCurveTo(x, y + r * 0.06, x + r * 0.34, y + r * 0.32);
+    ctx.lineTo(x + r * 0.34, y + r * 0.42);
+    ctx.lineTo(x - r * 0.34, y + r * 0.42);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawOctagonBody(a, balanceRatio) {
+    // Eight-sided — the "autonomous / bot" silhouette.
+    const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
+    ctx.save();
+    octagonPath(ctx, x, y, r);
+    if (a.state === "passive") {
+      const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
+      g.addColorStop(0, hsla(a.hue, 40, 65, 0.22));
+      g.addColorStop(1, hsla(a.hue, 40, 30, 0.06));
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)"; ctx.lineWidth = 1; ctx.stroke();
+    } else {
+      const g = ctx.createRadialGradient(x, y, 1, x, y, r);
+      g.addColorStop(0,  hsla(a.hue, 95, 70, 0.95 * (0.35 + 0.65 * balanceRatio)));
+      g.addColorStop(0.6, hsla(a.hue, 85, 50, 0.55 * (0.4 + 0.6 * balanceRatio)));
+      g.addColorStop(1,  hsla(a.hue, 60, 30, 0.85));
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = walletColor(a.wallet);
+      ctx.lineWidth = a.wallet === "treasury" ? 2.2 : 1.6;
+      ctx.stroke();
+    }
+    // tiny circuit hint — two horizontal traces
+    ctx.strokeStyle = "rgba(11, 13, 16, 0.45)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.4, y - r * 0.1); ctx.lineTo(x + r * 0.4, y - r * 0.1);
+    ctx.moveTo(x - r * 0.4, y + r * 0.16); ctx.lineTo(x + r * 0.4, y + r * 0.16);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(11, 13, 16, 0.7)";
+    [-0.3, 0, 0.3].forEach(t => {
+      ctx.beginPath(); ctx.arc(x + r * t, y - r * 0.1, 1.3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + r * t, y + r * 0.16, 1.3, 0, Math.PI*2); ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function roundedRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y,     x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x,     y + h, r);
+    ctx.arcTo(x,     y + h, x,     y,     r);
+    ctx.arcTo(x,     y,     x + w, y,     r);
+    ctx.closePath();
+  }
+  function octagonPath(ctx, cx, cy, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const ang = -Math.PI / 8 + i * Math.PI / 4;
+      const px = cx + Math.cos(ang) * r;
+      const py = cy + Math.sin(ang) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
   function drawHexBody(a, balanceRatio) {
-    const { x, y } = a.pos, r = a.radius;
+    const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
     ctx.save();
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
@@ -722,33 +872,49 @@
     if (!hoverId) { ttEl.classList.remove("show"); return; }
     const a = A[hoverId];
     const walletDesc = {
-      agentic:  "autonomous, auto-pays under cap",
+      agentic:  "autonomous · auto-pays under cap",
       hitl:     "human approves spend above threshold",
-      treasury: "rebalancer / fleet funder",
-      provider: "sells work, receives payments",
-      oracle:   "sells signed data, pay-per-query",
-      contract: "on-chain settlement (AgentEscrow.sol)",
+      treasury: "rebalancer · fleet funder",
+      provider: "sells work · receives payments",
+      oracle:   "sells signed data · pay-per-query",
+      contract: "on-chain settlement contract",
     }[a.wallet] || "";
+    const kindLabel = {
+      human: "human-operated",
+      bot:   "autonomous agent",
+      contract: "on-chain contract",
+    }[a.kind] || a.kind;
+    const kindGlyph = { human: "◐", bot: "⬢", contract: "⬡" }[a.kind] || "•";
     const wColor = walletColor(a.wallet);
+    const protoList = (a.protocols || []).map(p => `<span class="ttproto">${p}</span>`).join("");
+    const lastSeenLabel = a.lastSeen
+      ? `${Math.max(0, tick - a.lastSeen)} ticks ago`
+      : `idle`;
+
     ttEl.innerHTML = `
-      <div class="ttname">${a.name}</div>
+      <div class="ttname">${kindGlyph} ${a.name}</div>
       <div class="ttrole">${a.role}</div>
-      <span class="ttkind" style="color:${wColor};border-color:${wColor}">${a.wallet}</span>
-      <div style="color:var(--muted);font-size:10px;margin-bottom:4px">${walletDesc}</div>
+      <div class="ttrow">
+        <span class="ttkind" style="color:${wColor};border-color:${wColor}">${a.wallet}</span>
+        <span class="ttkind" style="color:var(--muted)">${kindLabel}</span>
+      </div>
+      <div class="ttdesc">${walletDesc}</div>
+      <div class="ttproto-row">${protoList || '<span class="ttproto muted">—</span>'}</div>
       <dl>
         <dt>balance</dt><dd>${a.balance.toFixed(2)} USDC</dd>
         <dt>daily cap</dt><dd>${a.dailyCap.toFixed(0)} USDC</dd>
         <dt>spent</dt><dd>${a.spent.toFixed(2)} USDC</dd>
         <dt>state</dt><dd>${a.state}</dd>
+        <dt>sig alg</dt><dd>${a.sigAlg}</dd>
+        <dt>last seen</dt><dd>${lastSeenLabel}</dd>
         <dt>sig hue</dt><dd>h${a.hue}°</dd>
       </dl>
     `;
-    // place near cursor, flip when near right edge
     const pad = 14;
     let tx = clientX + pad, ty = clientY + pad;
     const rect = ttEl.getBoundingClientRect();
-    if (tx + 220 > window.innerWidth) tx = clientX - 220 - pad;
-    if (ty + 200 > window.innerHeight) ty = clientY - rect.height - pad;
+    if (tx + 240 > window.innerWidth) tx = clientX - 240 - pad;
+    if (ty + rect.height > window.innerHeight) ty = clientY - rect.height - pad;
     ttEl.style.left = tx + "px";
     ttEl.style.top  = ty + "px";
     ttEl.classList.add("show");
@@ -1366,13 +1532,13 @@
   // adjacent. This scene illustrates the data-flow seams.
   // We extend the agent registry with repo "nodes" rendered with a contract
   // hex shape but distinct hues + per-repo roles.
-  A.swb       = makeAgent({ id: "swb",       name: "switchboard", role: "agent payments substrate", wallet: "contract", hue: 215, radius: 42, shape: "hex" });
-  A.zap_repo  = makeAgent({ id: "zap_repo",  name: "zap",         role: "zero-alloc binary wire",   wallet: "contract", hue: 285, radius: 32, shape: "hex" });
-  A.arka_repo = makeAgent({ id: "arka_repo", name: "arka",        role: "Rust agent SDK",           wallet: "contract", hue:  25, radius: 32, shape: "hex" });
-  A.scout_repo= makeAgent({ id: "scout_repo",name: "scout",       role: "wallet intel",             wallet: "contract", hue: 165, radius: 32, shape: "hex" });
-  A.gas_repo  = makeAgent({ id: "gas_repo",  name: "gas-oracle",  role: "L2 gas forecasts",         wallet: "contract", hue:  55, radius: 32, shape: "hex" });
-  A.x402_repo = makeAgent({ id: "x402_repo", name: "x402",        role: "upstream HTTP-402 spec",   wallet: "contract", hue: 195, radius: 32, shape: "hex" });
-  A.aeo_repo  = makeAgent({ id: "aeo_repo",  name: "AgentEscrow", role: "on-chain settlement",      wallet: "contract", hue: 250, radius: 30, shape: "hex" });
+  A.swb       = makeAgent({ id: "swb",       name: "switchboard", role: "agent payments substrate", kind: "contract", wallet: "contract", hue: 215, radius: 42, protocols: ["x402","MPP","ZAP","escrow"], sigAlg: "policy: hybrid+ml-dsa-65" });
+  A.zap_repo  = makeAgent({ id: "zap_repo",  name: "zap",         role: "zero-alloc binary wire",   kind: "contract", wallet: "contract", hue: 285, radius: 32, protocols: ["ZAP"], sigAlg: "n/a (wire format)" });
+  A.arka_repo = makeAgent({ id: "arka_repo", name: "arka",        role: "Rust agent SDK",           kind: "contract", wallet: "contract", hue:  25, radius: 32, protocols: ["x402","MPP"], sigAlg: "consumes switchboard" });
+  A.scout_repo= makeAgent({ id: "scout_repo",name: "scout",       role: "wallet intel",             kind: "contract", wallet: "contract", hue: 165, radius: 32, protocols: ["intel"], sigAlg: "ml-dsa-65" });
+  A.gas_repo  = makeAgent({ id: "gas_repo",  name: "gas-oracle",  role: "L2 gas forecasts",         kind: "contract", wallet: "contract", hue:  55, radius: 32, protocols: ["signed-data"], sigAlg: "ml-dsa-65" });
+  A.x402_repo = makeAgent({ id: "x402_repo", name: "x402",        role: "upstream HTTP-402 spec",   kind: "contract", wallet: "contract", hue: 195, radius: 32, protocols: ["x402"], sigAlg: "spec — no sig" });
+  A.aeo_repo  = makeAgent({ id: "aeo_repo",  name: "AgentEscrow", role: "on-chain settlement",      kind: "contract", wallet: "contract", hue: 250, radius: 30, protocols: ["escrow"], sigAlg: "ecdsa-secp256k1" });
 
   SCENES.stack = {
     id: "stack",
@@ -1629,19 +1795,20 @@
     id: "cafe",
     name: "Café walk-up",
     short: "11",
-    desc: "Smallest possible flow. <strong>Patty</strong> walks past <strong>Aroma</strong>'s shop, her agent does a proximity handshake, picks a latte off the signed menu, pays 4.50 USDC, takes the cup.",
+    desc: "Smallest possible flow. <strong>Patty</strong> walks up to <strong>Abhi</strong>'s espresso bar. The shop's POS agent (Aroma) does a proximity handshake with Patty, picks a latte off the signed menu, pays 4.50 USDC, takes the cup. Abhi is the human; Aroma is the bot surface he runs.",
     enter() {
-      setVisible(["bob", "cafe"]);
+      setVisible(["bob", "eli", "cafe"]);
       A.bob.balance = 20; A.bob.spent = 0;
-      A.cafe.balance = 0;
+      A.cafe.balance = 0; A.eli.balance = 0;
       this.layout();
       this.phase = 0; this.cool = 50;
-      setCaption("step 1 / 5", "<strong>Patty</strong> approaches <strong>Aroma</strong>. Bluetooth-range handshake announces both agents to each other.");
-      log(`<span class="info">cafe</span> scene loaded`);
+      setCaption("step 1 / 5", "<strong>Patty</strong> approaches <strong>Abhi</strong>'s café. Aroma POS handshakes with Patty's agent; Abhi watches from behind the counter.");
+      log(`<span class="info">cafe</span> scene loaded · Abhi's espresso bar`);
     },
     layout() {
-      A.bob.pos  = { x: W * 0.25, y: H * 0.55 };
-      A.cafe.pos = { x: W * 0.72, y: H * 0.5  };
+      A.bob.pos  = { x: W * 0.22, y: H * 0.6 };
+      A.cafe.pos = { x: W * 0.66, y: H * 0.55 };
+      A.eli.pos  = { x: W * 0.82, y: H * 0.4  };
     },
     drawUnderlay(ctx, W, H) {
       // counter rectangle behind the cafe
@@ -1657,7 +1824,7 @@
       ctx.strokeRect(x, y, w, h);
       ctx.fillStyle = "rgba(231, 233, 238, 0.5)";
       ctx.font = "10px ui-monospace, Menlo, monospace";
-      ctx.fillText("AROMA  ·  espresso bar", x + 10, y + 16);
+      ctx.fillText("ABHI'S  ·  espresso bar", x + 10, y + 16);
       ctx.restore();
     },
     tick(t) {
@@ -1702,23 +1869,24 @@
     id: "delivery",
     name: "Food delivery",
     short: "12",
-    desc: "Three-party flow. <strong>Patty</strong> orders from <strong>Spice Hub</strong>; <strong>Kiran</strong> takes the delivery slot. Escrow splits the payout: food to the restaurant, tip to the rider. Rider's position animates along the route.",
+    desc: "Three-party flow. <strong>Patty</strong> orders from <strong>Tridib</strong>'s restaurant (Spice Hub); <strong>Kiran</strong> (rider) takes the delivery slot. Escrow splits the payout: food to Tridib on pickup, tip to Kiran on delivery confirm.",
     enter() {
-      setVisible(["bob", "rest", "rider", "escrow"]);
-      A.bob.balance = 25; A.rest.balance = 0; A.rider.balance = 0;
+      setVisible(["bob", "gus", "rest", "rider", "escrow"]);
+      A.bob.balance = 25; A.rest.balance = 0; A.rider.balance = 0; A.gus.balance = 0;
       A.escrow.balance = 0;
       this.layout();
       this.phase = 0; this.cool = 60;
       this.tRide = 0;
       A.rider._visible = false;
-      setCaption("step 1 / 7", "<strong>Patty</strong> orders from <strong>Spice Hub</strong>: ₹420 of biryani. Restaurant confirms.");
-      log(`<span class="info">delivery</span> scene loaded · multi-party escrow`);
+      setCaption("step 1 / 7", "<strong>Patty</strong> orders from <strong>Tridib</strong>'s Spice Hub: 5.00 USDC of biryani.");
+      log(`<span class="info">delivery</span> scene loaded · Tridib's kitchen, Kiran riding`);
     },
     layout() {
       this.home = { x: W * 0.82, y: H * 0.68 };
       this.restaurant = { x: W * 0.18, y: H * 0.32 };
       A.bob.pos  = { ...this.home };
       A.rest.pos = { ...this.restaurant };
+      A.gus.pos  = { x: W * 0.10, y: H * 0.20 };          // Tridib next to his kitchen
       A.escrow.pos = { x: W * 0.5, y: H * 0.85 };
       A.rider.pos = { x: W * 0.1, y: H * 0.5 };
     },
@@ -1756,11 +1924,11 @@
             y: lerp(H * 0.5, this.restaurant.y + 6,  Math.min(1, this.tRide)),
           };
           if (this.tRide >= 1) {
-            log(`Pickup complete · 80% (4.00 USDC) released to Spice Hub`);
+            log(`Pickup complete · 80% (4.00 USDC) released to Tridib`);
             emit("escrow", "rest", { kind: "proof", label: "food paid 4.00", speed: 0.022,
               onArrive: () => { A.escrow.balance -= 4; A.rest.balance += 4; } });
             this.phase = 4; this.cool = 60; this.tRide = 0;
-            setCaption("step 5 / 7", "Pickup confirmed → 80% released to <strong>Spice Hub</strong>. Kiran rolls toward Patty.");
+            setCaption("step 5 / 7", "Pickup confirmed → 80% released to <strong>Tridib</strong>. Kiran rolls toward Patty.");
           }
           break;
         }
@@ -1801,21 +1969,21 @@
     id: "split",
     name: "Split bill",
     short: "13",
-    desc: "Four friends, one tab. Each agent computes its share against the signed line-items and pays the merchant simultaneously. The merchant only sees one settlement event: a complete bill. Drop-in for fintech apps that today require a single payer + chase-up later.",
+    desc: "Four friends — <strong>Patty</strong>, <strong>Abhi</strong>, <strong>Tridib</strong>, and <strong>Sara</strong> — sit down at the Bistro. Each agent computes its share against the merchant's signed line-items and pays simultaneously. The merchant sees one settlement event: a complete bill. Drop-in for fintech apps that today require a single payer + chase-up later.",
     enter() {
-      setVisible(["bob", "alice", "iris", "juno", "merchant"]);
-      A.bob.balance = 30; A.alice.balance = 30; A.iris.balance = 30; A.juno.balance = 30;
+      setVisible(["bob", "eli", "gus", "sara", "merchant"]);
+      A.bob.balance = 30; A.eli.balance = 30; A.gus.balance = 30; A.sara.balance = 30;
       A.merchant.balance = 0;
       this.total = 48.00;
       this.share = this.total / 4;
       this.layout();
       this.phase = 0; this.cool = 60;
       setCaption("step 1 / 3", `Bill: <code>${this.total.toFixed(2)} USDC</code>. Four agents see the signed itemized receipt and compute their share (${this.share.toFixed(2)} each).`);
-      log(`<span class="info">split</span> scene loaded · bill 48.00 USDC / 4 friends`);
+      log(`<span class="info">split</span> scene loaded · bill 48.00 USDC · Patty + Abhi + Tridib + Sara`);
     },
     layout() {
       A.merchant.pos = { x: W * 0.5, y: H * 0.5 };
-      ring(["bob", "alice", "iris", "juno"], W * 0.5, H * 0.5, Math.min(W, H) * 0.3);
+      ring(["bob", "eli", "gus", "sara"], W * 0.5, H * 0.5, Math.min(W, H) * 0.3);
     },
     drawUnderlay(ctx, W, H) {
       // round "table" behind the merchant
@@ -1836,13 +2004,13 @@
       if (this.cool > 0) { this.cool--; return; }
       switch (this.phase) {
         case 0:
-          ["bob", "alice", "iris", "juno"].forEach(id => emit("merchant", id, { kind: "data", label: "receipt", speed: 0.024 }));
-          log(`Tridib's sends signed line-items to all four agents`);
+          ["bob", "eli", "gus", "sara"].forEach(id => emit("merchant", id, { kind: "data", label: "receipt", speed: 0.024 }));
+          log(`Bistro sends signed line-items to all four agents`);
           this.phase = 1; this.cool = 70;
           setCaption("step 2 / 3", "Each agent verifies the merchant's signature and the line-items it's accountable for, then fires its share.");
           break;
         case 1:
-          ["bob", "alice", "iris", "juno"].forEach((id, i) => {
+          ["bob", "eli", "gus", "sara"].forEach((id, i) => {
             setTimeout(() => {
               emit(id, "merchant", { kind: "offer", label: this.share.toFixed(2),
                 amount: this.share, speed: 0.024,
@@ -1853,14 +2021,14 @@
                     jobs++; jobsEl.textContent = jobs;
                   }
                 }});
-              log(`${A[id].name} → Tridib's: ${this.share.toFixed(2)} USDC`);
+              log(`${A[id].name} → Bistro: ${this.share.toFixed(2)} USDC`);
             }, i * 140);
           });
           this.phase = 2; this.cool = 200;
           setCaption("step 3 / 3", "Merchant receives all four packets within one settlement window. No chasing, no Venmo IOU thread.");
           break;
         case 2:
-          A.bob.balance = 30; A.alice.balance = 30; A.iris.balance = 30; A.juno.balance = 30;
+          A.bob.balance = 30; A.eli.balance = 30; A.gus.balance = 30; A.sara.balance = 30;
           A.merchant.balance = 0;
           this.phase = 0; this.cool = 80;
           break;
@@ -1868,10 +2036,172 @@
     },
   };
 
+  // — Scene 14: Native ETH escrow (Patty ↔ Abhi) ——————————————————————————
+  // Plain ETH msg.value path through AgentEscrow.sol — no ERC-20 approve,
+  // no token contract, no wrapped assets. Works on any EVM chain out of
+  // the box. The cheapest, most universal A2A settlement primitive.
+  SCENES.ethEscrow = {
+    id: "ethEscrow",
+    name: "Native ETH escrow",
+    short: "14",
+    desc: "<strong>Patty</strong> hires <strong>Abhi</strong> for a one-shot inference job priced in <strong>ETH</strong>. No ERC-20 dance — funds lock via <code>createPayment{value: 0.05 ether}(...)</code> in <code>AgentEscrow.sol</code>. Abhi delivers, Patty confirms, escrow releases. Universal across EVM chains.",
+    enter() {
+      setVisible(["bob", "eli", "escrow"]);
+      A.bob.balance = 0.50; A.bob.spent = 0; A.bob.dailyCap = 1.0;       // ETH this scene
+      A.eli.balance = 0.00;
+      A.escrow.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      this.gasEth = 0.0008;
+      setCaption("step 1 / 6", "<strong>Patty</strong> commissions <strong>Abhi</strong> for a custom inference job. Quote: <code>0.05 ETH</code>. No tokens, no wrappers.");
+      log(`<span class="info">eth-escrow</span> scene loaded · 0.05 ETH job`);
+    },
+    layout() {
+      A.bob.pos    = { x: W * 0.20, y: H * 0.5 };
+      A.eli.pos    = { x: W * 0.80, y: H * 0.5 };
+      A.escrow.pos = { x: W * 0.50, y: H * 0.78 };
+    },
+    drawOverlay(ctx, W, H) {
+      // ETH plaque next to the escrow
+      const x = A.escrow.pos.x, y = A.escrow.pos.y + A.escrow.radius + 22;
+      ctx.fillStyle = "rgba(231, 233, 238, 0.85)";
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      const locked = A.escrow.balance.toFixed(3);
+      ctx.fillText(`locked: ${locked} ETH`, x, y);
+      ctx.fillStyle = "rgba(138, 147, 163, 0.85)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.fillText(`createPayment{value: msg.value}`, x, y + 14);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          emit("eli", "bob", { kind: "data", label: "signed quote · 0.05 ETH", speed: 0.022 });
+          log(`Abhi → Patty: PQ-signed quote · 0.05 ETH`);
+          this.phase = 1; this.cool = 70;
+          setCaption("step 2 / 6", "Abhi returns a PQ-signed quote. Patty's agent verifies, accepts, prepares the on-chain tx.");
+          break;
+        case 1:
+          // Patty's wallet pays gas + sends value into escrow
+          emit("bob", "escrow", { kind: "offer", label: "createPayment 0.05 ETH", amount: 0.05, speed: 0.018,
+            onArrive: () => {
+              A.bob.balance -= (0.05 + this.gasEth);
+              A.escrow.balance += 0.05;
+            }});
+          log(`Patty → Escrow: <code>createPayment(reqId, abhi, 100, 10){value: 0.05 ETH}</code>`);
+          this.phase = 2; this.cool = 90;
+          setCaption("step 3 / 6", `<strong>0.05 ETH</strong> locks in escrow. <code>msg.value</code> sits in <code>payments[reqId].amount</code>. Patty also paid ~${this.gasEth.toFixed(4)} ETH gas.`);
+          break;
+        case 2:
+          emit("eli", "bob", { kind: "data", label: "deliverable", speed: 0.020 });
+          log(`Abhi → Patty: deliverable (inference result + receipt)`);
+          this.phase = 3; this.cool = 80;
+          setCaption("step 4 / 6", "Abhi performs the work off-chain, delivers the result with a PQ-signed receipt. Patty verifies output and signature.");
+          break;
+        case 3:
+          emit("bob", "escrow", { kind: "request", label: "confirmPayment", speed: 0.022,
+            onArrive: () => {
+              emit("escrow", "eli", { kind: "proof", label: "released 0.05 ETH", speed: 0.022,
+                onArrive: () => {
+                  A.escrow.balance -= 0.05; A.eli.balance += 0.05;
+                  jobs++; jobsEl.textContent = jobs;
+                }});
+            }});
+          log(`Patty → Escrow: <code>confirmPayment(reqId)</code> · funds release to Abhi`);
+          this.phase = 4; this.cool = 130;
+          setCaption("step 5 / 6", "Patty calls <code>confirmPayment()</code>. Escrow's internal accounting transitions <code>State.Locked → State.Released</code> and <code>.call{value: amount}(\"\")</code> forwards ETH to Abhi.");
+          break;
+        case 4:
+          setCaption("step 6 / 6", `Done. Abhi's wallet credited <code>0.05 ETH</code> directly — no token approval, no wrap, no relayer. Same primitive on Ethereum, Base, Lux, Arbitrum.`);
+          log(`<span class="ok">handover complete</span> · Abhi balance ${A.eli.balance.toFixed(3)} ETH`);
+          this.phase = 5; this.cool = 220;
+          break;
+        case 5:
+          A.bob.balance = 0.50; A.eli.balance = 0;
+          A.escrow.balance = 0;
+          this.phase = 0; this.cool = 80;
+          break;
+      }
+    },
+  };
+
+  // — Scene 15: Subscription with auto-cap ————————————————————————————————
+  // Patty subscribes to Abhi's API. Monthly renewal hits inside her
+  // standing cap; cancellation = revoke the cap. Pattern composes from
+  // primitives the protocol already has: x402 + per-period gas budget.
+  SCENES.subscribe = {
+    id: "subscribe",
+    name: "Subscription",
+    short: "15",
+    desc: "<strong>Patty</strong> subscribes to <strong>Abhi</strong>'s API at 2 USDC/period under a 10 USDC/month cap. Renewal hits automatically while inside the cap, fails loudly outside. Cancel = revoke the cap; no merchant trust, no zombie charges.",
+    enter() {
+      setVisible(["bob", "eli"]);
+      A.bob.balance = 20; A.bob.spent = 0; A.bob.dailyCap = 10;
+      A.eli.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 40;
+      this.period = 0; this.maxPeriods = 6;
+      this.fee = 2.0;
+      setCaption("step 1 / 3", "Subscription opens. Cap: 10 USDC / month. Fee: 2 USDC / period. Patty's agent will renew autonomously while inside the cap.");
+      log(`<span class="info">subscribe</span> scene loaded · cap 10 USDC / 5 periods`);
+    },
+    layout() {
+      A.bob.pos = { x: W * 0.28, y: H * 0.5 };
+      A.eli.pos = { x: W * 0.72, y: H * 0.5 };
+    },
+    drawOverlay(ctx, W, H) {
+      // bar between Patty + Abhi showing cap usage
+      const x = (A.bob.pos.x + A.eli.pos.x) / 2, y = (A.bob.pos.y + A.eli.pos.y) / 2 - 90;
+      const w = 240, h = 22;
+      const pct = Math.min(1, A.bob.spent / Math.max(0.01, A.bob.dailyCap));
+      ctx.fillStyle = "rgba(13, 16, 21, 0.85)";
+      ctx.strokeStyle = "rgba(35, 39, 47, 0.9)";
+      ctx.fillRect(x - w/2, y, w, h);
+      ctx.strokeRect(x - w/2, y, w, h);
+      ctx.fillStyle = pct < 0.85 ? "rgba(125, 211, 252, 0.7)" : "rgba(248, 113, 113, 0.85)";
+      ctx.fillRect(x - w/2 + 2, y + 2, (w - 4) * pct, h - 4);
+      ctx.fillStyle = "rgba(231, 233, 238, 0.85)";
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`monthly cap ${A.bob.spent.toFixed(2)} / ${A.bob.dailyCap.toFixed(0)} USDC · period ${this.period} / ${this.maxPeriods}`, x, y - 6);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.period >= this.maxPeriods) {
+        if (!this.cancelled) {
+          this.cancelled = true;
+          log(`<span class="warn">subscription cancelled</span> · cap revoked`);
+          setCaption("step 3 / 3", "Patty's agent revokes the cap. No further charges possible. Demonstrates the cancel path: no merchant cooperation needed.");
+        }
+        if (t % 240 === 0) { A.bob.balance = 20; A.bob.spent = 0; A.eli.balance = 0;
+                             this.period = 0; this.cancelled = false; }
+        return;
+      }
+      if (A.bob.spent + this.fee > A.bob.dailyCap) {
+        log(`<span class="hot">renewal blocked</span> · would exceed monthly cap`);
+        setCaption("step 3 / 3", "Renewal would breach Patty's monthly cap → blocked at the wallet layer, never reaches Abhi.");
+        this.period = this.maxPeriods;
+        this.cool = 60;
+        return;
+      }
+      emit("bob", "eli", { kind: "stream", label: `${this.fee.toFixed(2)} USDC`, amount: this.fee, speed: 0.026,
+        onArrive: () => {
+          A.bob.balance -= this.fee; A.bob.spent += this.fee;
+          A.eli.balance += this.fee;
+          jobs++; jobsEl.textContent = jobs;
+        }});
+      log(`renewal #${this.period + 1} · 2.00 USDC → Abhi`);
+      if (this.period === 0) setCaption("step 2 / 3", "First period charges immediately. Subsequent renewals hit on schedule, gated by the cap.");
+      this.period++;
+      this.cool = 90;
+    },
+  };
+
   // ─── scene registry & switcher ────────────────────────────────────────────
   const SCENE_ORDER = [
     "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
-    "taxi", "cafe", "delivery", "split",
+    "taxi", "cafe", "delivery", "split", "ethEscrow", "subscribe",
   ];
 
   function selectScene(id, force) {
@@ -1891,15 +2221,43 @@
     log(`<span class="seg">— scene switched to <strong>${currentScene.name}</strong> —</span>`);
   }
 
+  // Group scene-bar by category for readability.
+  // Group A: protocol primitives. Group B: real-world use cases.
+  // Group C: meta (PQ proposal, stack).
+  const SCENE_GROUPS = [
+    { label: "primitives", ids: ["x402","escrow","stream","auction","hitl","fanout","oracle"] },
+    { label: "use cases",  ids: ["taxi","cafe","delivery","split","ethEscrow","subscribe"] },
+    { label: "meta",       ids: ["pq","stack"] },
+  ];
+
   const sceneBar = document.getElementById("sceneBar");
-  SCENE_ORDER.forEach(id => {
-    const s = SCENES[id];
-    const b = document.createElement("button");
-    b.dataset.scene = id;
-    b.innerHTML = `<span class="num">${s.short}</span>${s.name}`;
-    b.addEventListener("click", () => selectScene(id));
-    sceneBar.appendChild(b);
+  SCENE_GROUPS.forEach((group, gi) => {
+    if (gi > 0) {
+      const sep = document.createElement("span"); sep.className = "sep"; sceneBar.appendChild(sep);
+    }
+    group.ids.forEach(id => {
+      const s = SCENES[id];
+      if (!s) return;
+      const b = document.createElement("button");
+      b.dataset.scene = id;
+      b.innerHTML = `<span class="num">${s.short}</span>${s.name}`;
+      b.title = s.name + " — " + group.label;
+      b.addEventListener("click", () => selectScene(id));
+      sceneBar.appendChild(b);
+    });
   });
+
+  // "Add yours" CTA — invites developers to contribute a scene.
+  {
+    const sep = document.createElement("span"); sep.className = "sep"; sceneBar.appendChild(sep);
+    const b = document.createElement("a");
+    b.href = "https://github.com/kcolbchain/switchboard/blob/main/web/SCENES.md";
+    b.target = "_blank"; b.rel = "noopener";
+    b.className = "add-scene";
+    b.innerHTML = `<span class="plus">＋</span>Add your scene`;
+    b.title = "Open the scene template — fork, drop in, send a PR";
+    sceneBar.appendChild(b);
+  }
 
   // ─── split-flap "switchboard" title ───────────────────────────────────────
   const SB_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789-_/";

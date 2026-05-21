@@ -101,7 +101,7 @@ def test_scramble_logic_present(lab_script: str) -> None:
 
 EXPECTED_SCENES = [
     "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
-    "taxi", "cafe", "delivery", "split",
+    "taxi", "cafe", "delivery", "split", "ethEscrow", "subscribe",
 ]
 
 
@@ -192,3 +192,58 @@ def test_hover_ripple_and_scale(lab_script: str) -> None:
     # ripple state + hover ease are both required by the new hover treatment
     assert "_ripples" in lab_script
     assert "_hoverEase" in lab_script
+
+
+# ─── kinds, shapes, informatics ────────────────────────────────────────────
+
+def test_three_kinds_present(lab_script: str) -> None:
+    """human / bot / contract — every agent should be tagged with one."""
+    for kind in ('"human"', '"bot"', '"contract"'):
+        assert f"kind: {kind}" in lab_script, f"no agents declared as {kind}"
+
+
+def test_shape_dispatch_present(lab_script: str) -> None:
+    """drawAgent should dispatch on the three new shape branches."""
+    for branch in ("squircle", "octagon", "hex"):
+        assert branch in lab_script, f"shape `{branch}` not referenced"
+    assert "drawSquircleBody" in lab_script
+    assert "drawOctagonBody"  in lab_script
+    assert "drawHexBody"      in lab_script
+
+
+def test_tooltip_includes_informatics(lab_script: str) -> None:
+    """Tooltip should surface protocols, sig alg, kind, last seen."""
+    must_contain = ["protocols", "sigAlg", "lastSeen",
+                    "ttproto", "ttdesc"]
+    for s in must_contain:
+        assert s in lab_script, f"tooltip missing informatics field: {s}"
+
+
+def test_scene_groups_present(lab_script: str) -> None:
+    """Pill bar should be grouped: primitives / use cases / meta."""
+    assert "SCENE_GROUPS" in lab_script
+    for label in ('"primitives"', '"use cases"', '"meta"'):
+        assert label in lab_script, f"scene group {label} missing"
+
+
+def test_add_scene_cta_present(lab_script: str, lab_html: str) -> None:
+    """`+ Add your scene` CTA should link to SCENES.md."""
+    assert "add-scene" in lab_script or "add-scene" in lab_html
+    assert "SCENES.md" in lab_script
+
+
+def test_scenes_md_file_exists() -> None:
+    md = WEB / "SCENES.md"
+    assert md.is_file(), "web/SCENES.md missing — scene-template doc is required"
+    body = md.read_text()
+    # contract checks — these are load-bearing for contributors
+    for hook in ("SCENES.myScene", "enter()", "tick(t)", "EXPECTED_SCENES"):
+        assert hook in body, f"SCENES.md missing required example: {hook}"
+
+
+# ─── cast refinement ───────────────────────────────────────────────────────
+
+def test_sara_added_as_human(lab_script: str) -> None:
+    """Split-bill scene now uses Sara instead of an AI agent."""
+    assert 'name: "Sara"' in lab_script
+    assert 'kind: "human"' in lab_script   # at least one explicit human kind
