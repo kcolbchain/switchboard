@@ -317,6 +317,56 @@
   footer { position: fixed; bottom: 4px; right: 8px; font-size: 10px;
     color: var(--muted-2); font-family: var(--mono); }
   footer a { color: var(--muted-2); }
+
+  /* ─── responsive ───────────────────────────────────────────────────────── */
+  /* Tablet: collapse right log into a slide-over drawer. */
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 240px 1fr; height: calc(100vh - 95px); }
+    aside.right {
+      position: fixed; top: 95px; right: 0; bottom: 0; width: 300px;
+      transform: translateX(100%); transition: transform 0.25s ease;
+      z-index: 40; border-left: 1px solid var(--glass-stroke);
+      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.25);
+    }
+    body.log-open aside.right { transform: translateX(0); }
+    .log-toggle { display: inline-flex; }
+  }
+  /* Phone: stack everything; sidebar becomes a top drawer. */
+  @media (max-width: 800px) {
+    header { padding: 8px 14px; }
+    header h1 { font-size: 13px; gap: 6px; }
+    .sb-title { padding: 4px 7px 6px 7px; font-size: 13px; }
+    .scene-bar { padding: 6px 12px; }
+    .scene-bar button { padding: 4px 9px; font-size: 11px; }
+    .scene-bar .add-scene { padding: 4px 9px; font-size: 11px; }
+    .layout { grid-template-columns: 1fr; height: calc(100vh - 90px); }
+    aside.left {
+      position: fixed; top: 90px; left: 0; bottom: 0; width: 260px;
+      transform: translateX(-100%); transition: transform 0.25s ease;
+      z-index: 40; border-right: 1px solid var(--glass-stroke);
+      box-shadow: 8px 0 32px rgba(0, 0, 0, 0.25);
+    }
+    body.info-open aside.left { transform: translateX(0); }
+    .info-toggle { display: inline-flex; }
+    .stats { font-size: 9.5px; padding: 5px 10px; gap: 10px;
+      top: 10px; left: 12px; right: auto; }
+    .transport { top: 10px; right: 12px; padding: 3px 6px; }
+    .transport button { width: 26px; height: 26px; font-size: 13px; }
+    .transport .speed { display: none; }     /* save space */
+    .caption { bottom: 10px; left: 12px; right: 12px; padding: 9px 12px; font-size: 11px; }
+    .tt { min-width: 180px; max-width: 220px; font-size: 10.5px; }
+  }
+  /* Drawer toggle buttons hidden by default; shown only on narrow viewports */
+  .log-toggle, .info-toggle { display: none;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--glass-stroke); border-radius: 6px;
+    width: 26px; height: 26px; cursor: pointer; padding: 0;
+    align-items: center; justify-content: center;
+    font: inherit; font-size: 13px; line-height: 1; }
+  .log-toggle:hover, .info-toggle:hover { color: var(--fg); border-color: var(--accent); }
+  body.log-open .log-scrim, body.info-open .info-scrim {
+    position: fixed; inset: 95px 0 0 0; background: rgba(0, 0, 0, 0.3);
+    z-index: 30; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -332,9 +382,13 @@
     <a href="./index.html">protocol explorer</a>
     <span>·</span>
     <span>vanilla canvas, no build</span>
+    <button id="infoToggleBtn" class="info-toggle" title="inspector" aria-label="toggle inspector">☰</button>
+    <button id="logToggleBtn" class="log-toggle" title="activity log" aria-label="toggle activity log">≣</button>
     <button id="themeBtn" class="theme-btn" title="toggle theme" aria-label="toggle theme">☾</button>
   </div>
 </header>
+<div class="log-scrim" id="logScrim"></div>
+<div class="info-scrim" id="infoScrim"></div>
 
 <div class="scene-bar" id="sceneBar"></div>
 
@@ -2662,6 +2716,16 @@
     b.title = "Open the scene template — fork, drop in, send a PR";
     sceneBar.appendChild(b);
   }
+
+  // ─── responsive drawer toggles (narrow viewports) ─────────────────────────
+  const logToggle  = document.getElementById("logToggleBtn");
+  const infoToggle = document.getElementById("infoToggleBtn");
+  const logScrim   = document.getElementById("logScrim");
+  const infoScrim  = document.getElementById("infoScrim");
+  logToggle.addEventListener("click",  () => document.body.classList.toggle("log-open"));
+  infoToggle.addEventListener("click", () => document.body.classList.toggle("info-open"));
+  logScrim.addEventListener("click",   () => document.body.classList.remove("log-open"));
+  infoScrim.addEventListener("click",  () => document.body.classList.remove("info-open"));
 
   // ─── theme toggle (light / dark) ──────────────────────────────────────────
   const themeBtn = document.getElementById("themeBtn");
