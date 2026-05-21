@@ -2053,7 +2053,13 @@
     id: "taxi",
     name: "Taxi handover",
     short: "10",
-    desc: "<strong>Patty</strong>'s agent books a ride. It RFQs <strong>Dispatch</strong>, picks <strong>Sai</strong> on price+ETA, validates the signed quote, locks funds in escrow, watches the GPS handshake at pickup, rides A→B, and releases on dropoff. Zero taps once policy is set.",
+    desc: "<strong>Patty</strong>'s agent books a ride. It RFQs <strong>Dispatch</strong>, picks <strong>Sai</strong> on price+ETA, validates the signed quote, locks funds in escrow, watches the GPS handshake at pickup, rides A→B along city streets, and releases on dropoff. Zero taps once policy is set.",
+    why: "Ride-share apps today are three-trust black boxes: rider trusts the app, app trusts the driver, driver trusts the app to pay. An <strong>agentic</strong> ride routes through one on-chain escrow — the driver knows funds exist before they roll; the rider's funds release only when both agents confirm the dropoff. No middleman, no chargeback, signed receipt.",
+    controls: [
+      { id: "fareBase", type: "range", label: "Base fare",   min: 2.0, max: 12.0, step: 0.1,  default: 3.50, suffix: "USDC", decimals: 2 },
+      { id: "perKm",    type: "range", label: "Per-km rate", min: 0.2, max: 2.5,  step: 0.05, default: 0.85, suffix: "USDC/km", decimals: 2 },
+      { id: "tripKm",   type: "range", label: "Trip distance", min: 0.5, max: 12, step: 0.1,  default: 4.20, suffix: "km",   decimals: 1 },
+    ],
     enter() {
       setVisible(["bob", "driver", "dispatch", "escrow"]);
       A.bob.balance = 25; A.bob.spent = 0; A.bob.dailyCap = 50;
@@ -2061,34 +2067,149 @@
       this.layout();
       this.phase = 0; this.cool = 50;
       this.driveT = 0;
-      A.driver._visible = false; A.driver.pos = { ...this.pickup };
-      setCaption("step 1 / 8", "<strong>Patty</strong> at pin <strong>A</strong>. Her agent broadcasts a ride request to <strong>Dispatch</strong>.");
-      log(`<span class="info">taxi</span> scene loaded · pickup A → dropoff B`);
+      this.fare = this.ctl.fareBase + this.ctl.perKm * this.ctl.tripKm;
+      // ride telemetry for the overlay
+      this.eta = Math.ceil(this.ctl.tripKm * 2.6);    // minutes, ~23 km/h avg
+      this.kmDone = 0;
+      A.driver._visible = false; A.driver.pos = { ...this.spawn };
+      setCaption("event 1 · request", "<strong>Patty</strong> stands at pin <strong>A</strong>. Her agent broadcasts a ride request to <strong>Dispatch</strong> over the agentic-payments network.");
+      log(`<span class="info">taxi</span> scene loaded · trip ${this.ctl.tripKm.toFixed(1)} km · fare ${this.fare.toFixed(2)} USDC`);
     },
     layout() {
       this.pickup  = { x: W * 0.18, y: H * 0.72 };
-      this.dropoff = { x: W * 0.82, y: H * 0.30 };
+      this.dropoff = { x: W * 0.82, y: H * 0.28 };
+      this.spawn   = { x: W * 0.92, y: H * 0.85 };           // where Sai's taxi enters from
+      // L-shaped waypoint route (down, then up) — feels like city streets
+      this.wp = [
+        { ...this.pickup },
+        { x: W * 0.30, y: H * 0.50 },
+        { x: W * 0.55, y: H * 0.50 },
+        { x: W * 0.55, y: H * 0.34 },
+        { x: this.dropoff.x, y: this.dropoff.y },
+      ];
+      // distance lookup table for smooth animation along waypoints
+      this.wpDists = [0];
+      let total = 0;
+      for (let i = 1; i < this.wp.length; i++) {
+        total += Math.hypot(this.wp[i].x - this.wp[i-1].x, this.wp[i].y - this.wp[i-1].y);
+        this.wpDists.push(total);
+      }
+      this.wpTotal = total;
       A.bob.pos = { ...this.pickup };
-      A.dispatch.pos = { x: W * 0.5,  y: H * 0.18 };
-      A.escrow.pos   = { x: W * 0.5,  y: H * 0.82 };
-      A.driver.pos   = { ...this.pickup };
+      A.dispatch.pos = { x: W * 0.5,  y: H * 0.14 };
+      A.escrow.pos   = { x: W * 0.18, y: H * 0.22 };
+      A.driver.pos   = { ...this.spawn };
     },
     drawUnderlay(ctx, W, H) {
-      // map pins + curved route
+      // city blocks — soft gray rectangles to suggest streets
+      const blocks = [
+        { x: 0.32, y: 0.55, w: 0.18, h: 0.18 },
+        { x: 0.60, y: 0.55, w: 0.15, h: 0.18 },
+        { x: 0.32, y: 0.20, w: 0.18, h: 0.20 },
+        { x: 0.60, y: 0.18, w: 0.15, h: 0.10 },
+      ];
+      ctx.save();
+      ctx.fillStyle = "rgba(150, 160, 175, 0.06)";
+      ctx.strokeStyle = "rgba(150, 160, 175, 0.18)";
+      ctx.lineWidth = 1;
+      blocks.forEach(b => {
+        ctx.fillRect(b.x * W, b.y * H, b.w * W, b.h * H);
+        ctx.strokeRect(b.x * W, b.y * H, b.w * W, b.h * H);
+      });
+      ctx.restore();
+      // solid streets between waypoints
+      ctx.save();
+      ctx.strokeStyle = "rgba(96, 165, 250, 0.25)";
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(this.wp[0].x, this.wp[0].y);
+      for (let i = 1; i < this.wp.length; i++) ctx.lineTo(this.wp[i].x, this.wp[i].y);
+      ctx.stroke();
+      // dashed centerline on top of the street
+      ctx.strokeStyle = "rgba(231, 233, 238, 0.35)";
+      ctx.lineWidth = 1.2; ctx.setLineDash([6, 8]);
+      ctx.beginPath();
+      ctx.moveTo(this.wp[0].x, this.wp[0].y);
+      for (let i = 1; i < this.wp.length; i++) ctx.lineTo(this.wp[i].x, this.wp[i].y);
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.restore();
+      // map pins (drawn on top of street)
       drawPin(ctx, this.pickup.x, this.pickup.y, "A · pickup", "#7dd3fc");
       drawPin(ctx, this.dropoff.x, this.dropoff.y, "B · dropoff", "#34d399");
-      drawDashedCurve(ctx, this.pickup.x, this.pickup.y, this.dropoff.x, this.dropoff.y, 110,
-                      "rgba(96,165,250,0.3)");
     },
     drawOverlay(ctx, W, H) {
-      // small "validate" badge on Patty while validating
+      // Trip telemetry HUD in the top-left of the stage
+      const x = 20, y = 60, w = 168, h = 70;
+      ctx.save();
+      ctx.fillStyle = "rgba(13, 16, 21, 0.7)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+      ctx.lineWidth = 1;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = "rgba(138, 147, 163, 0.8)";
+      ctx.font = "9px ui-monospace, Menlo, monospace";
+      ctx.fillText("RIDE TELEMETRY", x + 8, y + 12);
+      ctx.fillStyle = "rgba(231, 233, 238, 0.95)";
+      ctx.font = "12px ui-monospace, Menlo, monospace";
+      ctx.fillText(`fare    ${this.fare.toFixed(2)} USDC`, x + 8, y + 28);
+      ctx.fillText(`trip    ${this.kmDone.toFixed(1)} / ${this.ctl.tripKm.toFixed(1)} km`, x + 8, y + 42);
+      ctx.fillText(`ETA     ${this.eta} min`, x + 8, y + 56);
+      ctx.restore();
+
+      // Animate the taxi as a small body offset from Sai's agent center
+      if (A.driver._visible && (this.phase >= 4)) {
+        this.drawTaxi(ctx, A.driver.pos.x, A.driver.pos.y, this._heading || 0);
+      }
+
       if (this.phase === 3) {
         ctx.fillStyle = "rgba(96, 165, 250, 0.9)";
         ctx.font = "10px ui-monospace, Menlo, monospace";
         ctx.textAlign = "center";
         const a = A.bob;
-        ctx.fillText("validating: sig · price · ETA", a.pos.x, a.pos.y - a.radius - 16);
+        ctx.fillText("validating: sig · price · ETA", a.pos.x, a.pos.y - a.radius - 18);
+        ctx.textAlign = "left";
       }
+    },
+    drawTaxi(ctx, x, y, heading) {
+      ctx.save();
+      ctx.translate(x + 26, y - 26);          // offset so taxi body is beside Sai's agent
+      ctx.rotate(heading);
+      // body — neobrutalist mini-car shape (block + cabin)
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.fillRect(-14, -7 + 2, 28, 14);     // shadow
+      ctx.fillStyle = "#fbbf24";              // taxi yellow
+      ctx.fillRect(-14, -7, 28, 14);
+      ctx.fillStyle = "#0b0d10";
+      ctx.fillRect(-7, -5, 10, 4);            // cabin window
+      ctx.strokeStyle = "#0b0d10"; ctx.lineWidth = 1.5;
+      ctx.strokeRect(-14, -7, 28, 14);
+      // wheels
+      ctx.fillStyle = "#0b0d10";
+      ctx.fillRect(-12, 5,  6, 3);
+      ctx.fillRect(  6, 5,  6, 3);
+      // "TAXI" stamp
+      ctx.fillStyle = "#0b0d10";
+      ctx.font = "bold 6px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("TAXI", 4, 1);
+      ctx.restore();
+    },
+    posAtDistance(d) {
+      // Walk waypoints until we exceed d, then lerp inside the segment.
+      d = Math.min(d, this.wpTotal);
+      for (let i = 1; i < this.wp.length; i++) {
+        if (d <= this.wpDists[i]) {
+          const segLen = this.wpDists[i] - this.wpDists[i-1];
+          const segT = (d - this.wpDists[i-1]) / Math.max(1, segLen);
+          const x = lerp(this.wp[i-1].x, this.wp[i].x, segT);
+          const y = lerp(this.wp[i-1].y, this.wp[i].y, segT);
+          const heading = Math.atan2(this.wp[i].y - this.wp[i-1].y, this.wp[i].x - this.wp[i-1].x);
+          return { x, y, heading };
+        }
+      }
+      const last = this.wp[this.wp.length - 1];
+      return { x: last.x, y: last.y, heading: 0 };
     },
     tick(t) {
       if (this.cool > 0) { this.cool--; return; }
@@ -2097,82 +2218,84 @@
           emit("bob", "dispatch", { kind: "request", label: "ride A→B", speed: 0.02 });
           log(`Patty → Dispatch: <code>requestRide(A, B)</code>`);
           this.phase = 1; this.cool = 60;
-          setCaption("step 2 / 8", "<strong>Dispatch</strong> fans the request out to nearby drivers and collects bids.");
+          setCaption("event 2 · matching", "<strong>Dispatch</strong> fans the request out to nearby drivers and waits on bids.");
           break;
         case 1:
           A.driver._visible = true;
-          A.driver.pos = { x: W * 0.85, y: H * 0.75 };
-          emit("driver", "dispatch", { kind: "bid", label: "$5.20 · 3 min", speed: 0.02 });
-          log(`Sai bids: <span class="warn">5.20 USDC · ETA 3 min</span> · PQ-signed quote`);
+          A.driver.pos = { ...this.spawn };
+          emit("driver", "dispatch", { kind: "bid", label: `$${this.fare.toFixed(2)} · ${this.eta} min`, speed: 0.022 });
+          log(`Sai bids: <span class="warn">${this.fare.toFixed(2)} USDC · ETA ${this.eta} min</span> · PQ-signed quote`);
           this.phase = 2; this.cool = 80;
-          setCaption("step 3 / 8", "Sai's agent returns a signed quote. Other drivers bid too; Dispatch forwards the winning offer.");
+          setCaption("event 3 · bid", `Sai bids ${this.fare.toFixed(2)} USDC with ETA ${this.eta} min. Quote is signed; tampering invalidates it.`);
           break;
         case 2:
-          emit("dispatch", "bob", { kind: "offer", label: "Sai · 5.20", speed: 0.02 });
+          emit("dispatch", "bob", { kind: "offer", label: `Sai · ${this.fare.toFixed(2)}`, speed: 0.022 });
           this.phase = 3; this.cool = 100;
-          setCaption("step 4 / 8", "Patty's agent validates the offer: <code>verify(sig, pk)</code>, price under cap, ETA under tolerance.");
+          setCaption("event 4 · validate", "Patty's agent runs <code>verify(sig, pk)</code>, checks fare < cap, ETA < tolerance.");
           break;
         case 3:
-          emit("bob", "escrow", { kind: "offer", label: "lock 5.20", amount: 5.2, speed: 0.018,
-            onArrive: () => { A.bob.balance -= 5.2; A.escrow.balance += 5.2; } });
-          log(`Patty → Escrow: lock 5.20 USDC`);
+          emit("bob", "escrow", { kind: "offer", label: `lock ${this.fare.toFixed(2)}`, amount: this.fare, speed: 0.020,
+            onArrive: () => { A.bob.balance -= this.fare; A.escrow.balance += this.fare; } });
+          log(`Patty → Escrow: lock ${this.fare.toFixed(2)} USDC`);
           this.phase = 4; this.cool = 90;
-          setCaption("step 5 / 8", "Funds lock in <span class=\"pill\">Escrow</span>. Sai's agent watches the lock event before rolling.");
+          setCaption("event 5 · escrow lock", `<strong>${this.fare.toFixed(2)} USDC</strong> locks in escrow. Sai's agent watches for the lock event before rolling — no funds, no drive.`);
           break;
         case 4: {
-          // animate Sai's car from off-screen position to pickup
+          // Sai's taxi drives from spawn to pickup
           this.driveT += 0.018;
-          const start = { x: W * 0.85, y: H * 0.75 };
-          A.driver.pos = {
-            x: lerp(start.x, this.pickup.x + 38, Math.min(1, this.driveT)),
-            y: lerp(start.y, this.pickup.y, Math.min(1, this.driveT)),
-          };
+          const t01 = Math.min(1, this.driveT);
+          const sx = lerp(this.spawn.x, this.pickup.x + 36, t01);
+          const sy = lerp(this.spawn.y, this.pickup.y - 4,  t01);
+          A.driver.pos = { x: sx, y: sy };
+          this._heading = Math.atan2(this.pickup.y - this.spawn.y, this.pickup.x - this.spawn.x);
           if (this.driveT >= 1) {
             log(`Sai arrives at <strong>A</strong>. GPS handshake: <span class="ok">match</span>`);
-            emit("driver", "bob", { kind: "data", label: "GPS sig", speed: 0.03 });
-            emit("bob", "driver", { kind: "data", label: "GPS ack",  speed: 0.03 });
-            this.phase = 5; this.cool = 60; this.driveT = 0;
-            setCaption("step 6 / 8", "Sai pulls up. Both agents exchange signed GPS positions. Match → ride begins.");
+            emit("driver", "bob", { kind: "data", label: "GPS sig", speed: 0.032 });
+            emit("bob", "driver", { kind: "data", label: "GPS ack", speed: 0.032 });
+            this.phase = 5; this.cool = 70; this.driveT = 0;
+            setCaption("event 6 · pickup handshake", "Sai pulls up. Both agents exchange signed GPS positions. <strong>Match</strong> → ride begins.");
           }
           break;
         }
         case 5: {
-          // animate the actual ride along the curve, both Patty and Sai together
-          this.driveT += 0.005;
-          const p0 = this.pickup;
-          const p2 = this.dropoff;
-          const p1 = { x: (p0.x + p2.x) / 2, y: Math.min(p0.y, p2.y) - 110 };
-          const pt = bezierPoint(Math.min(1, this.driveT), p0, p1, p2);
-          A.driver.pos = pt;
-          A.bob.pos = { x: pt.x - 28, y: pt.y + 2 };
+          // ride: animate along waypoint route, taxi + Patty traveling together
+          this.driveT += 0.0035;
+          const d = this.driveT * this.wpTotal;
+          const p = this.posAtDistance(d);
+          A.driver.pos = { x: p.x, y: p.y };
+          A.bob.pos    = { x: p.x - 28, y: p.y + 2 };
+          this._heading = p.heading;
+          this.kmDone = this.ctl.tripKm * Math.min(1, this.driveT);
+          this.eta = Math.max(0, Math.ceil(this.ctl.tripKm * 2.6 * (1 - this.driveT)));
           if (this.driveT >= 1) {
             log(`Arrived at <strong>B</strong>. Both agents confirm dropoff.`);
             this.phase = 6; this.cool = 50; this.driveT = 0;
-            setCaption("step 7 / 8", "Arrival confirmed by both agents. Patty's app calls <code>confirmPayment()</code>.");
+            setCaption("event 7 · arrival", "Arrival confirmed by both agents. Patty's app calls <code>confirmPayment()</code>.");
           }
           break;
         }
         case 6:
-          emit("bob", "escrow", { kind: "request", label: "confirm", speed: 0.022,
+          emit("bob", "escrow", { kind: "request", label: "confirm", speed: 0.024,
             onArrive: () => {
-              emit("escrow", "driver", { kind: "proof", label: "released 5.20", speed: 0.022,
+              emit("escrow", "driver", { kind: "proof", label: `released ${this.fare.toFixed(2)}`, speed: 0.024,
                 onArrive: () => {
-                  A.escrow.balance -= 5.2; A.driver.balance += 5.2;
+                  A.escrow.balance -= this.fare; A.driver.balance += this.fare;
                   jobs++; jobsEl.textContent = jobs;
                 }});
             }});
-          log(`<span class="ok">Escrow released 5.20 USDC to Sai</span> · handover complete`);
-          this.phase = 7; this.cool = 220;
-          setCaption("step 8 / 8", "Escrow releases 5.20 USDC to Sai. Receipt PQ-signed; Patty's done. No taps after step 1.");
+          log(`<span class="ok">Escrow released ${this.fare.toFixed(2)} USDC to Sai</span> · handover complete`);
+          this.phase = 7; this.cool = 240;
+          setCaption("event 8 · settled", `Escrow releases ${this.fare.toFixed(2)} USDC to Sai. Receipt PQ-signed; Patty's done. <strong>No taps after event 1.</strong>`);
           break;
         case 7:
-          // reset for loop
           A.bob.balance = 25; A.bob.spent = 0;
           A.driver.balance = 0; A.escrow.balance = 0;
-          this.driveT = 0; this.phase = 0;
+          this.driveT = 0; this.kmDone = 0; this.phase = 0;
+          this.fare = this.ctl.fareBase + this.ctl.perKm * this.ctl.tripKm;
+          this.eta = Math.ceil(this.ctl.tripKm * 2.6);
           this.layout();
           A.driver._visible = false;
-          this.cool = 80;
+          this.cool = 100;
           break;
       }
     },

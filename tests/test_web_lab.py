@@ -283,3 +283,60 @@ def test_why_card_supported(lab_script: str) -> None:
     assert "why-card" in lab_script
     # Escrow scene + auction scene both publish a why
     assert 'why: "' in lab_script or 'why: `' in lab_script
+
+
+# ─── theme toggle ─────────────────────────────────────────────────────────
+
+def test_theme_toggle_present(lab_html: str, lab_script: str) -> None:
+    """Sun/moon toggle in header, light tokens defined."""
+    assert 'id="themeBtn"' in lab_html
+    assert "data-theme=\"light\"" in lab_html
+    assert "applyTheme" in lab_script
+    assert "localStorage" in lab_script
+
+
+# ─── transport / step controls ────────────────────────────────────────────
+
+def test_transport_bar_present(lab_html: str, lab_script: str) -> None:
+    """Restart / play-pause / step / speed all wired."""
+    for needle in ('id="btnRestart"', 'id="btnPlayPause"', 'id="btnStep"', 'id="speedSel"'):
+        assert needle in lab_html, f"transport bar missing element: {needle}"
+    assert "stepOneEvent" in lab_script
+    assert "stepWatcher" in lab_script
+    assert "speedMul" in lab_script
+
+
+# ─── neobrutalist agents ──────────────────────────────────────────────────
+
+def test_neobrutalist_renderer(lab_script: str) -> None:
+    """Solid two-tone fills + block shadow + ink outlines, no radial gradients."""
+    assert "brutFills" in lab_script
+    assert "shadowInk()" in lab_script
+    assert "inkColor()" in lab_script
+    # The previous soft halo + soft radial gradient on the body has been
+    # removed. We assert this directly: drawCircleBody should no longer
+    # call createRadialGradient.
+    body_block = lab_script.split("function drawCircleBody")[1].split("function drawSquircleBody")[0]
+    assert "createRadialGradient" not in body_block, "agent body still uses radial gradient (not brutalist)"
+
+
+# ─── responsive layout ────────────────────────────────────────────────────
+
+def test_responsive_layout(lab_html: str, lab_script: str) -> None:
+    """Media queries + drawer toggles wired for narrow viewports."""
+    assert "@media (max-width: 1100px)" in lab_html
+    assert "@media (max-width: 800px)" in lab_html
+    assert 'id="logToggleBtn"' in lab_html
+    assert 'id="infoToggleBtn"' in lab_html
+    assert "log-open" in lab_script
+    assert "info-open" in lab_script
+
+
+# ─── elaborated taxi scene ────────────────────────────────────────────────
+
+def test_taxi_is_elaborated(lab_script: str) -> None:
+    """Multi-waypoint route, animated taxi icon, fare + ETA controls + HUD."""
+    taxi_block = lab_script.split("SCENES.taxi = {")[1].split("SCENES.cafe")[0]
+    for needle in ("wp = [", "wpTotal", "drawTaxi", "posAtDistance",
+                   "fareBase", "perKm", "tripKm", "RIDE TELEMETRY"):
+        assert needle in taxi_block, f"taxi scene missing: {needle}"
