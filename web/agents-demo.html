@@ -1,0 +1,2534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>agent payments — interactive lab</title>
+<meta name="description" content="Interactive canvas lab of agent-to-agent payment patterns: HTTP-402 paywalls, on-chain escrow, streaming micropayments, AI compute auctions, human-in-the-loop, treasury rebalance, oracle pull." />
+<style>
+  :root {
+    --bg: #0b0d10; --panel: #13161b; --panel-2: #0f1216; --border: #23272f;
+    --fg: #e7e9ee; --muted: #8a93a3; --muted-2: #5a6270;
+    --accent: #60a5fa; --ok: #34d399; --warn: #fbbf24; --hot: #f87171; --info: #7dd3fc;
+    --agentic: #7dd3fc; --hitl: #fbbf24; --treasury: #a78bfa; --provider: #34d399; --oracle: #f0abfc;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background:
+    radial-gradient(1200px 800px at 20% 0%, #11161d 0%, #0b0d10 60%),
+    radial-gradient(900px 600px at 100% 100%, #131922 0%, #0b0d10 60%);
+    background-attachment: fixed;
+    color: var(--fg);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    overflow: hidden; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Translucent glass on every floating chrome surface */
+  .glass { background: rgba(15, 18, 22, 0.55);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.06); }
+
+  header { padding: 12px 24px; border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(13, 16, 21, 0.55);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%); }
+  header h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--muted);
+    letter-spacing: 0.02em; display: flex; align-items: center; gap: 10px; }
+  header .crumbs { color: var(--muted-2); font-size: 11px; }
+  header .crumbs a { color: var(--muted-2); }
+
+  /* ─── split-flap switchboard title ──────────────────────────────────── */
+  .sb-title { display: inline-flex; gap: 1px; font-family: var(--mono);
+    font-weight: 600; font-size: 15px; cursor: pointer; user-select: none;
+    padding: 6px 10px 8px 10px; border-radius: 6px;
+    background: linear-gradient(180deg, #0f1216 0%, #13161b 100%);
+    border: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 0 rgba(0,0,0,0.3); }
+  .sb-char { display: inline-block; position: relative; min-width: 0.78em;
+    text-align: center; color: var(--fg); padding-top: 6px;
+    transition: color 0.15s, transform 0.15s, text-shadow 0.2s; }
+  .sb-char::before {                       /* LED dot above each char */
+    content: ""; position: absolute; top: 0; left: 50%;
+    width: 3px; height: 3px; border-radius: 50%;
+    background: var(--muted-2); transform: translateX(-50%);
+    transition: background 0.2s, box-shadow 0.2s; }
+  .sb-char.settled {
+    color: var(--fg); text-shadow: 0 0 8px rgba(96, 165, 250, 0.25); }
+  .sb-char.settled::before {
+    background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .sb-char.scrambling {
+    color: var(--accent); transform: translateY(-1px); }
+  .sb-char.scrambling::before { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .sb-tag { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+  .scene-bar { display: flex; gap: 6px; padding: 8px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(13, 16, 21, 0.55);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    overflow-x: auto; align-items: center; }
+  .scene-bar::-webkit-scrollbar { height: 0; }
+  .scene-bar button { background: rgba(255, 255, 255, 0.02); color: var(--muted);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 5px 11px; border-radius: 999px; cursor: pointer;
+    font: inherit; font-size: 12px; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: color 0.15s, background 0.15s, border-color 0.15s; }
+  .scene-bar button:hover { color: var(--fg); border-color: rgba(255, 255, 255, 0.12); }
+  .scene-bar button.active { background: rgba(96, 165, 250, 0.12);
+    color: var(--fg); border-color: rgba(96, 165, 250, 0.5); }
+  .scene-bar button .num { color: var(--muted-2); font-family: var(--mono); font-size: 11px; }
+  .scene-bar .sep { width: 1px; height: 16px; background: rgba(255, 255, 255, 0.08); margin: 0 4px; }
+  .scene-bar .add-scene { color: var(--muted); border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 999px; padding: 5px 11px; font-size: 11.5px;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s, background 0.15s; }
+  .scene-bar .add-scene:hover { color: var(--fg); border-color: var(--accent);
+    background: rgba(96, 165, 250, 0.08); text-decoration: none; }
+  .scene-bar .add-scene .plus { color: var(--accent); font-size: 14px; line-height: 1; }
+
+  .layout { display: grid; grid-template-columns: 250px 1fr 300px;
+    height: calc(100vh - 95px); gap: 0; }
+
+  aside { padding: 16px 16px 18px 16px; overflow-y: auto;
+    background: rgba(15, 18, 22, 0.55);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border-right: 1px solid rgba(255, 255, 255, 0.04); }
+  aside.right { border-right: none; border-left: 1px solid rgba(255, 255, 255, 0.04); }
+  aside::-webkit-scrollbar { width: 6px; }
+  aside::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 3px; }
+  aside::-webkit-scrollbar-track { background: transparent; }
+  aside h2 { font-size: 10px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.1em; margin: 0 0 8px 0; font-weight: 500; }
+  aside h2:not(:first-child) { margin-top: 16px; }
+
+  .scene-title { font-size: 15px; font-weight: 600; color: var(--fg); margin: 0 0 4px 0; }
+  .scene-desc { font-size: 12px; color: var(--muted); line-height: 1.55; }
+  .scene-desc code { font-family: var(--mono); font-size: 11px; color: var(--info);
+    background: var(--panel); padding: 1px 4px; border-radius: 3px; }
+
+  .agent-info { font-family: var(--mono); font-size: 11px; }
+  .agent-info .name { font-size: 13px; color: var(--fg);
+    font-family: -apple-system, system-ui, sans-serif; font-weight: 600; margin-bottom: 2px; }
+  .agent-info .role { color: var(--muted); font-family: -apple-system, system-ui, sans-serif;
+    margin-bottom: 10px; font-size: 11px; }
+  .agent-info dl { margin: 0; display: grid; grid-template-columns: auto 1fr;
+    gap: 3px 10px; }
+  .agent-info dt { color: var(--muted-2); }
+  .agent-info dd { margin: 0; color: var(--fg); }
+  .agent-info .bar { height: 3px; background: var(--panel); border-radius: 2px;
+    overflow: hidden; margin-top: 4px; }
+  .agent-info .bar > div { height: 100%; background: var(--ok); transition: width 0.2s; }
+  .agent-info .bar.warn > div { background: var(--warn); }
+  .agent-info .bar.over > div { background: var(--hot); }
+
+  .empty { color: var(--muted-2); font-style: italic; font-size: 11px; }
+
+  .legend { font-size: 11px; color: var(--muted); line-height: 1.8; }
+  .legend.small { line-height: 1.5; }
+  .legend .dot { display: inline-block; width: 7px; height: 7px;
+    border-radius: 50%; vertical-align: 1px; margin-right: 7px; }
+  .legend .row-key { color: var(--fg); }
+  .legend .shape { display: inline-block; width: 11px; height: 11px;
+    vertical-align: -1px; margin-right: 7px; border: 1px solid var(--muted-2); }
+  .legend .shape.sq { border-radius: 4px; background: rgba(125, 211, 252, 0.15); border-color: var(--agentic); }
+  .legend .shape.oc { clip-path: polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
+    background: rgba(52, 211, 153, 0.18); border: none;
+    box-shadow: 0 0 0 1px var(--provider); }
+  .legend .shape.hx { clip-path: polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    background: rgba(96, 165, 250, 0.18); border: none;
+    box-shadow: 0 0 0 1px var(--accent); }
+
+  /* Per-scene simulation controls */
+  .ctl-panel { margin-top: 4px; }
+  .ctl-list { display: flex; flex-direction: column; gap: 8px;
+    font-family: var(--mono); font-size: 11px; margin-bottom: 8px; }
+  .ctl-row { display: flex; flex-direction: column; gap: 2px; }
+  .ctl-row label { color: var(--muted); display: flex; justify-content: space-between; }
+  .ctl-row .val { color: var(--fg); }
+  .ctl-row input[type=range] { width: 100%; accent-color: var(--accent); }
+  .ctl-row .preset { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+  .ctl-row .preset button { background: rgba(255,255,255,0.04); color: var(--muted);
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 4px;
+    padding: 3px 8px; font: inherit; font-size: 10px; cursor: pointer; }
+  .ctl-row .preset button:hover { color: var(--fg); border-color: var(--accent); }
+  .ctl-row .preset button.active { background: rgba(96,165,250,0.12);
+    color: var(--fg); border-color: var(--accent); }
+  .ctl-btn { width: 100%; background: rgba(96,165,250,0.08);
+    color: var(--accent); border: 1px solid rgba(96,165,250,0.3);
+    border-radius: 6px; padding: 6px; font: inherit; font-size: 11px; cursor: pointer; }
+  .ctl-btn:hover { background: rgba(96,165,250,0.16); }
+  .why-card { background: rgba(125, 211, 252, 0.06);
+    border: 1px solid rgba(125, 211, 252, 0.18); border-radius: 6px;
+    padding: 9px 11px; font-size: 11px; line-height: 1.55; color: var(--fg);
+    margin-bottom: 10px; }
+  .why-card .lbl { color: var(--info); font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.05em; text-transform: uppercase; display: block; margin-bottom: 3px; }
+  .why-card ul { margin: 4px 0 0 0; padding-left: 16px; color: var(--muted); }
+  .why-card li { margin-bottom: 2px; }
+
+  .log { font-family: var(--mono); font-size: 10px; line-height: 1.5; }
+  .log .row { padding: 3px 0; border-bottom: 1px dashed var(--border);
+    display: flex; gap: 6px; }
+  .log .t { color: var(--muted-2); flex: 0 0 32px; }
+  .log .m { color: var(--fg); flex: 1; word-break: break-word; }
+  .log .ok { color: var(--ok); }
+  .log .warn { color: var(--warn); }
+  .log .hot { color: var(--hot); }
+  .log .info { color: var(--info); }
+  .log .seg { color: var(--muted); }
+
+  .stage { position: relative; overflow: hidden; background: transparent; }
+  .stage::after {                                /* inner boundary frame */
+    content: ""; position: absolute; inset: 12px; pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px;
+    box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.35); }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair;
+    position: relative; z-index: 1; }
+
+  .stats { position: absolute; top: 18px; left: 20px; z-index: 2;
+    background: rgba(13, 16, 21, 0.6);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 999px; padding: 6px 14px; font-family: var(--mono); font-size: 10px;
+    display: flex; gap: 14px; align-items: center; }
+  .stats .label { color: var(--muted-2); margin-right: 4px; }
+  .stats .val { color: var(--fg); }
+  .stats .val.ok { color: var(--ok); }
+  .stats .val.warn { color: var(--warn); }
+
+  .caption { position: absolute; bottom: 18px; left: 20px; right: 20px; z-index: 2;
+    background: rgba(13, 16, 21, 0.6);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px; padding: 11px 16px; font-size: 11px; color: var(--muted);
+    line-height: 1.55; max-width: 760px; margin: 0 auto; }
+  .caption .step { color: var(--info); font-family: var(--mono); font-size: 10px;
+    margin-right: 8px; }
+  .caption code { font-family: var(--mono); color: var(--fg);
+    background: rgba(96, 165, 250, 0.08); padding: 1px 4px; border-radius: 3px; }
+  .caption .pill { display: inline-block; padding: 1px 6px; border-radius: 3px;
+    background: var(--panel); border: 1px solid var(--border); font-size: 10px;
+    color: var(--muted); margin: 0 3px; font-family: var(--mono); }
+
+  .tt { position: fixed; pointer-events: none; z-index: 50;
+    background: rgba(13, 16, 21, 0.88);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px; padding: 9px 11px; font-size: 11px; min-width: 220px; max-width: 260px;
+    opacity: 0; transform: translateY(-2px);
+    transition: opacity 0.12s, transform 0.12s;
+    box-shadow: 0 12px 38px rgba(0,0,0,0.55); }
+  .tt.show { opacity: 1; transform: translateY(0); }
+  .tt .ttname { font-weight: 600; font-size: 12px; color: var(--fg); letter-spacing: 0.01em; }
+  .tt .ttrole { color: var(--muted); font-size: 10px; margin-bottom: 8px; }
+  .tt .ttrow { display: flex; gap: 5px; margin-bottom: 4px; flex-wrap: wrap; }
+  .tt .ttkind { display: inline-block; padding: 1px 6px; border-radius: 999px;
+    border: 1px solid currentColor; font-size: 9.5px; font-family: var(--mono);
+    line-height: 1.4; letter-spacing: 0.02em; }
+  .tt .ttdesc { color: var(--muted); font-size: 10px; margin-bottom: 8px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(255,255,255,0.06); }
+  .tt .ttproto-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  .tt .ttproto { display: inline-block; padding: 1px 6px; border-radius: 3px;
+    background: rgba(96, 165, 250, 0.10); border: 1px solid rgba(96, 165, 250, 0.25);
+    color: var(--info); font-size: 9.5px; font-family: var(--mono); }
+  .tt .ttproto.muted { background: transparent; border-color: var(--border); color: var(--muted-2); }
+  .tt dl { margin: 0; display: grid; grid-template-columns: auto 1fr;
+    gap: 2px 10px; font-family: var(--mono); font-size: 10px; }
+  .tt dt { color: var(--muted-2); }
+  .tt dd { margin: 0; color: var(--fg); text-align: right; }
+
+  .approve { position: absolute; pointer-events: auto;
+    background: var(--panel); border: 1px solid var(--warn); color: var(--warn);
+    border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 10px;
+    font-family: var(--mono); cursor: pointer; transform: translate(-50%, -50%);
+    box-shadow: 0 0 24px rgba(251, 191, 36, 0.25); }
+  .approve:hover { background: var(--warn); color: var(--bg); }
+
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 3px;
+    background: var(--panel); border: 1px solid var(--border); font-size: 10px;
+    color: var(--muted); margin-right: 4px; font-family: var(--mono); }
+  .tag.high { color: var(--hot); border-color: var(--hot); }
+  .tag.medium { color: var(--warn); border-color: var(--warn); }
+  .tag.low { color: var(--muted); }
+
+  footer { position: fixed; bottom: 4px; right: 8px; font-size: 10px;
+    color: var(--muted-2); font-family: var(--mono); }
+  footer a { color: var(--muted-2); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>
+    <span class="sb-title" id="sbTitle" title="hover to re-patch">
+      <span class="sb-char" data-target="s">s</span><span class="sb-char" data-target="w">w</span><span class="sb-char" data-target="i">i</span><span class="sb-char" data-target="t">t</span><span class="sb-char" data-target="c">c</span><span class="sb-char" data-target="h">h</span><span class="sb-char" data-target="b">b</span><span class="sb-char" data-target="o">o</span><span class="sb-char" data-target="a">a</span><span class="sb-char" data-target="r">r</span><span class="sb-char" data-target="d">d</span>
+    </span>
+    <span class="sb-tag">· agent payments lab</span>
+  </h1>
+  <div class="crumbs">
+    <a href="./index.html">protocol explorer</a> ·
+    <span>vanilla canvas, no build</span>
+  </div>
+</header>
+
+<div class="scene-bar" id="sceneBar"></div>
+
+<div class="layout">
+
+  <aside class="left">
+    <h2 id="sceneLabel">Scene</h2>
+    <div class="scene-title" id="sceneTitle">—</div>
+    <div class="scene-desc" id="sceneDesc"></div>
+
+    <h2>Inspector</h2>
+    <div id="info" class="agent-info">
+      <div class="empty">hover an agent to inspect</div>
+    </div>
+
+    <div id="ctlPanel" class="ctl-panel" style="display:none">
+      <h2>Simulation controls</h2>
+      <div id="ctlList" class="ctl-list"></div>
+      <button id="ctlReset" class="ctl-btn">Restart scene</button>
+    </div>
+
+    <h2>Shapes</h2>
+    <div class="legend">
+      <div><span class="shape sq"></span><span class="row-key">human</span> — Patty, Abhi, Tridib</div>
+      <div><span class="shape oc"></span><span class="row-key">bot</span> — autonomous agents</div>
+      <div><span class="shape hx"></span><span class="row-key">contract</span> — on-chain entities</div>
+    </div>
+
+    <h2>Wallet types</h2>
+    <div class="legend">
+      <div><span class="dot" style="background: var(--agentic)"></span><span class="row-key">agentic</span> · auto-pays</div>
+      <div><span class="dot" style="background: var(--hitl)"></span><span class="row-key">HITL</span> · gates spend</div>
+      <div><span class="dot" style="background: var(--treasury)"></span><span class="row-key">treasury</span> · funds fleets</div>
+      <div><span class="dot" style="background: var(--provider)"></span><span class="row-key">provider</span> · sells work</div>
+      <div><span class="dot" style="background: var(--oracle)"></span><span class="row-key">oracle</span> · sells data</div>
+    </div>
+
+    <h2>Developers</h2>
+    <div class="legend small">
+      Rip this apart — every scene is ~150 lines.
+      <a href="https://github.com/kcolbchain/switchboard/blob/main/web/SCENES.md" target="_blank" rel="noopener" style="color:var(--accent)">scene template ↗</a>
+    </div>
+  </aside>
+
+  <div class="stage">
+    <canvas id="canvas"></canvas>
+    <div class="stats">
+      <div><span class="label">tick</span><span id="tick" class="val">0</span></div>
+      <div><span class="label">scene-time</span><span id="sceneTime" class="val">0s</span></div>
+      <div><span class="label">jobs</span><span id="jobs" class="val ok">0</span></div>
+      <div><span class="label">paused</span><span id="paused" class="val">no</span></div>
+    </div>
+    <div class="caption" id="caption">
+      <span class="step">—</span> Pick a scene above to begin.
+    </div>
+  </div>
+
+  <aside class="right">
+    <h2>Activity log</h2>
+    <div id="log" class="log"></div>
+  </aside>
+
+</div>
+
+<div class="tt" id="tooltip"></div>
+<footer><a href="https://github.com/kcolbchain/switchboard">source</a></footer>
+
+<script>
+(() => {
+  // ─── canvas + state ───────────────────────────────────────────────────────
+  const cvs = document.getElementById("canvas");
+  const ctx = cvs.getContext("2d");
+  const infoEl = document.getElementById("info");
+  const logEl = document.getElementById("log");
+  const tickEl = document.getElementById("tick");
+  const jobsEl = document.getElementById("jobs");
+  const sceneTimeEl = document.getElementById("sceneTime");
+  const pausedEl = document.getElementById("paused");
+  const captionEl = document.getElementById("caption");
+
+  let DPR = window.devicePixelRatio || 1;
+  let W = 0, H = 0;
+  let mouse = { x: -1, y: -1, shift: false };
+  let lastClient = { x: -1, y: -1 };       // last cursor position in client coords (for live tooltip)
+  let hoverId = null;
+  let paused = false;
+  let tick = 0;
+  let sceneTick = 0;
+  let jobs = 0;
+
+  function resize() {
+    const rect = cvs.parentElement.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    cvs.width = W * DPR; cvs.height = H * DPR;
+    cvs.style.width = W + "px"; cvs.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    if (currentScene) currentScene.layout();
+  }
+  window.addEventListener("resize", resize);
+
+  // ─── agent registry ───────────────────────────────────────────────────────
+  // Each agent has a unique signature hue — the visual stand-in for its
+  // PQ public key. Hover reveals the conic gradient.
+  function makeAgent(o) {
+    // Derive shape from kind if shape not provided.
+    const kind = o.kind || (o.wallet === "contract" ? "contract" :
+                            ["hitl","treasury"].includes(o.wallet) ? "human" : "bot");
+    const shape = o.shape || ({ human: "squircle", bot: "octagon", contract: "hex" }[kind]);
+    return Object.assign({
+      id: "", name: "", role: "",
+      kind,                    // human | bot | contract
+      shape,                   // squircle | octagon | hex (drives geometry)
+      wallet: "agentic",       // agentic | hitl | treasury | provider | oracle | contract
+      hue: 0,
+      balance: 5.0, dailyCap: 10.0, spent: 0,
+      priority: "medium",
+      state: "active",         // active | passive | paying | awaitingApproval | listening
+      radius: 32,
+      glowPhase: Math.random() * Math.PI * 2,
+      pos: { x: 0, y: 0 },
+      protocols: [],           // ["x402","MPP","ZAP","escrow",...]
+      sigAlg: "ml-dsa-65",     // post-quantum default per docs/post-quantum.md
+      lastSeen: 0,             // bumped on every emit() to/from this agent
+      meta: {},
+      _approveBtn: null,
+    }, o);
+  }
+
+  const A = {
+    // ── humans (Patty, Abhi, Tridib are the three protagonists) ──
+    bob:    makeAgent({ id: "bob",     name: "Patty",   role: "buyer · the user",       kind: "human", wallet: "agentic", hue: 195, balance: 6.0, dailyCap: 25, protocols: ["x402","MPP","escrow"], sigAlg: "hybrid (ecdsa+ml-dsa-65)" }),
+    eli:    makeAgent({ id: "eli",     name: "Abhi",    role: "service operator",       kind: "human", wallet: "provider",hue: 152, balance: 1.0, dailyCap: 50, radius: 36, protocols: ["x402","MPP","escrow"], sigAlg: "hybrid (ecdsa+ml-dsa-65)" }),
+    gus:    makeAgent({ id: "gus",     name: "Tridib",  role: "merchant / restaurateur",kind: "human", wallet: "provider",hue:   8, balance: 0.5, dailyCap: 40, radius: 36, protocols: ["x402","escrow"], sigAlg: "hybrid (ecdsa+ml-dsa-65)" }),
+    sara:   makeAgent({ id: "sara",    name: "Sara",    role: "friend at the bill",     kind: "human", wallet: "agentic", hue:  90, balance: 8, dailyCap: 15, protocols: ["x402"], sigAlg: "ml-dsa-65" }),
+    deva:   makeAgent({ id: "deva",    name: "Deva",    role: "discretionary trader",   kind: "human", wallet: "hitl",    hue:  40, balance: 4.0, dailyCap: 25, protocols: ["x402","escrow"], sigAlg: "hybrid (ecdsa+ml-dsa-65)" }),
+    driver: makeAgent({ id: "driver",  name: "Sai",     role: "taxi driver",            kind: "human", wallet: "provider",hue: 180, balance: 0,  dailyCap: 200, protocols: ["x402","escrow"], sigAlg: "ml-dsa-65" }),
+    rider:  makeAgent({ id: "rider",   name: "Kiran",   role: "delivery rider",         kind: "human", wallet: "provider",hue: 115, balance: 0,  dailyCap: 200, radius: 30, protocols: ["x402","escrow"], sigAlg: "ml-dsa-65" }),
+
+    // ── bots / autonomous AI agents ──
+    alice:  makeAgent({ id: "alice",   name: "Alice",   role: "researcher AI",          kind: "bot", wallet: "agentic", hue: 200, balance: 8.0, dailyCap: 12, protocols: ["x402","MPP","ZAP"], sigAlg: "ml-dsa-65" }),
+    iris:   makeAgent({ id: "iris",    name: "Iris",    role: "buyer agent",            kind: "bot", wallet: "agentic", hue: 175, balance: 6, dailyCap: 12, protocols: ["x402","MPP"], sigAlg: "ml-dsa-65" }),
+    juno:   makeAgent({ id: "juno",    name: "Juno",    role: "buyer agent",            kind: "bot", wallet: "agentic", hue:  90, balance: 5, dailyCap: 10, protocols: ["x402"], sigAlg: "ml-dsa-65" }),
+    chen:   makeAgent({ id: "chen",    name: "Chen",    role: "price oracle",           kind: "bot", wallet: "oracle",  hue: 295, balance: 30, dailyCap: 80, radius: 38, protocols: ["x402","signed-data"], sigAlg: "ml-dsa-65" }),
+    fina:   makeAgent({ id: "fina",    name: "Fina",    role: "treasury algo",          kind: "bot", wallet: "treasury",hue: 250, balance: 80, dailyCap: 90, radius: 42, protocols: ["batch-escrow","x402"], sigAlg: "threshold + ml-dsa-65" }),
+    hana:   makeAgent({ id: "hana",    name: "Hana",    role: "embed service",          kind: "bot", wallet: "provider",hue: 330, balance: 0.8, dailyCap: 40, radius: 32, protocols: ["x402","ZAP"], sigAlg: "ml-dsa-65" }),
+    cafe:   makeAgent({ id: "cafe",    name: "Aroma POS", role: "Abhi's café surface",  kind: "bot", wallet: "provider",hue:  28, balance: 0, dailyCap: 200, radius: 32, protocols: ["x402"], sigAlg: "ml-dsa-65" }),
+    rest:   makeAgent({ id: "rest",    name: "Spice Hub POS", role: "Tridib's kitchen", kind: "bot", wallet: "provider",hue:   8, balance: 0, dailyCap: 200, radius: 32, protocols: ["x402","escrow"], sigAlg: "ml-dsa-65" }),
+    merchant:makeAgent({id: "merchant",name: "Bistro POS",   role: "merchant surface",  kind: "bot", wallet: "provider",hue:  60, balance: 0, dailyCap: 999, radius: 32, protocols: ["x402","escrow"], sigAlg: "ml-dsa-65" }),
+
+    // ── contracts / on-chain entities (hex) ──
+    escrow:  makeAgent({ id: "escrow",  name: "Escrow",   role: "AgentEscrow.sol",        kind: "contract", wallet: "contract", hue: 220, balance: 0, dailyCap: 999, radius: 30, protocols: ["escrow"], sigAlg: "ecdsa-secp256k1" }),
+    dispatch:makeAgent({ id: "dispatch",name: "Dispatch", role: "ride-share matcher",     kind: "contract", wallet: "contract", hue: 215, balance: 0, dailyCap: 999, radius: 28, protocols: ["matcher"], sigAlg: "ecdsa-secp256k1" }),
+  };
+  const ALL = Object.values(A);
+
+  // ─── packets ──────────────────────────────────────────────────────────────
+  // Visual abstraction over PaymentOffer / PaymentProof / generic messages.
+  const packets = [];
+  function emit(fromId, toId, opts = {}) {
+    const from = A[fromId], to = A[toId];
+    if (!from || !to) return null;
+    from.lastSeen = tick;
+    to.lastSeen = tick;
+    const p = {
+      from, to,
+      amount: opts.amount ?? 0,
+      kind: opts.kind ?? "offer",   // offer | proof | request | bid | refund | data | stream
+      label: opts.label ?? "",
+      speed: opts.speed ?? 0.014,
+      t: 0,
+      trail: [],
+      onArrive: opts.onArrive || null,
+    };
+    packets.push(p);
+    return p;
+  }
+
+  // ─── interaction ──────────────────────────────────────────────────────────
+  const ttEl = document.getElementById("tooltip");
+  cvs.addEventListener("mousemove", e => {
+    const r = cvs.getBoundingClientRect();
+    mouse.x = e.clientX - r.left;
+    mouse.y = e.clientY - r.top;
+    lastClient.x = e.clientX; lastClient.y = e.clientY;
+    const prevHover = hoverId;
+    hoverId = pickAgent(mouse.x, mouse.y);
+    if (hoverId && hoverId !== prevHover) {
+      // kick a ripple wave on first frame of hover
+      const a = A[hoverId];
+      a._ripples = a._ripples || [];
+      a._ripples.push({ t: 0, r: a.radius });
+    }
+    renderInfo();
+    renderTooltip(lastClient.x, lastClient.y);
+  });
+  cvs.addEventListener("mouseleave", () => {
+    hoverId = null; lastClient.x = -1; lastClient.y = -1;
+    renderInfo();
+    ttEl.classList.remove("show");
+  });
+  cvs.addEventListener("click", () => {
+    if (!hoverId || !currentScene.onAgentClick) return;
+    currentScene.onAgentClick(A[hoverId]);
+  });
+  window.addEventListener("keydown", e => {
+    if (e.code === "Space") { paused = !paused; pausedEl.textContent = paused ? "yes" : "no"; e.preventDefault(); }
+    if (e.key === "r" && currentScene) selectScene(currentScene.id, true);
+  });
+
+  function pickAgent(x, y) {
+    for (const a of ALL) {
+      if (!a._visible) continue;
+      const dx = x - a.pos.x, dy = y - a.pos.y;
+      if (dx*dx + dy*dy <= (a.radius + 6) * (a.radius + 6)) return a.id;
+    }
+    return null;
+  }
+
+  // ─── drawing ──────────────────────────────────────────────────────────────
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function hsla(h, s, l, a) { return `hsla(${h}, ${s}%, ${l}%, ${a})`; }
+
+  function walletColor(w) {
+    switch (w) {
+      case "agentic":  return "#7dd3fc";
+      case "hitl":     return "#fbbf24";
+      case "treasury": return "#a78bfa";
+      case "provider": return "#34d399";
+      case "oracle":   return "#f0abfc";
+      case "contract": return "#60a5fa";
+      default:         return "#8a93a3";
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawGrid();
+    if (currentScene.drawUnderlay) currentScene.drawUnderlay(ctx, W, H);
+    if (currentScene.drawChannels) currentScene.drawChannels(ctx);
+    else drawDefaultChannels(ctx);
+    for (const p of packets) drawPacket(p);
+    for (const a of ALL) if (a._visible) drawAgent(a);
+    if (currentScene.drawOverlay) currentScene.drawOverlay(ctx, W, H);
+  }
+
+  function drawGrid() {
+    // Dot grid with a soft center vignette so the stage feels framed.
+    ctx.save();
+    const step = 36;
+    const cx = W / 2, cy = H / 2;
+    const maxD = Math.hypot(cx, cy);
+    for (let x = step; x < W; x += step) {
+      for (let y = step; y < H; y += step) {
+        const d = Math.hypot(x - cx, y - cy) / maxD;   // 0 center → 1 corner
+        const alpha = 0.18 * (1 - d * 0.65);
+        if (alpha <= 0.01) continue;
+        ctx.fillStyle = `rgba(180, 196, 222, ${alpha})`;
+        ctx.beginPath(); ctx.arc(x, y, 0.9, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawDefaultChannels(ctx) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(96, 165, 250, 0.04)";
+    ctx.lineWidth = 1;
+    const v = ALL.filter(a => a._visible);
+    for (let i = 0; i < v.length; i++)
+      for (let j = i+1; j < v.length; j++) {
+        ctx.beginPath();
+        ctx.moveTo(v[i].pos.x, v[i].pos.y);
+        ctx.lineTo(v[j].pos.x, v[j].pos.y);
+        ctx.stroke();
+      }
+    ctx.restore();
+  }
+
+  function drawAgent(a) {
+    const { x, y } = a.pos;
+    const hovered = (a.id === hoverId);
+    // hover scale-up: smooth ease toward 1.12 when hovered, 1.0 otherwise
+    a._hoverEase = (a._hoverEase ?? 1) + ((hovered ? 1.12 : 1.0) - (a._hoverEase ?? 1)) * 0.18;
+    const r = a.radius * a._hoverEase;
+    const balanceRatio = Math.min(1, a.balance / Math.max(1, a.dailyCap));
+
+    // hover ripples — expanding rings, fade as they grow
+    if (a._ripples) {
+      for (let i = a._ripples.length - 1; i >= 0; i--) {
+        const rp = a._ripples[i];
+        rp.t += 0.04;
+        if (rp.t >= 1) { a._ripples.splice(i, 1); continue; }
+        const rr = a.radius + rp.t * 50;
+        ctx.strokeStyle = hsla(a.hue, 90, 65, (1 - rp.t) * 0.5);
+        ctx.lineWidth = 2 * (1 - rp.t);
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI*2); ctx.stroke();
+      }
+    }
+
+    // halo
+    if (a.state === "active" || a.state === "paying" || a.state === "listening") {
+      const pulse = 0.5 + 0.5 * Math.sin(a.glowPhase);
+      const haloR = r + 14 + (a.state === "paying" ? 8 * pulse : 4 * pulse);
+      const g = ctx.createRadialGradient(x, y, r, x, y, haloR);
+      g.addColorStop(0, "rgba(255,255,255,0)");
+      const c = hsla(a.hue, 80, 60, 0.32 * (a.state === "paying" ? 1 : 0.55));
+      g.addColorStop(0.7, c);
+      g.addColorStop(1, c.replace(/[\d.]+\)$/, "0)"));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, haloR, 0, Math.PI*2); ctx.fill();
+    }
+
+    // hover: signature gradient
+    if (hovered) {
+      const ang = (tick * 0.04) % (Math.PI * 2);
+      const sigR = r + 26;
+      for (let i = 0; i < 60; i++) {
+        const a0 = ang + (i / 60) * Math.PI * 2;
+        const a1 = ang + ((i+1) / 60) * Math.PI * 2;
+        const hue = (a.hue + i * 6) % 360;
+        ctx.beginPath(); ctx.arc(x, y, sigR, a0, a1);
+        ctx.strokeStyle = hsla(hue, 90, 65, 0.55);
+        ctx.lineWidth = 4; ctx.stroke();
+      }
+    }
+
+    // body — dispatch on shape
+    if (a.shape === "hex") drawHexBody(a, balanceRatio);
+    else if (a.shape === "octagon") drawOctagonBody(a, balanceRatio);
+    else if (a.shape === "squircle") drawSquircleBody(a, balanceRatio);
+    else drawCircleBody(a, balanceRatio);
+
+    // HITL lock dot
+    if (a.wallet === "hitl") {
+      ctx.fillStyle = "rgba(251, 191, 36, 0.9)";
+      ctx.beginPath(); ctx.arc(x, y - r - 6, 3, 0, Math.PI*2); ctx.fill();
+    }
+
+    // awaitingApproval ring
+    if (a.state === "awaitingApproval") {
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.9)";
+      ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.arc(x, y, r + 8, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // listening (oracle / marketplace)
+    if (a.state === "listening") {
+      ctx.strokeStyle = hsla(a.hue, 85, 65, 0.55);
+      ctx.lineWidth = 1.5; ctx.setLineDash([2, 6]);
+      ctx.beginPath(); ctx.arc(x, y, r + 14, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // labels
+    ctx.fillStyle = hovered ? "rgba(231, 233, 238, 0.95)" : "rgba(231, 233, 238, 0.62)";
+    ctx.font = "11px ui-monospace, Menlo, monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(a.name, x, y + r + 16);
+    if (a.role && hovered) {
+      ctx.fillStyle = "rgba(138, 147, 163, 0.85)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.fillText(a.role, x, y + r + 30);
+    }
+  }
+
+  function drawCircleBody(a, balanceRatio) {
+    const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
+    ctx.save();
+    if (a.state === "passive") {
+      const g = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r);
+      g.addColorStop(0, hsla(a.hue, 40, 70, 0.22));
+      g.addColorStop(1, hsla(a.hue, 40, 30, 0.08));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)"; ctx.lineWidth = 1; ctx.stroke();
+    } else {
+      const inner = ctx.createRadialGradient(x, y, 1, x, y, r);
+      inner.addColorStop(0,  hsla(a.hue, 95, 70, 0.95 * (0.35 + 0.65 * balanceRatio)));
+      inner.addColorStop(0.6, hsla(a.hue, 85, 50, 0.55 * (0.4 + 0.6 * balanceRatio)));
+      inner.addColorStop(1,  hsla(a.hue, 60, 30, 0.85));
+      ctx.fillStyle = inner;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = walletColor(a.wallet);
+      ctx.lineWidth = a.wallet === "treasury" ? 2.4 : 1.6;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawSquircleBody(a, balanceRatio) {
+    // Soft rounded square — the "human-operated agent" silhouette.
+    const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
+    ctx.save();
+    const w = r * 1.8, h = r * 1.8, rr = r * 0.55;
+    const x0 = x - w / 2, y0 = y - h / 2;
+    if (a.state === "passive") {
+      const g = ctx.createLinearGradient(x0, y0, x0, y0 + h);
+      g.addColorStop(0, hsla(a.hue, 40, 70, 0.20));
+      g.addColorStop(1, hsla(a.hue, 40, 30, 0.06));
+      ctx.fillStyle = g;
+      roundedRectPath(ctx, x0, y0, w, h, rr);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)"; ctx.lineWidth = 1;
+      roundedRectPath(ctx, x0, y0, w, h, rr); ctx.stroke();
+    } else {
+      const g = ctx.createLinearGradient(x0, y0, x0, y0 + h);
+      g.addColorStop(0, hsla(a.hue, 90, 70, 0.85 * (0.35 + 0.65 * balanceRatio)));
+      g.addColorStop(0.6, hsla(a.hue, 80, 50, 0.55 * (0.4 + 0.6 * balanceRatio)));
+      g.addColorStop(1, hsla(a.hue, 60, 30, 0.85));
+      ctx.fillStyle = g;
+      roundedRectPath(ctx, x0, y0, w, h, rr); ctx.fill();
+      ctx.strokeStyle = walletColor(a.wallet);
+      ctx.lineWidth = 1.6;
+      roundedRectPath(ctx, x0, y0, w, h, rr); ctx.stroke();
+    }
+    // tiny "person" glyph — head + shoulders silhouette
+    ctx.fillStyle = "rgba(11, 13, 16, 0.55)";
+    ctx.beginPath(); ctx.arc(x, y - r * 0.18, r * 0.18, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.34, y + r * 0.32);
+    ctx.quadraticCurveTo(x, y + r * 0.06, x + r * 0.34, y + r * 0.32);
+    ctx.lineTo(x + r * 0.34, y + r * 0.42);
+    ctx.lineTo(x - r * 0.34, y + r * 0.42);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawOctagonBody(a, balanceRatio) {
+    // Eight-sided — the "autonomous / bot" silhouette.
+    const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
+    ctx.save();
+    octagonPath(ctx, x, y, r);
+    if (a.state === "passive") {
+      const g = ctx.createRadialGradient(x, y, r * 0.2, x, y, r);
+      g.addColorStop(0, hsla(a.hue, 40, 65, 0.22));
+      g.addColorStop(1, hsla(a.hue, 40, 30, 0.06));
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = "rgba(231, 233, 238, 0.12)"; ctx.lineWidth = 1; ctx.stroke();
+    } else {
+      const g = ctx.createRadialGradient(x, y, 1, x, y, r);
+      g.addColorStop(0,  hsla(a.hue, 95, 70, 0.95 * (0.35 + 0.65 * balanceRatio)));
+      g.addColorStop(0.6, hsla(a.hue, 85, 50, 0.55 * (0.4 + 0.6 * balanceRatio)));
+      g.addColorStop(1,  hsla(a.hue, 60, 30, 0.85));
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = walletColor(a.wallet);
+      ctx.lineWidth = a.wallet === "treasury" ? 2.2 : 1.6;
+      ctx.stroke();
+    }
+    // tiny circuit hint — two horizontal traces
+    ctx.strokeStyle = "rgba(11, 13, 16, 0.45)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.4, y - r * 0.1); ctx.lineTo(x + r * 0.4, y - r * 0.1);
+    ctx.moveTo(x - r * 0.4, y + r * 0.16); ctx.lineTo(x + r * 0.4, y + r * 0.16);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(11, 13, 16, 0.7)";
+    [-0.3, 0, 0.3].forEach(t => {
+      ctx.beginPath(); ctx.arc(x + r * t, y - r * 0.1, 1.3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + r * t, y + r * 0.16, 1.3, 0, Math.PI*2); ctx.fill();
+    });
+    ctx.restore();
+  }
+
+  function roundedRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y,     x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x,     y + h, r);
+    ctx.arcTo(x,     y + h, x,     y,     r);
+    ctx.arcTo(x,     y,     x + w, y,     r);
+    ctx.closePath();
+  }
+  function octagonPath(ctx, cx, cy, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const ang = -Math.PI / 8 + i * Math.PI / 4;
+      const px = cx + Math.cos(ang) * r;
+      const py = cy + Math.sin(ang) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function drawHexBody(a, balanceRatio) {
+    const { x, y } = a.pos, r = a.radius * (a._hoverEase || 1);
+    ctx.save();
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const ang = -Math.PI/2 + i * Math.PI / 3;
+      const px = x + Math.cos(ang) * r;
+      const py = y + Math.sin(ang) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    const inner = ctx.createRadialGradient(x, y, 1, x, y, r);
+    inner.addColorStop(0,  hsla(a.hue, 60, 55, 0.5));
+    inner.addColorStop(1,  hsla(a.hue, 35, 28, 0.85));
+    ctx.fillStyle = inner; ctx.fill();
+    ctx.strokeStyle = walletColor(a.wallet); ctx.lineWidth = 1.6; ctx.stroke();
+    // Only draw the lock glyph for actual escrow contracts, not repo nodes.
+    if (a.id === "escrow" || a.id === "aeo_repo") {
+      ctx.strokeStyle = hsla(a.hue, 60, 80, 0.7);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.rect(x - 5, y - 2, 10, 8);
+      ctx.moveTo(x - 3, y - 2); ctx.lineTo(x - 3, y - 5);
+      ctx.arc(x, y - 5, 3, Math.PI, 0);
+      ctx.lineTo(x + 3, y - 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawPacket(p) {
+    const x = lerp(p.from.pos.x, p.to.pos.x, p.t);
+    const y = lerp(p.from.pos.y, p.to.pos.y, p.t);
+    p.trail.push({ x, y });
+    if (p.trail.length > 18) p.trail.shift();
+
+    // trail
+    p.trail.forEach((pt, i) => {
+      const alpha = (i / p.trail.length) * 0.65;
+      const hue = packetHue(p);
+      ctx.fillStyle = hsla(hue, 90, 70, alpha);
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, 2, 0, Math.PI*2); ctx.fill();
+    });
+    // head
+    ctx.fillStyle = packetHeadColor(p);
+    ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI*2); ctx.fill();
+    // halo
+    const g = ctx.createRadialGradient(x, y, 1, x, y, 14);
+    g.addColorStop(0, hsla(packetHue(p), 90, 70, 0.6));
+    g.addColorStop(1, hsla(packetHue(p), 90, 70, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, 14, 0, Math.PI*2); ctx.fill();
+    // label
+    if (p.label) {
+      ctx.fillStyle = "rgba(231, 233, 238, 0.7)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(p.label, x, y - 10);
+    }
+  }
+
+  function packetHue(p) {
+    switch (p.kind) {
+      case "proof":   return 140;
+      case "refund":  return 0;
+      case "bid":     return 50;
+      case "request": return 210;
+      case "data":    return 295;
+      case "stream":  return p.from.hue;
+      default:        return p.from.hue;
+    }
+  }
+  function packetHeadColor(p) {
+    switch (p.kind) {
+      case "proof":  return "#34d399";
+      case "refund": return "#f87171";
+      case "bid":    return "#fbbf24";
+      case "data":   return "#f0abfc";
+      default:       return "#e7e9ee";
+    }
+  }
+
+  // ─── tick loop ────────────────────────────────────────────────────────────
+  function step() {
+    if (!paused) { tick++; sceneTick++; }
+    sceneTimeEl.textContent = (sceneTick / 60).toFixed(1) + "s";
+    tickEl.textContent = tick;
+
+    // glow phase + auto state
+    for (const a of ALL) {
+      if (!a._visible) continue;
+      if (a.state !== "awaitingApproval" && a.state !== "listening" && a.state !== "paying") {
+        const ratio = a.balance / Math.max(1, a.dailyCap);
+        if (ratio < 0.10 && a.wallet !== "contract" && a.wallet !== "provider" && a.wallet !== "oracle") a.state = "passive";
+        else a.state = "active";
+      }
+      a.glowPhase += 0.05;
+    }
+
+    // packets
+    if (!paused) {
+      for (let i = packets.length - 1; i >= 0; i--) {
+        const p = packets[i];
+        p.t += p.speed;
+        if (p.t >= 1) {
+          packets.splice(i, 1);
+          if (p.onArrive) p.onArrive(p);
+        }
+      }
+    }
+
+    if (!paused && currentScene && currentScene.tick) currentScene.tick(sceneTick);
+
+    draw();
+
+    // Tooltip + inspector live-refresh while a hover is active. Without this,
+    // a tooltip pinned on Patty wouldn't show her balance dropping after a
+    // packet arrives — the user would have to wiggle the mouse to refresh.
+    // No throttle — innerHTML update of a small card is cheap and the user
+    // wants instant feedback.
+    if (hoverId) {
+      renderInfo();
+      if (lastClient.x >= 0) renderTooltip(lastClient.x, lastClient.y);
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  // ─── side panels ──────────────────────────────────────────────────────────
+  function renderInfo() {
+    if (!hoverId) {
+      infoEl.innerHTML = `<div class="empty">hover an agent to inspect</div>`;
+      return;
+    }
+    const a = A[hoverId];
+    const pct = Math.min(100, (a.spent / Math.max(1, a.dailyCap)) * 100);
+    const overCls = pct > 90 ? "over" : pct > 60 ? "warn" : "";
+    infoEl.innerHTML = `
+      <div class="name">${a.name}</div>
+      <div class="role">${a.role}</div>
+      <dl>
+        <dt>wallet</dt><dd>${a.wallet}</dd>
+        <dt>balance</dt><dd>${a.balance.toFixed(2)} USDC</dd>
+        <dt>daily cap</dt><dd>${a.dailyCap.toFixed(0)} USDC</dd>
+        <dt>spent</dt><dd>${a.spent.toFixed(2)} USDC</dd>
+        <dt>priority</dt><dd><span class="tag ${a.priority}">${a.priority}</span></dd>
+        <dt>state</dt><dd>${a.state}</dd>
+        <dt>sig hue</dt><dd>h${a.hue}°</dd>
+      </dl>
+      <div class="bar ${overCls}"><div style="width:${pct}%"></div></div>
+    `;
+  }
+
+  function renderTooltip(clientX, clientY) {
+    if (!hoverId) { ttEl.classList.remove("show"); return; }
+    const a = A[hoverId];
+    const walletDesc = {
+      agentic:  "autonomous · auto-pays under cap",
+      hitl:     "human approves spend above threshold",
+      treasury: "rebalancer · fleet funder",
+      provider: "sells work · receives payments",
+      oracle:   "sells signed data · pay-per-query",
+      contract: "on-chain settlement contract",
+    }[a.wallet] || "";
+    const kindLabel = {
+      human: "human-operated",
+      bot:   "autonomous agent",
+      contract: "on-chain contract",
+    }[a.kind] || a.kind;
+    const kindGlyph = { human: "◐", bot: "⬢", contract: "⬡" }[a.kind] || "•";
+    const wColor = walletColor(a.wallet);
+    const protoList = (a.protocols || []).map(p => `<span class="ttproto">${p}</span>`).join("");
+    const lastSeenLabel = a.lastSeen
+      ? `${Math.max(0, tick - a.lastSeen)} ticks ago`
+      : `idle`;
+
+    ttEl.innerHTML = `
+      <div class="ttname">${kindGlyph} ${a.name}</div>
+      <div class="ttrole">${a.role}</div>
+      <div class="ttrow">
+        <span class="ttkind" style="color:${wColor};border-color:${wColor}">${a.wallet}</span>
+        <span class="ttkind" style="color:var(--muted)">${kindLabel}</span>
+      </div>
+      <div class="ttdesc">${walletDesc}</div>
+      <div class="ttproto-row">${protoList || '<span class="ttproto muted">—</span>'}</div>
+      <dl>
+        <dt>balance</dt><dd>${a.balance.toFixed(2)} USDC</dd>
+        <dt>daily cap</dt><dd>${a.dailyCap.toFixed(0)} USDC</dd>
+        <dt>spent</dt><dd>${a.spent.toFixed(2)} USDC</dd>
+        <dt>state</dt><dd>${a.state}</dd>
+        <dt>sig alg</dt><dd>${a.sigAlg}</dd>
+        <dt>last seen</dt><dd>${lastSeenLabel}</dd>
+        <dt>sig hue</dt><dd>h${a.hue}°</dd>
+      </dl>
+    `;
+    const pad = 14;
+    let tx = clientX + pad, ty = clientY + pad;
+    const rect = ttEl.getBoundingClientRect();
+    if (tx + 240 > window.innerWidth) tx = clientX - 240 - pad;
+    if (ty + rect.height > window.innerHeight) ty = clientY - rect.height - pad;
+    ttEl.style.left = tx + "px";
+    ttEl.style.top  = ty + "px";
+    ttEl.classList.add("show");
+  }
+
+  function log(html) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const t = String(sceneTick).padStart(4, "0");
+    row.innerHTML = `<span class="t">${t}</span><span class="m">${html}</span>`;
+    logEl.prepend(row);
+    while (logEl.children.length > 80) logEl.lastChild.remove();
+  }
+
+  function setCaption(step, html) {
+    captionEl.innerHTML = `<span class="step">${step}</span>${html}`;
+  }
+
+  // ─── HITL approval button helper ──────────────────────────────────────────
+  function showApprove(agent, label, onApprove) {
+    if (agent._approveBtn) return;
+    agent.state = "awaitingApproval";
+    const btn = document.createElement("button");
+    btn.className = "approve";
+    btn.textContent = label;
+    const r = cvs.getBoundingClientRect();
+    btn.style.left = (r.left + agent.pos.x) + "px";
+    btn.style.top  = (r.top  + agent.pos.y - agent.radius - 24) + "px";
+    document.body.appendChild(btn);
+    btn.addEventListener("click", () => {
+      btn.remove();
+      agent._approveBtn = null;
+      agent.state = "active";
+      onApprove();
+    });
+    agent._approveBtn = btn;
+  }
+  function clearApprovals() {
+    for (const a of ALL) {
+      if (a._approveBtn) { a._approveBtn.remove(); a._approveBtn = null; }
+    }
+  }
+
+  // ─── scenes ───────────────────────────────────────────────────────────────
+  let currentScene = null;
+  const SCENES = {};
+
+  function setVisible(ids) {
+    for (const a of ALL) a._visible = false;
+    for (const id of ids) if (A[id]) A[id]._visible = true;
+  }
+  function ring(ids, cx, cy, r, startAng = -Math.PI/2) {
+    ids.forEach((id, i) => {
+      const ang = startAng + (i / ids.length) * Math.PI * 2;
+      A[id].pos.x = cx + Math.cos(ang) * r;
+      A[id].pos.y = cy + Math.sin(ang) * r;
+    });
+  }
+  function row(ids, y, x0, x1) {
+    ids.forEach((id, i) => {
+      const t = ids.length === 1 ? 0.5 : i / (ids.length - 1);
+      A[id].pos.x = lerp(x0, x1, t);
+      A[id].pos.y = y;
+    });
+  }
+
+  // — Scene 1: x402 paywall —————————————————————————————————————————————
+  SCENES.x402 = {
+    id: "x402",
+    name: "HTTP-402 paywall",
+    short: "01",
+    desc: "An <code>x402</code>-style paywall. Caller hits a paid endpoint, gets back <code>402 Payment Required</code> with an <code>accepts[]</code> envelope, signs an <code>X-Payment-Proof</code> header, retries, and is served. Off-chain HTTP, on-chain settlement on the bottom rail.",
+    enter() {
+      setVisible(["bob", "eli"]);
+      A.bob.balance = 6; A.bob.spent = 0;
+      A.eli.balance = 1;
+      this.layout(); this.phase = 0; this.cool = 0;
+      setCaption("step 1 / 4", "<code>GET /inference</code> — <strong>Patty</strong> calls <strong>Abhi</strong>'s endpoint cold, no <code>X-Payment-Proof</code> header attached.");
+      log(`<span class="info">x402</span> scene loaded`);
+    },
+    layout() {
+      A.bob.pos = { x: W * 0.28, y: H * 0.5 };
+      A.eli.pos = { x: W * 0.72, y: H * 0.5 };
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.phase === 0 && t % 220 === 30) {
+        emit("bob", "eli", { kind: "request", label: "GET /infer", speed: 0.018 });
+        log(`Patty → Abhi: <code>GET /inference</code>`);
+        this.phase = 1; this.cool = 60;
+      } else if (this.phase === 1) {
+        emit("eli", "bob", { kind: "request", label: "402 + accepts[]", speed: 0.018 });
+        log(`Abhi → Patty: <span class="warn">402 Payment Required</span> · 0.001 USDC`);
+        setCaption("step 2 / 4", "Abhi returns <code>402 Payment Required</code> with an <code>accepts[]</code> envelope describing the price and recipient.");
+        this.phase = 2; this.cool = 80;
+      } else if (this.phase === 2) {
+        emit("bob", "eli", { kind: "offer", label: "X-Payment-Proof", amount: 0.001, speed: 0.018,
+          onArrive: () => { A.bob.balance -= 0.001; A.eli.balance += 0.001; A.bob.spent += 0.001; }});
+        log(`Patty → Abhi: <code>X-Payment-Proof</code> 0.001 USDC`);
+        setCaption("step 3 / 4", "Patty signs an <code>X-Payment-Proof</code> header and retries. Payment settles on-chain in the background.");
+        this.phase = 3; this.cool = 80;
+      } else if (this.phase === 3) {
+        emit("eli", "bob", { kind: "proof", label: "200 OK", speed: 0.018 });
+        log(`Abhi → Patty: <span class="ok">200 OK</span> · inference result`);
+        setCaption("step 4 / 4", "Abhi verifies the proof, serves <code>200 OK</code> with the inference result. Loop repeats — every paid call costs Patty 0.001 USDC.");
+        jobs++; jobsEl.textContent = jobs;
+        this.phase = 0; this.cool = 140;
+      }
+    },
+    onAgentClick(a) {
+      if (a.id === "bob" && this.phase === 0) { this.cool = 0; }
+    },
+  };
+
+  // — Scene 2: Escrow (happy + refund) ————————————————————————————————————
+  SCENES.escrow = {
+    id: "escrow",
+    name: "Escrow + refund",
+    short: "02",
+    desc: "Trust-minimized A2A via <code>AgentEscrow.sol</code>. Payer locks funds, payee delivers, payer confirms → release. If payee goes silent past <code>timeout_blocks + challenge_period</code>, payer reclaims.",
+    why: `An <strong>agentic payment escrow</strong> is the only on-chain primitive that interoperates cleanly across every other rail in this lab:
+      <ul>
+        <li><strong>x402 paywalls</strong> use it to settle off-chain proofs without trusting the merchant.</li>
+        <li><strong>Streaming MPP</strong> uses it to anchor session caps in code, not a vendor's promise.</li>
+        <li><strong>Marketplaces</strong> (auction, taxi, delivery) use it so bidders commit no funds until a counterparty is chosen, and a refund path exists for the unhappy case.</li>
+        <li><strong>PQ-signed envelopes</strong> need a settlement layer that verifies signatures before releasing — escrow is the natural place to enforce that.</li>
+      </ul>
+      Built once in 200 lines of Solidity, reused across every higher-level pattern. The alternative is a per-merchant centralized escrow service — exactly what crypto was supposed to remove.`,
+    enter() {
+      setVisible(["alice", "gus", "escrow", "deva", "hana"]);
+      A.alice.balance = 10; A.gus.balance = 1;
+      A.deva.balance = 10; A.hana.balance = 0.5;
+      this.layout();
+      this.phase = 0; this.cool = 60; this.block = 0; this.refundBlock = 0;
+      setCaption("step 1 / 5", "Two parallel flows. <strong>Alice → Tridib</strong> follows the happy path. <strong>Deva → Hana</strong> will demonstrate the refund path.");
+      log(`<span class="info">escrow</span> scene loaded · two parallel flows`);
+    },
+    layout() {
+      A.escrow.pos = { x: W * 0.5,  y: H * 0.5 };
+      A.alice.pos  = { x: W * 0.18, y: H * 0.3 };
+      A.gus.pos    = { x: W * 0.82, y: H * 0.3 };
+      A.deva.pos   = { x: W * 0.18, y: H * 0.75 };
+      A.hana.pos   = { x: W * 0.82, y: H * 0.75 };
+    },
+    drawChannels(ctx) {
+      ctx.save();
+      ctx.strokeStyle = "rgba(96, 165, 250, 0.18)";
+      ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+      [["alice","escrow"],["gus","escrow"],["deva","escrow"],["hana","escrow"]].forEach(([a,b]) => {
+        ctx.beginPath();
+        ctx.moveTo(A[a].pos.x, A[a].pos.y);
+        ctx.lineTo(A[b].pos.x, A[b].pos.y);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]); ctx.restore();
+    },
+    drawOverlay(ctx, W, H) {
+      // block counter near the escrow contract
+      ctx.fillStyle = "rgba(138, 147, 163, 0.85)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("block #" + this.block, A.escrow.pos.x, A.escrow.pos.y + A.escrow.radius + 16);
+      // refund-path countdown if relevant
+      if (this.phase >= 3 && this.phase < 6) {
+        const remaining = Math.max(0, this.refundBlock - this.block);
+        ctx.fillStyle = remaining ? "rgba(248, 113, 113, 0.9)" : "rgba(52, 211, 153, 0.9)";
+        ctx.fillText(remaining ? `refund in ${remaining} blocks` : "refund window open",
+          (A.deva.pos.x + A.hana.pos.x) / 2, (A.deva.pos.y + A.hana.pos.y) / 2 - 10);
+      }
+    },
+    tick(t) {
+      if (t % 30 === 0) this.block++;
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.phase === 0) {
+        // Alice locks 2.5 in escrow
+        emit("alice", "escrow", { kind: "offer", label: "lock 2.5", amount: 2.5, speed: 0.014,
+          onArrive: () => { A.alice.balance -= 2.5; A.escrow.balance += 2.5; }});
+        log(`Alice → Escrow: <code>createPayment(request_id, gus, 2.5 USDC)</code>`);
+        setCaption("step 2 / 5", "<strong>Alice</strong> calls <code>createPayment()</code>, locking 2.5 USDC in the <span class=\"pill\">Escrow</span> contract.");
+        this.phase = 1; this.cool = 80;
+      } else if (this.phase === 1) {
+        // Tridib delivers work (data packet to Alice)
+        emit("gus", "alice", { kind: "data", label: "deliverable", speed: 0.016 });
+        log(`Tridib → Alice: deliverable submitted`);
+        setCaption("step 3 / 5", "<strong>Tridib</strong> performs the work off-chain and delivers the artifact.");
+        this.phase = 2; this.cool = 80;
+      } else if (this.phase === 2) {
+        // Alice confirms, escrow releases to Gus
+        emit("alice", "escrow", { kind: "request", label: "confirm", speed: 0.018,
+          onArrive: () => {
+            emit("escrow", "gus", { kind: "proof", label: "released 2.5", amount: 2.5, speed: 0.018,
+              onArrive: () => { A.escrow.balance -= 2.5; A.gus.balance += 2.5; jobs++; jobsEl.textContent = jobs; }});
+          }});
+        log(`Alice → Escrow: <code>confirmPayment(request_id)</code> · <span class="ok">released to Tridib</span>`);
+        setCaption("step 4 / 5", "Alice calls <code>confirmPayment()</code> → escrow releases 2.5 USDC to Tridib.");
+        this.phase = 3; this.cool = 100;
+        // Kick off refund-path scenario
+        this.refundBlock = this.block + 20;
+        emit("deva", "escrow", { kind: "offer", label: "lock 1.0", amount: 1.0, speed: 0.014,
+          onArrive: () => { A.deva.balance -= 1.0; A.escrow.balance += 1.0; }});
+        log(`Deva → Escrow: <code>createPayment(..., hana, 1.0 USDC)</code>`);
+      } else if (this.phase === 3 && this.block >= this.refundBlock) {
+        log(`<span class="warn">Hana silent</span> — refund window opens at block ${this.block}`);
+        setCaption("step 5 / 5", "Deva's counterparty <strong>Hana</strong> went silent past <code>timeout_blocks + challenge_period</code>. Deva reclaims via <code>requestRefund()</code>.");
+        this.phase = 4; this.cool = 60;
+      } else if (this.phase === 4) {
+        emit("deva", "escrow", { kind: "request", label: "requestRefund", speed: 0.018,
+          onArrive: () => {
+            emit("escrow", "deva", { kind: "refund", label: "refunded 1.0", amount: 1.0, speed: 0.018,
+              onArrive: () => { A.escrow.balance -= 1.0; A.deva.balance += 1.0; }});
+          }});
+        log(`Escrow → Deva: <span class="hot">refunded 1.0 USDC</span>`);
+        this.phase = 5; this.cool = 180;
+      } else if (this.phase === 5) {
+        this.phase = 0; this.cool = 60;
+        A.alice.balance = 10; A.gus.balance = 1;
+        A.deva.balance = 10; A.hana.balance = 0.5;
+      }
+    },
+  };
+
+  // — Scene 3: Streaming MPP ————————————————————————————————————————————
+  SCENES.stream = {
+    id: "stream",
+    name: "Streaming micropayments",
+    short: "03",
+    desc: "Multi-party / streaming pay: Alice opens a budget-capped session with Abhi, and pays per chunk as inference tokens stream back. Like x402's <code>STREAMING</code> scheme — small, fast, capped.",
+    enter() {
+      setVisible(["alice", "eli"]);
+      A.alice.balance = 5; A.alice.spent = 0; A.alice.dailyCap = 5;
+      A.eli.balance = 0;
+      this.layout();
+      this.tokensServed = 0;
+      this.budget = 5.0;
+      setCaption("step 1 / 2", "Session opened. Cap is 5 USDC. Each chunk = 0.02 USDC. Alice's balance drains as Abhi's grows; session auto-closes at cap.");
+      log(`<span class="info">stream</span> scene loaded · cap 5.00 USDC, 0.02 USDC/chunk`);
+    },
+    layout() {
+      A.alice.pos = { x: W * 0.22, y: H * 0.5 };
+      A.eli.pos   = { x: W * 0.78, y: H * 0.5 };
+    },
+    drawOverlay(ctx, W, H) {
+      // progress bar between them
+      const x = (A.alice.pos.x + A.eli.pos.x) / 2;
+      const y = (A.alice.pos.y + A.eli.pos.y) / 2 - 80;
+      const w = 220;
+      const pct = Math.min(1, A.alice.spent / Math.max(0.01, this.budget));
+      ctx.fillStyle = "rgba(13, 16, 21, 0.85)";
+      ctx.strokeStyle = "rgba(35, 39, 47, 0.9)";
+      ctx.fillRect(x - w/2, y, w, 22);
+      ctx.strokeRect(x - w/2, y, w, 22);
+      ctx.fillStyle = pct < 0.85 ? "rgba(52, 211, 153, 0.75)" : "rgba(248, 113, 113, 0.85)";
+      ctx.fillRect(x - w/2 + 2, y + 2, (w - 4) * pct, 18);
+      ctx.fillStyle = "rgba(231, 233, 238, 0.85)";
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`session ${A.alice.spent.toFixed(2)} / ${this.budget.toFixed(2)} USDC · ${this.tokensServed} chunks`, x, y - 6);
+    },
+    tick(t) {
+      if (A.alice.spent >= this.budget) {
+        if (!this.closed) {
+          this.closed = true;
+          log(`<span class="warn">session closed at cap</span> · ${this.tokensServed} chunks`);
+          setCaption("step 2 / 2", `Cap reached — session auto-closes. Total served: <strong>${this.tokensServed}</strong> chunks for <strong>${A.alice.spent.toFixed(2)} USDC</strong>.`);
+        }
+        if (t % 240 === 0) {
+          A.alice.spent = 0; A.alice.balance = 5; A.eli.balance = 0;
+          this.tokensServed = 0; this.closed = false;
+        }
+        return;
+      }
+      if (t % 8 === 0) {
+        emit("alice", "eli", { kind: "stream", label: "", amount: 0.02, speed: 0.04,
+          onArrive: () => {
+            A.alice.balance -= 0.02; A.alice.spent += 0.02;
+            A.eli.balance += 0.02; this.tokensServed++;
+            if (this.tokensServed % 25 === 0) jobs++; jobsEl.textContent = jobs;
+          }});
+      }
+    },
+  };
+
+  // — Scene 4: AI compute auction ——————————————————————————————————————————
+  // Reworked: better placement, scrubbable bid + budget sliders in the
+  // sidebar, three scenario presets. Each phase is broken into smaller
+  // event beats so the user can follow what is happening.
+  SCENES.auction = {
+    id: "auction",
+    name: "AI compute auction",
+    short: "04",
+    desc: "Marketplace flow. <strong>Iris</strong> posts a transcription job. <strong>Abhi</strong>, <strong>Tridib</strong>, and <strong>Hana</strong> bid. Cheapest valid bid wins; payment goes through escrow. Drag the sliders below to change bid prices or Iris's budget — watch the outcome change.",
+    why: "Marketplaces today batch up bids on a centralized server and only emit one event when a winner is picked. Agents need <strong>granular events</strong> (each RFQ, each bid, the validation outcome) so they can react in-flight — drop out, re-bid, or refuse a winner whose signature doesn't validate. Switchboard models the marketplace as a sequence of small signed packets, not a single API call.",
+    controls: [
+      { id: "scenario", type: "preset", label: "Scenario",
+        default: "cheapestWins",
+        options: [
+          { label: "Cheapest wins",  value: "cheapestWins",  applyPreset: true },
+          { label: "All over budget", value: "overBudget",   applyPreset: true },
+          { label: "Tie",              value: "tie",           applyPreset: true },
+        ]},
+      { id: "budget",   type: "range", label: "Iris's max budget", min: 0.40, max: 3.00, step: 0.05, default: 1.50, suffix: "USDC", decimals: 2 },
+      { id: "bid_eli",  type: "range", label: "Abhi's bid",       min: 0.30, max: 3.00, step: 0.05, default: 1.20, suffix: "USDC", decimals: 2 },
+      { id: "bid_gus",  type: "range", label: "Tridib's bid",     min: 0.30, max: 3.00, step: 0.05, default: 0.90, suffix: "USDC", decimals: 2 },
+      { id: "bid_hana", type: "range", label: "Hana's bid",       min: 0.30, max: 3.00, step: 0.05, default: 1.05, suffix: "USDC", decimals: 2 },
+    ],
+    applyPreset(name) {
+      // Mutate the slider values + the live UI so the user sees the change.
+      const set = (id, v) => {
+        this.ctl[id] = v;
+        const input = document.getElementById("ctl-" + id);
+        const valEl = document.getElementById("ctl-" + id + "-val");
+        if (input) input.value = v;
+        if (valEl) valEl.textContent = v.toFixed(2) + " USDC";
+      };
+      if (name === "cheapestWins") {
+        set("budget", 1.50); set("bid_eli", 1.20); set("bid_gus", 0.90); set("bid_hana", 1.05);
+      } else if (name === "overBudget") {
+        set("budget", 0.80); set("bid_eli", 1.20); set("bid_gus", 1.10); set("bid_hana", 1.05);
+      } else if (name === "tie") {
+        set("budget", 1.50); set("bid_eli", 1.00); set("bid_gus", 1.00); set("bid_hana", 1.20);
+      }
+      selectScene("auction", true);   // restart with new params
+    },
+    enter() {
+      setVisible(["iris", "eli", "gus", "hana", "escrow"]);
+      A.iris.balance = this.ctl.budget * 4; A.iris.spent = 0;
+      A.eli.balance = 0; A.gus.balance = 0; A.hana.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      this.bids = []; this.winner = null;
+      A.eli.state = "listening"; A.gus.state = "listening"; A.hana.state = "listening";
+      setCaption("event 1", "Iris drafts an RFQ for the job. Three providers are <em>listening</em> (dashed outer ring).");
+      log(`<span class="info">auction</span> scene loaded · budget ${this.ctl.budget.toFixed(2)} USDC`);
+    },
+    layout() {
+      // Clean placement: Iris on the left, providers stacked vertically on
+      // the right with comfortable spacing, escrow tucked at the bottom.
+      A.iris.pos   = { x: W * 0.22, y: H * 0.5  };
+      A.eli.pos    = { x: W * 0.72, y: H * 0.22 };
+      A.gus.pos    = { x: W * 0.78, y: H * 0.5  };
+      A.hana.pos   = { x: W * 0.72, y: H * 0.78 };
+      A.escrow.pos = { x: W * 0.46, y: H * 0.82 };
+    },
+    drawOverlay(ctx, W, H) {
+      // Show each provider's current bid floating above them.
+      const providers = [
+        { id: "eli",  bid: this.ctl.bid_eli  },
+        { id: "gus",  bid: this.ctl.bid_gus  },
+        { id: "hana", bid: this.ctl.bid_hana },
+      ];
+      ctx.save();
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      providers.forEach(p => {
+        const a = A[p.id];
+        const overBudget = p.bid > this.ctl.budget;
+        ctx.fillStyle = overBudget ? "rgba(248, 113, 113, 0.85)" : "rgba(231, 233, 238, 0.75)";
+        ctx.fillText(`bid: ${p.bid.toFixed(2)} USDC${overBudget ? " · over cap" : ""}`,
+                     a.pos.x, a.pos.y - a.radius - 14);
+      });
+      // Iris's budget callout
+      ctx.fillStyle = "rgba(125, 211, 252, 0.85)";
+      ctx.fillText(`budget ≤ ${this.ctl.budget.toFixed(2)} USDC`,
+                   A.iris.pos.x, A.iris.pos.y - A.iris.radius - 14);
+      ctx.restore();
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0: {
+          // event 2: Iris broadcasts the RFQ to each provider, one packet each
+          // for clearer beat-by-beat visualization.
+          ["eli","gus","hana"].forEach((id, i) => {
+            setTimeout(() => emit("iris", id, { kind: "request", label: "RFQ", speed: 0.026 }), i * 220);
+          });
+          log(`Iris broadcasts RFQ to 3 providers`);
+          setCaption("event 2", "RFQ packet leaves Iris three times — one per provider. Each provider's agent receives, prices the job, prepares a signed bid.");
+          this.phase = 1; this.cool = 90;
+          break;
+        }
+        case 1: {
+          // event 3: each provider returns a bid, staggered so they're individually readable
+          const bids = { eli: this.ctl.bid_eli, gus: this.ctl.bid_gus, hana: this.ctl.bid_hana };
+          Object.entries(bids).forEach(([id, price], i) => {
+            setTimeout(() => {
+              emit(id, "iris", { kind: "bid", label: `${price.toFixed(2)} USDC`, speed: 0.026,
+                onArrive: () => this.bids.push({ id, price }) });
+              log(`<span class="warn">${A[id].name}</span> bids ${price.toFixed(2)} USDC`);
+            }, i * 480);
+          });
+          setCaption("event 3", "Each provider signs and sends a bid back. Iris's agent collects them, verifies signatures, sorts by price.");
+          this.phase = 2; this.cool = 160;
+          break;
+        }
+        case 2: {
+          // event 4: pick a winner (or fail)
+          const valid = this.bids.filter(b => b.price <= this.ctl.budget);
+          if (valid.length === 0) {
+            log(`<span class="hot">no valid bids</span> · all over Iris's ${this.ctl.budget.toFixed(2)} USDC cap`);
+            setCaption("event 4 · abort", `Every bid exceeded Iris's budget cap. Auction aborts — <strong>no escrow lock</strong>, no commitment. Iris keeps her funds.`);
+            ["eli","gus","hana"].forEach(id => A[id].state = "passive");
+            this.phase = 5; this.cool = 220;
+            break;
+          }
+          valid.sort((a, b) => a.price - b.price);
+          // Tie? same lowest price — first-seen wins
+          const lowest = valid[0].price;
+          const tied = valid.filter(b => Math.abs(b.price - lowest) < 1e-9);
+          this.winner = tied[0];
+          ["eli","gus","hana"].forEach(id => { if (id !== this.winner.id) A[id].state = "passive"; });
+          if (tied.length > 1) {
+            log(`<span class="info">tie at ${lowest.toFixed(2)} USDC</span> · ${A[this.winner.id].name} wins on first-seen rule`);
+            setCaption("event 4 · tie-break", `Tie at ${lowest.toFixed(2)} USDC between ${tied.map(b => A[b.id].name).join(" + ")}. First-seen-wins: <strong>${A[this.winner.id].name}</strong>.`);
+          } else {
+            log(`<span class="ok">${A[this.winner.id].name} wins</span> at ${lowest.toFixed(2)} USDC`);
+            setCaption("event 4", `<strong>${A[this.winner.id].name}</strong> wins at ${lowest.toFixed(2)} USDC. Losing providers go passive — losing a bid costs them nothing.`);
+          }
+          this.phase = 3; this.cool = 100;
+          break;
+        }
+        case 3: {
+          // event 5: Iris locks funds in escrow
+          const w = this.winner;
+          emit("iris", "escrow", { kind: "offer", label: "lock " + w.price.toFixed(2),
+            amount: w.price, speed: 0.022,
+            onArrive: () => { A.iris.balance -= w.price; A.escrow.balance += w.price; }});
+          log(`Iris → Escrow: lock ${w.price.toFixed(2)} USDC for ${A[w.id].name}`);
+          setCaption("event 5", `Iris locks ${w.price.toFixed(2)} USDC in escrow against the winning bid. No funds leave Iris's wallet without the contract guarantee.`);
+          this.phase = 4; this.cool = 130;
+          break;
+        }
+        case 4: {
+          // event 6 + 7: delivery, confirm, release — separate beats
+          const w = this.winner;
+          emit(w.id, "iris", { kind: "data", label: "transcript", speed: 0.022 });
+          log(`${A[w.id].name} → Iris: transcript delivered`);
+          setCaption("event 6", `<strong>${A[w.id].name}</strong> performs the work and delivers a signed artifact to Iris.`);
+          setTimeout(() => {
+            emit("iris", "escrow", { kind: "request", label: "confirm", speed: 0.026,
+              onArrive: () => {
+                emit("escrow", w.id, { kind: "proof", label: `released ${w.price.toFixed(2)}`, speed: 0.024,
+                  onArrive: () => {
+                    A.escrow.balance -= w.price; A[w.id].balance += w.price;
+                    jobs++; jobsEl.textContent = jobs;
+                  }});
+                log(`Escrow released ${w.price.toFixed(2)} USDC to ${A[w.id].name}`);
+                setCaption("event 7", `Iris confirms → escrow releases. Winner credited; losers untouched. The protocol completes in ${this.bids.length + 4} signed packets total.`);
+              }});
+          }, 1400);
+          this.phase = 5; this.cool = 260;
+          break;
+        }
+        case 5: {
+          // reset loop
+          this.bids = []; this.winner = null;
+          ["eli","gus","hana"].forEach(id => { A[id].state = "listening"; A[id].balance = 0; });
+          A.iris.balance = this.ctl.budget * 4; A.iris.spent = 0;
+          A.escrow.balance = 0;
+          this.phase = 0; this.cool = 100;
+          break;
+        }
+      }
+    },
+  };
+
+  // — Scene 5: HITL gate ——————————————————————————————————————————————————
+  SCENES.hitl = {
+    id: "hitl",
+    name: "Human-in-the-loop gate",
+    short: "05",
+    desc: "Risky spend? <strong>Deva</strong> is a HITL wallet. Any spend above a threshold raises an <strong>Approve</strong> button — release requires a human click. Small spends pass automatically.",
+    enter() {
+      setVisible(["deva", "eli", "gus"]);
+      A.deva.balance = 50; A.deva.spent = 0; A.deva.dailyCap = 80;
+      A.eli.balance = 1; A.gus.balance = 1;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      setCaption("step 1 / 3", "Click <strong>Deva</strong> to initiate a spend. Small purchases pass; large ones raise an <strong>Approve</strong> button.");
+      log(`<span class="info">hitl</span> scene loaded · threshold = 5 USDC`);
+    },
+    layout() {
+      A.deva.pos = { x: W * 0.5, y: H * 0.7 };
+      A.eli.pos  = { x: W * 0.3, y: H * 0.3 };
+      A.gus.pos  = { x: W * 0.7, y: H * 0.3 };
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.phase === 0 && t % 200 === 50) {
+        const target = Math.random() < 0.5 ? "eli" : "gus";
+        const amount = Math.random() < 0.5 ? 1.5 : 12;       // mix small/large
+        if (amount >= 5) {
+          showApprove(A.deva, `approve ${amount.toFixed(2)} USDC`, () => {
+            emit("deva", target, { kind: "offer", label: `${amount.toFixed(2)} USDC`,
+              amount, speed: 0.018,
+              onArrive: () => { A.deva.balance -= amount; A[target].balance += amount;
+                jobs++; jobsEl.textContent = jobs; }});
+            log(`<span class="ok">approved</span> · ${amount.toFixed(2)} USDC → ${A[target].name}`);
+          });
+          log(`<span class="warn">gate</span> · ${amount.toFixed(2)} USDC > 5 USDC threshold — awaiting human`);
+          setCaption("step 2 / 3", "Above-threshold spend. Click <strong>Approve</strong> to release.");
+        } else {
+          emit("deva", target, { kind: "offer", label: `${amount.toFixed(2)} USDC`,
+            amount, speed: 0.018,
+            onArrive: () => { A.deva.balance -= amount; A[target].balance += amount;
+              jobs++; jobsEl.textContent = jobs; }});
+          log(`auto-pay · ${amount.toFixed(2)} USDC → ${A[target].name}`);
+          setCaption("step 3 / 3", "Sub-threshold spend passes automatically.");
+        }
+        this.cool = 220;
+      }
+    },
+    onAgentClick(a) {
+      if (a.id === "deva" && this.cool > 100) this.cool = 0;
+    },
+  };
+
+  // — Scene 6: Treasury rebalance ————————————————————————————————————————
+  SCENES.fanout = {
+    id: "fanout",
+    name: "Treasury rebalance",
+    short: "06",
+    desc: "Fan-out from one balance source. <strong>Fina</strong> watches her agentic wallets; if one drops below a floor, she refills it. A common pattern for fleets of autonomous agents.",
+    enter() {
+      setVisible(["fina", "alice", "bob", "iris", "juno"]);
+      A.fina.balance = 80; A.fina.dailyCap = 100;
+      A.alice.balance = 0.5; A.alice.dailyCap = 4;
+      A.bob.balance   = 1.2; A.bob.dailyCap   = 4;
+      A.iris.balance  = 0.3; A.iris.dailyCap  = 4;
+      A.juno.balance  = 3.5; A.juno.dailyCap  = 4;
+      this.layout();
+      this.cool = 30;
+      setCaption("step 1 / 2", "Fleet wallets running low (frosted = below floor). Treasury detects on its sweep tick.");
+      log(`<span class="info">fanout</span> scene loaded · floor = 1.0 USDC`);
+    },
+    layout() {
+      A.fina.pos = { x: W * 0.5, y: H * 0.5 };
+      ring(["alice","bob","iris","juno"], W * 0.5, H * 0.5, Math.min(W, H) * 0.32);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (t % 30 === 0) {
+        let refilled = 0;
+        ["alice","bob","iris","juno"].forEach(id => {
+          if (A[id].balance < 1.0) {
+            const top = 3.5 - A[id].balance;
+            emit("fina", id, { kind: "offer", label: `+${top.toFixed(2)}`, amount: top, speed: 0.02,
+              onArrive: () => { A.fina.balance -= top; A[id].balance += top; }});
+            log(`Fina → ${A[id].name}: top up ${top.toFixed(2)} USDC`);
+            refilled++;
+          }
+        });
+        if (refilled) setCaption("step 2 / 2", `Treasury fans out ${refilled} top-up payment(s). Recipients brighten back to active.`);
+        this.cool = 180;
+        // simulate continued spending
+        ["alice","bob","iris","juno"].forEach(id => { A[id].balance = Math.max(0, A[id].balance - 0.7); });
+      }
+    },
+  };
+
+  // — Scene 7: On-chain oracle pull ——————————————————————————————————————————
+  SCENES.oracle = {
+    id: "oracle",
+    name: "On-chain oracle pull",
+    short: "07",
+    desc: "AI-on-chain pattern. <strong>Chen</strong> sells signed price quotes. <strong>Alice</strong>, <strong>Patty</strong>, and <strong>Iris</strong> pull on demand and pay per-query. Signed responses fold into the PQ-signed-envelope work tracked in <a href=\"https://github.com/kcolbchain/switchboard/issues/33\">#33</a>.",
+    enter() {
+      setVisible(["chen", "alice", "bob", "iris"]);
+      A.chen.balance = 12;
+      A.alice.balance = 6; A.bob.balance = 6; A.iris.balance = 6;
+      A.alice.spent = 0; A.bob.spent = 0; A.iris.spent = 0;
+      this.layout();
+      this.cool = 30;
+      setCaption("step 1 / 2", "Three buyers pull from one oracle, asynchronously. Each query costs 0.05 USDC; the oracle returns a signed quote.");
+      log(`<span class="info">oracle</span> scene loaded · 0.05 USDC / query`);
+    },
+    layout() {
+      A.chen.pos = { x: W * 0.5, y: H * 0.5 };
+      ring(["alice","bob","iris"], W * 0.5, H * 0.5, Math.min(W, H) * 0.32);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      // each buyer pulls at its own cadence
+      const buyers = [
+        { id: "alice", every: 90 },
+        { id: "bob",   every: 130 },
+        { id: "iris",  every: 70 },
+      ];
+      buyers.forEach(b => {
+        if (t % b.every === 0 && A[b.id].balance > 0.1) {
+          emit(b.id, "chen", { kind: "request", label: "quote?", speed: 0.022,
+            onArrive: () => {
+              emit("chen", b.id, { kind: "data", label: "signed quote · 0.05 USDC",
+                amount: 0.05, speed: 0.022,
+                onArrive: () => {
+                  A[b.id].balance -= 0.05; A[b.id].spent += 0.05;
+                  A.chen.balance  += 0.05;
+                  jobs++; jobsEl.textContent = jobs;
+                }});
+            }});
+          log(`${A[b.id].name} ⇄ Chen: quote pulled · 0.05 USDC`);
+        }
+      });
+      setCaption("step 2 / 2", `Asynchronous pulls; each response is a signed envelope. With <a href="https://github.com/kcolbchain/switchboard/issues/37">PQ-4</a> live, buyers verify <em>before</em> paying.`);
+    },
+  };
+
+  // — Scene 8: PQ-signed envelopes (our proposal) ————————————————————————
+  SCENES.pq = {
+    id: "pq",
+    name: "PQ-signed envelopes",
+    short: "08",
+    desc: "Our proposal — every <code>PaymentOffer</code> / <code>PaymentProof</code> carries an application-layer post-quantum signature (default <strong>ML-DSA-65</strong>; <strong>hybrid</strong> mode pairs it with ECDSA). Receivers verify <em>before</em> paying. Tracked in <a href=\"https://github.com/kcolbchain/switchboard/issues/33\">#33</a>.",
+    enter() {
+      setVisible(["bob", "eli", "deva"]);
+      A.bob.balance = 8;  A.bob.spent = 0;
+      A.eli.balance = 1;
+      A.deva.balance = 8; A.deva.spent = 0;
+      this.layout();
+      this.phase = 0; this.cool = 50; this.mode = "ml-dsa-65";
+      setCaption("step 1 / 4", "<strong>Patty</strong> constructs a <code>PaymentOffer</code>, signs the canonical transcript with her PQ secret key, attaches the signature.");
+      log(`<span class="info">pq</span> scene loaded · default alg ml-dsa-65`);
+    },
+    layout() {
+      A.bob.pos  = { x: W * 0.22, y: H * 0.38 };
+      A.eli.pos  = { x: W * 0.78, y: H * 0.5 };
+      A.deva.pos = { x: W * 0.22, y: H * 0.72 };
+    },
+    drawOverlay(ctx, W, H) {
+      // signing/verifying glyphs near agents in flight phases
+      if (this.signing) {
+        const a = A.bob;
+        const ang = (tick * 0.18) % (Math.PI * 2);
+        for (let i = 0; i < 6; i++) {
+          const aa = ang + (i / 6) * Math.PI * 2;
+          const px = a.pos.x + Math.cos(aa) * (a.radius + 16);
+          const py = a.pos.y + Math.sin(aa) * (a.radius + 16);
+          ctx.fillStyle = "rgba(96, 165, 250, 0.85)";
+          ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.fillStyle = "rgba(96, 165, 250, 0.9)";
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("signing…", a.pos.x, a.pos.y - a.radius - 18);
+      }
+      if (this.verifying) {
+        const a = A.eli;
+        const ang = (-tick * 0.22) % (Math.PI * 2);
+        ctx.strokeStyle = "rgba(52, 211, 153, 0.7)";
+        ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(a.pos.x, a.pos.y, a.radius + 12, ang, ang + Math.PI * 1.5);
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(52, 211, 153, 0.9)";
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("verifying ml-dsa-65…", a.pos.x, a.pos.y - a.radius - 18);
+      }
+      // legend strip near top
+      const lx = W * 0.5;
+      ctx.fillStyle = "rgba(231, 233, 238, 0.7)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText("⬢ signed envelope    ⬡ unsigned (rejected in strict mode)", lx, 18);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.phase === 0) {
+        this.signing = true; this.cool = 60;
+        this.phase = 1;
+        return;
+      }
+      if (this.phase === 1) {
+        this.signing = false;
+        const amount = 0.5;
+        emit("bob", "eli", { kind: "offer", label: "ml-dsa-65 ✓", amount, speed: 0.014,
+          onArrive: () => { this.verifying = true; }
+        });
+        log(`Patty → Abhi: <code>PaymentOffer</code> + <span class="info">ml-dsa-65</span> sig (3,309 bytes)`);
+        setCaption("step 2 / 4", "Envelope leaves <strong>Patty</strong> with the PQ signature attached. Comet head + label show <code>ml-dsa-65</code>.");
+        this.phase = 2; this.cool = 80;
+        return;
+      }
+      if (this.phase === 2) {
+        this.verifying = false;
+        emit("eli", "bob", { kind: "proof", label: "verified · 0.5 USDC", amount: 0.5, speed: 0.018,
+          onArrive: () => { A.bob.balance -= 0.5; A.eli.balance += 0.5; jobs++; jobsEl.textContent = jobs; }
+        });
+        log(`<span class="ok">Abhi verified</span> sig vs Patty's pubkey · 200 OK · 0.5 USDC`);
+        setCaption("step 3 / 4", "<strong>Abhi</strong> verifies the signature against Patty's public key <em>before</em> paying. Today's code path can't do this — it has to settle first and inspect the tx hash after.");
+        this.phase = 3; this.cool = 120;
+        return;
+      }
+      if (this.phase === 3) {
+        // Contrast: Deva sends an UNSIGNED offer (strict mode rejects)
+        emit("deva", "eli", { kind: "request", label: "unsigned", amount: 0.5, speed: 0.014,
+          onArrive: () => {
+            log(`<span class="hot">Abhi rejected</span> offer from Deva: signature_alg = "none" (strict mode)`);
+            // bounce-back red refund packet
+            emit("eli", "deva", { kind: "refund", label: "reject", speed: 0.022 });
+          }
+        });
+        setCaption("step 4 / 4", "<strong>Deva</strong> sends an <em>unsigned</em> offer. With <code>X402Middleware.require_signed=True</code> the receiver rejects on principle — no settlement, no leak.");
+        this.phase = 4; this.cool = 180;
+        return;
+      }
+      if (this.phase === 4) {
+        // hybrid demo: ECDSA + ML-DSA-65 stamped twice
+        emit("bob", "eli", { kind: "offer", label: "hybrid (ecdsa + ml-dsa-65)", amount: 0.5, speed: 0.014,
+          onArrive: () => {
+            log(`<span class="ok">hybrid verified</span> · both halves passed (ecdsa + ml-dsa-65)`);
+            emit("eli", "bob", { kind: "proof", label: "200 OK", speed: 0.018,
+              onArrive: () => { A.bob.balance -= 0.5; A.eli.balance += 0.5; jobs++; jobsEl.textContent = jobs; }
+            });
+          }
+        });
+        log(`Patty → Abhi: hybrid envelope (ecdsa + ml-dsa-65)`);
+        setCaption("step 4 / 4", "<strong>Hybrid mode</strong> — two signatures stacked. Verifier requires <em>both</em> to pass. Migration-friendly: classical-only verifiers still see the ECDSA half.");
+        this.phase = 5; this.cool = 200;
+        return;
+      }
+      if (this.phase === 5) {
+        this.phase = 0; this.cool = 100;
+        A.bob.balance = 8; A.eli.balance = 1; A.deva.balance = 8;
+      }
+    },
+  };
+
+  // — Scene 9: stack — coexistence with neighboring repos ————————————————————
+  // Switchboard isn't alone. ZAP, x402, gas-oracle, scout, arka all sit
+  // adjacent. This scene illustrates the data-flow seams.
+  // We extend the agent registry with repo "nodes" rendered with a contract
+  // hex shape but distinct hues + per-repo roles.
+  A.swb       = makeAgent({ id: "swb",       name: "switchboard", role: "agent payments substrate", kind: "contract", wallet: "contract", hue: 215, radius: 42, protocols: ["x402","MPP","ZAP","escrow"], sigAlg: "policy: hybrid+ml-dsa-65" });
+  A.zap_repo  = makeAgent({ id: "zap_repo",  name: "zap",         role: "zero-alloc binary wire",   kind: "contract", wallet: "contract", hue: 285, radius: 32, protocols: ["ZAP"], sigAlg: "n/a (wire format)" });
+  A.arka_repo = makeAgent({ id: "arka_repo", name: "arka",        role: "Rust agent SDK",           kind: "contract", wallet: "contract", hue:  25, radius: 32, protocols: ["x402","MPP"], sigAlg: "consumes switchboard" });
+  A.scout_repo= makeAgent({ id: "scout_repo",name: "scout",       role: "wallet intel",             kind: "contract", wallet: "contract", hue: 165, radius: 32, protocols: ["intel"], sigAlg: "ml-dsa-65" });
+  A.gas_repo  = makeAgent({ id: "gas_repo",  name: "gas-oracle",  role: "L2 gas forecasts",         kind: "contract", wallet: "contract", hue:  55, radius: 32, protocols: ["signed-data"], sigAlg: "ml-dsa-65" });
+  A.x402_repo = makeAgent({ id: "x402_repo", name: "x402",        role: "upstream HTTP-402 spec",   kind: "contract", wallet: "contract", hue: 195, radius: 32, protocols: ["x402"], sigAlg: "spec — no sig" });
+  A.aeo_repo  = makeAgent({ id: "aeo_repo",  name: "AgentEscrow", role: "on-chain settlement",      kind: "contract", wallet: "contract", hue: 250, radius: 30, protocols: ["escrow"], sigAlg: "ecdsa-secp256k1" });
+
+  SCENES.stack = {
+    id: "stack",
+    name: "Repo coexistence",
+    short: "09",
+    desc: "Switchboard's place in the stack. Arrows are real data-flow seams in the code: <code>zap_transport.py</code> ↔ <a href=\"https://github.com/luxfi/zap\">zap</a>, <code>gas_tracker.py</code> ↔ <a href=\"https://github.com/kcolbchain/gas-oracle\">gas-oracle</a>, <code>x402_middleware.py</code> implements the <a href=\"https://x402.org\">x402</a> spec, etc.",
+    enter() {
+      setVisible(["swb", "zap_repo", "arka_repo", "scout_repo", "gas_repo", "x402_repo", "aeo_repo"]);
+      this.layout();
+      this.cool = 30; this.flows = [];
+      // ascii arrows shown on canvas
+      setCaption("step 1 / 1", "Each repo owns one job. Switchboard composes them: it imports zap for the wire, gas-oracle for budget signals, scout for counterparty intel, and ships the AgentEscrow contract that gives the rails their on-chain teeth. Hover to inspect.");
+      log(`<span class="info">stack</span> scene loaded · 7 nodes`);
+    },
+    layout() {
+      A.swb.pos       = { x: W * 0.5,  y: H * 0.5  };
+      A.zap_repo.pos  = { x: W * 0.78, y: H * 0.28 };
+      A.arka_repo.pos = { x: W * 0.78, y: H * 0.72 };
+      A.scout_repo.pos= { x: W * 0.22, y: H * 0.72 };
+      A.gas_repo.pos  = { x: W * 0.22, y: H * 0.28 };
+      A.x402_repo.pos = { x: W * 0.5,  y: H * 0.18 };
+      A.aeo_repo.pos  = { x: W * 0.5,  y: H * 0.82 };
+    },
+    drawChannels(ctx) {
+      // directional arrows with labels
+      const edges = [
+        { a: "zap_repo",  b: "swb", label: "wire", color: "rgba(240, 171, 252, 0.45)" },
+        { a: "gas_repo",  b: "swb", label: "gas signals", color: "rgba(251, 191, 36, 0.45)" },
+        { a: "x402_repo", b: "swb", label: "implements", color: "rgba(125, 211, 252, 0.45)" },
+        { a: "scout_repo",b: "swb", label: "intel", color: "rgba(52, 211, 153, 0.45)" },
+        { a: "swb", b: "arka_repo", label: "consumer", color: "rgba(96, 165, 250, 0.45)" },
+        { a: "swb", b: "aeo_repo",  label: "ships", color: "rgba(167, 139, 250, 0.45)" },
+      ];
+      ctx.save();
+      ctx.lineWidth = 1.5;
+      for (const e of edges) {
+        const a = A[e.a], b = A[e.b];
+        const dx = b.pos.x - a.pos.x, dy = b.pos.y - a.pos.y;
+        const len = Math.hypot(dx, dy);
+        const ux = dx / len, uy = dy / len;
+        const sx = a.pos.x + ux * (a.radius + 4);
+        const sy = a.pos.y + uy * (a.radius + 4);
+        const ex = b.pos.x - ux * (b.radius + 4);
+        const ey = b.pos.y - uy * (b.radius + 4);
+        ctx.strokeStyle = e.color;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+        // arrowhead
+        const ah = 6;
+        const angle = Math.atan2(uy, ux);
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - ah * Math.cos(angle - 0.4), ey - ah * Math.sin(angle - 0.4));
+        ctx.lineTo(ex - ah * Math.cos(angle + 0.4), ey - ah * Math.sin(angle + 0.4));
+        ctx.closePath(); ctx.fillStyle = e.color; ctx.fill();
+        // label
+        const lx = (sx + ex) / 2, ly = (sy + ey) / 2;
+        ctx.fillStyle = "rgba(231, 233, 238, 0.65)";
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(e.label, lx, ly - 4);
+      }
+      ctx.restore();
+    },
+    tick(t) {
+      // Periodically emit a tiny data dot along each edge for liveliness
+      if (t % 90 === 0) {
+        const edges = [
+          ["zap_repo", "swb"], ["gas_repo", "swb"], ["x402_repo", "swb"],
+          ["scout_repo", "swb"], ["swb", "arka_repo"], ["swb", "aeo_repo"],
+        ];
+        const [a, b] = edges[Math.floor(Math.random() * edges.length)];
+        emit(a, b, { kind: "data", label: "", speed: 0.018 });
+      }
+    },
+  };
+
+  // — helpers shared by the use-case scenes ————————————————————————————————
+  function drawPin(ctx, x, y, label, color = "#60a5fa") {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y - 4, 8, Math.PI, 0);
+    ctx.lineTo(x, y + 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#0b0d10";
+    ctx.beginPath(); ctx.arc(x, y - 4, 3, 0, Math.PI * 2); ctx.fill();
+    if (label) {
+      ctx.fillStyle = "rgba(231, 233, 238, 0.85)";
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(label, x, y + 24);
+    }
+    ctx.restore();
+  }
+
+  function drawDashedCurve(ctx, x1, y1, x2, y2, lift = 70, color = "rgba(96,165,250,0.35)") {
+    ctx.save();
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    const cx = (x1 + x2) / 2;
+    const cy = Math.min(y1, y2) - lift;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(cx, cy, x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  function bezierPoint(t, p0, p1, p2) {
+    const u = 1 - t;
+    return { x: u*u*p0.x + 2*u*t*p1.x + t*t*p2.x,
+             y: u*u*p0.y + 2*u*t*p1.y + t*t*p2.y };
+  }
+
+  // — Scene 10: Taxi handover ——————————————————————————————————————————————
+  // Centerpiece scene. Walks the full story: Patty's agent books a ride,
+  // matches with a driver, validates the offer (PQ sig + price + ETA),
+  // funds lock in dispatch escrow, GPS handshake on arrival, ride
+  // animates A→B, both agents confirm at the dropoff, escrow releases.
+  SCENES.taxi = {
+    id: "taxi",
+    name: "Taxi handover",
+    short: "10",
+    desc: "<strong>Patty</strong>'s agent books a ride. It RFQs <strong>Dispatch</strong>, picks <strong>Sai</strong> on price+ETA, validates the signed quote, locks funds in escrow, watches the GPS handshake at pickup, rides A→B, and releases on dropoff. Zero taps once policy is set.",
+    enter() {
+      setVisible(["bob", "driver", "dispatch", "escrow"]);
+      A.bob.balance = 25; A.bob.spent = 0; A.bob.dailyCap = 50;
+      A.driver.balance = 0; A.escrow.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 50;
+      this.driveT = 0;
+      A.driver._visible = false; A.driver.pos = { ...this.pickup };
+      setCaption("step 1 / 8", "<strong>Patty</strong> at pin <strong>A</strong>. Her agent broadcasts a ride request to <strong>Dispatch</strong>.");
+      log(`<span class="info">taxi</span> scene loaded · pickup A → dropoff B`);
+    },
+    layout() {
+      this.pickup  = { x: W * 0.18, y: H * 0.72 };
+      this.dropoff = { x: W * 0.82, y: H * 0.30 };
+      A.bob.pos = { ...this.pickup };
+      A.dispatch.pos = { x: W * 0.5,  y: H * 0.18 };
+      A.escrow.pos   = { x: W * 0.5,  y: H * 0.82 };
+      A.driver.pos   = { ...this.pickup };
+    },
+    drawUnderlay(ctx, W, H) {
+      // map pins + curved route
+      drawPin(ctx, this.pickup.x, this.pickup.y, "A · pickup", "#7dd3fc");
+      drawPin(ctx, this.dropoff.x, this.dropoff.y, "B · dropoff", "#34d399");
+      drawDashedCurve(ctx, this.pickup.x, this.pickup.y, this.dropoff.x, this.dropoff.y, 110,
+                      "rgba(96,165,250,0.3)");
+    },
+    drawOverlay(ctx, W, H) {
+      // small "validate" badge on Patty while validating
+      if (this.phase === 3) {
+        ctx.fillStyle = "rgba(96, 165, 250, 0.9)";
+        ctx.font = "10px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        const a = A.bob;
+        ctx.fillText("validating: sig · price · ETA", a.pos.x, a.pos.y - a.radius - 16);
+      }
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          emit("bob", "dispatch", { kind: "request", label: "ride A→B", speed: 0.02 });
+          log(`Patty → Dispatch: <code>requestRide(A, B)</code>`);
+          this.phase = 1; this.cool = 60;
+          setCaption("step 2 / 8", "<strong>Dispatch</strong> fans the request out to nearby drivers and collects bids.");
+          break;
+        case 1:
+          A.driver._visible = true;
+          A.driver.pos = { x: W * 0.85, y: H * 0.75 };
+          emit("driver", "dispatch", { kind: "bid", label: "$5.20 · 3 min", speed: 0.02 });
+          log(`Sai bids: <span class="warn">5.20 USDC · ETA 3 min</span> · PQ-signed quote`);
+          this.phase = 2; this.cool = 80;
+          setCaption("step 3 / 8", "Sai's agent returns a signed quote. Other drivers bid too; Dispatch forwards the winning offer.");
+          break;
+        case 2:
+          emit("dispatch", "bob", { kind: "offer", label: "Sai · 5.20", speed: 0.02 });
+          this.phase = 3; this.cool = 100;
+          setCaption("step 4 / 8", "Patty's agent validates the offer: <code>verify(sig, pk)</code>, price under cap, ETA under tolerance.");
+          break;
+        case 3:
+          emit("bob", "escrow", { kind: "offer", label: "lock 5.20", amount: 5.2, speed: 0.018,
+            onArrive: () => { A.bob.balance -= 5.2; A.escrow.balance += 5.2; } });
+          log(`Patty → Escrow: lock 5.20 USDC`);
+          this.phase = 4; this.cool = 90;
+          setCaption("step 5 / 8", "Funds lock in <span class=\"pill\">Escrow</span>. Sai's agent watches the lock event before rolling.");
+          break;
+        case 4: {
+          // animate Sai's car from off-screen position to pickup
+          this.driveT += 0.018;
+          const start = { x: W * 0.85, y: H * 0.75 };
+          A.driver.pos = {
+            x: lerp(start.x, this.pickup.x + 38, Math.min(1, this.driveT)),
+            y: lerp(start.y, this.pickup.y, Math.min(1, this.driveT)),
+          };
+          if (this.driveT >= 1) {
+            log(`Sai arrives at <strong>A</strong>. GPS handshake: <span class="ok">match</span>`);
+            emit("driver", "bob", { kind: "data", label: "GPS sig", speed: 0.03 });
+            emit("bob", "driver", { kind: "data", label: "GPS ack",  speed: 0.03 });
+            this.phase = 5; this.cool = 60; this.driveT = 0;
+            setCaption("step 6 / 8", "Sai pulls up. Both agents exchange signed GPS positions. Match → ride begins.");
+          }
+          break;
+        }
+        case 5: {
+          // animate the actual ride along the curve, both Patty and Sai together
+          this.driveT += 0.005;
+          const p0 = this.pickup;
+          const p2 = this.dropoff;
+          const p1 = { x: (p0.x + p2.x) / 2, y: Math.min(p0.y, p2.y) - 110 };
+          const pt = bezierPoint(Math.min(1, this.driveT), p0, p1, p2);
+          A.driver.pos = pt;
+          A.bob.pos = { x: pt.x - 28, y: pt.y + 2 };
+          if (this.driveT >= 1) {
+            log(`Arrived at <strong>B</strong>. Both agents confirm dropoff.`);
+            this.phase = 6; this.cool = 50; this.driveT = 0;
+            setCaption("step 7 / 8", "Arrival confirmed by both agents. Patty's app calls <code>confirmPayment()</code>.");
+          }
+          break;
+        }
+        case 6:
+          emit("bob", "escrow", { kind: "request", label: "confirm", speed: 0.022,
+            onArrive: () => {
+              emit("escrow", "driver", { kind: "proof", label: "released 5.20", speed: 0.022,
+                onArrive: () => {
+                  A.escrow.balance -= 5.2; A.driver.balance += 5.2;
+                  jobs++; jobsEl.textContent = jobs;
+                }});
+            }});
+          log(`<span class="ok">Escrow released 5.20 USDC to Sai</span> · handover complete`);
+          this.phase = 7; this.cool = 220;
+          setCaption("step 8 / 8", "Escrow releases 5.20 USDC to Sai. Receipt PQ-signed; Patty's done. No taps after step 1.");
+          break;
+        case 7:
+          // reset for loop
+          A.bob.balance = 25; A.bob.spent = 0;
+          A.driver.balance = 0; A.escrow.balance = 0;
+          this.driveT = 0; this.phase = 0;
+          this.layout();
+          A.driver._visible = false;
+          this.cool = 80;
+          break;
+      }
+    },
+  };
+
+  // — Scene 11: Café walk-up ——————————————————————————————————————————————
+  SCENES.cafe = {
+    id: "cafe",
+    name: "Café walk-up",
+    short: "11",
+    desc: "Smallest possible flow. <strong>Patty</strong> walks up to <strong>Abhi</strong>'s espresso bar. The shop's POS agent (Aroma) does a proximity handshake with Patty, picks a latte off the signed menu, pays 4.50 USDC, takes the cup. Abhi is the human; Aroma is the bot surface he runs.",
+    enter() {
+      setVisible(["bob", "eli", "cafe"]);
+      A.bob.balance = 20; A.bob.spent = 0;
+      A.cafe.balance = 0; A.eli.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 50;
+      setCaption("step 1 / 5", "<strong>Patty</strong> approaches <strong>Abhi</strong>'s café. Aroma POS handshakes with Patty's agent; Abhi watches from behind the counter.");
+      log(`<span class="info">cafe</span> scene loaded · Abhi's espresso bar`);
+    },
+    layout() {
+      A.bob.pos  = { x: W * 0.22, y: H * 0.6 };
+      A.cafe.pos = { x: W * 0.66, y: H * 0.55 };
+      A.eli.pos  = { x: W * 0.82, y: H * 0.4  };
+    },
+    drawUnderlay(ctx, W, H) {
+      // counter rectangle behind the cafe
+      ctx.save();
+      const x = W * 0.62, y = H * 0.35, w = W * 0.26, h = H * 0.32;
+      const g = ctx.createLinearGradient(x, y, x, y + h);
+      g.addColorStop(0, "rgba(251, 191, 36, 0.06)");
+      g.addColorStop(1, "rgba(251, 191, 36, 0.0)");
+      ctx.fillStyle = g;
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.25)";
+      ctx.lineWidth = 1;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = "rgba(231, 233, 238, 0.5)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.fillText("ABHI'S  ·  espresso bar", x + 10, y + 16);
+      ctx.restore();
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          emit("bob", "cafe", { kind: "request", label: "hello", speed: 0.03 });
+          emit("cafe", "bob", { kind: "data",    label: "menu (signed)", speed: 0.03 });
+          log(`handshake complete · Aroma sent signed menu`);
+          setCaption("step 2 / 5", "Aroma sends a PQ-signed menu. Patty's agent picks: latte 4.50 USDC.");
+          this.phase = 1; this.cool = 70;
+          break;
+        case 1:
+          emit("bob", "cafe", { kind: "offer", label: "latte · 4.50", amount: 4.5, speed: 0.022 });
+          setCaption("step 3 / 5", "Order placed. Aroma confirms availability and pricing.");
+          this.phase = 2; this.cool = 80;
+          break;
+        case 2:
+          emit("bob", "cafe", { kind: "offer", label: "X-Payment-Proof", amount: 4.5, speed: 0.022,
+            onArrive: () => { A.bob.balance -= 4.5; A.cafe.balance += 4.5; } });
+          log(`Patty pays 4.50 USDC via <code>X-Payment-Proof</code>`);
+          setCaption("step 4 / 5", "Payment settles. Aroma starts the latte.");
+          this.phase = 3; this.cool = 110;
+          break;
+        case 3:
+          emit("cafe", "bob", { kind: "data", label: "☕ ready", speed: 0.022 });
+          log(`<span class="ok">latte handed over</span> · receipt signed`);
+          setCaption("step 5 / 5", "Cup handover. Receipt is a PQ-signed proof — Patty leaves without touching the phone.");
+          jobs++; jobsEl.textContent = jobs;
+          this.phase = 4; this.cool = 200;
+          break;
+        case 4:
+          A.bob.balance = 20; A.cafe.balance = 0;
+          this.phase = 0; this.cool = 60;
+          break;
+      }
+    },
+  };
+
+  // — Scene 12: Food delivery (3-party) ————————————————————————————————————
+  SCENES.delivery = {
+    id: "delivery",
+    name: "Food delivery",
+    short: "12",
+    desc: "Three-party flow. <strong>Patty</strong> orders from <strong>Tridib</strong>'s restaurant (Spice Hub); <strong>Kiran</strong> (rider) takes the delivery slot. Escrow splits the payout: food to Tridib on pickup, tip to Kiran on delivery confirm.",
+    enter() {
+      setVisible(["bob", "gus", "rest", "rider", "escrow"]);
+      A.bob.balance = 25; A.rest.balance = 0; A.rider.balance = 0; A.gus.balance = 0;
+      A.escrow.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      this.tRide = 0;
+      A.rider._visible = false;
+      setCaption("step 1 / 7", "<strong>Patty</strong> orders from <strong>Tridib</strong>'s Spice Hub: 5.00 USDC of biryani.");
+      log(`<span class="info">delivery</span> scene loaded · Tridib's kitchen, Kiran riding`);
+    },
+    layout() {
+      this.home = { x: W * 0.82, y: H * 0.68 };
+      this.restaurant = { x: W * 0.18, y: H * 0.32 };
+      A.bob.pos  = { ...this.home };
+      A.rest.pos = { ...this.restaurant };
+      A.gus.pos  = { x: W * 0.10, y: H * 0.20 };          // Tridib next to his kitchen
+      A.escrow.pos = { x: W * 0.5, y: H * 0.85 };
+      A.rider.pos = { x: W * 0.1, y: H * 0.5 };
+    },
+    drawUnderlay(ctx, W, H) {
+      drawPin(ctx, this.restaurant.x, this.restaurant.y, "kitchen", "#f87171");
+      drawPin(ctx, this.home.x, this.home.y, "you", "#7dd3fc");
+      drawDashedCurve(ctx, this.restaurant.x, this.restaurant.y, this.home.x, this.home.y, 90,
+                      "rgba(115, 188, 130, 0.3)");
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          emit("bob", "rest", { kind: "offer", label: "order 5.00", speed: 0.022 });
+          this.phase = 1; this.cool = 70;
+          setCaption("step 2 / 7", "Funds locked in escrow with a split policy: 80% to restaurant on pickup, 20% rider tip on delivery.");
+          break;
+        case 1:
+          emit("bob", "escrow", { kind: "offer", label: "lock 5.00", amount: 5.0, speed: 0.02,
+            onArrive: () => { A.bob.balance -= 5; A.escrow.balance += 5; } });
+          this.phase = 2; this.cool = 80;
+          setCaption("step 3 / 7", "Kiran's rider agent claims the slot — fastest ETA wins.");
+          A.rider._visible = true;
+          break;
+        case 2:
+          emit("rider", "escrow", { kind: "bid", label: "claim", speed: 0.022 });
+          log(`Kiran claims the delivery slot`);
+          this.phase = 3; this.cool = 60;
+          setCaption("step 4 / 7", "Kiran rides to the kitchen for pickup.");
+          break;
+        case 3: {
+          this.tRide += 0.012;
+          A.rider.pos = {
+            x: lerp(W * 0.1, this.restaurant.x + 36, Math.min(1, this.tRide)),
+            y: lerp(H * 0.5, this.restaurant.y + 6,  Math.min(1, this.tRide)),
+          };
+          if (this.tRide >= 1) {
+            log(`Pickup complete · 80% (4.00 USDC) released to Tridib`);
+            emit("escrow", "rest", { kind: "proof", label: "food paid 4.00", speed: 0.022,
+              onArrive: () => { A.escrow.balance -= 4; A.rest.balance += 4; } });
+            this.phase = 4; this.cool = 60; this.tRide = 0;
+            setCaption("step 5 / 7", "Pickup confirmed → 80% released to <strong>Tridib</strong>. Kiran rolls toward Patty.");
+          }
+          break;
+        }
+        case 4: {
+          this.tRide += 0.008;
+          const p0 = this.restaurant;
+          const p2 = this.home;
+          const p1 = { x: (p0.x + p2.x) / 2, y: Math.min(p0.y, p2.y) - 90 };
+          A.rider.pos = bezierPoint(Math.min(1, this.tRide), p0, p1, p2);
+          if (this.tRide >= 1) {
+            this.phase = 5; this.cool = 50; this.tRide = 0;
+            setCaption("step 6 / 7", "Delivery confirmed by Patty's agent. Rider tip released.");
+          }
+          break;
+        }
+        case 5:
+          emit("bob", "escrow", { kind: "request", label: "confirm delivery", speed: 0.022,
+            onArrive: () => {
+              emit("escrow", "rider", { kind: "proof", label: "tip 1.00", speed: 0.022,
+                onArrive: () => { A.escrow.balance -= 1; A.rider.balance += 1; }});
+            }});
+          log(`<span class="ok">Delivery complete</span> · tip 1.00 USDC → Kiran`);
+          this.phase = 6; this.cool = 220;
+          jobs++; jobsEl.textContent = jobs;
+          setCaption("step 7 / 7", "Done. Restaurant got food revenue at pickup; rider got the tip on confirmed delivery. Patty never touched a card.");
+          break;
+        case 6:
+          A.bob.balance = 25; A.rest.balance = 0; A.rider.balance = 0; A.escrow.balance = 0;
+          A.rider._visible = false; this.tRide = 0; this.phase = 0;
+          this.layout(); this.cool = 70;
+          break;
+      }
+    },
+  };
+
+  // — Scene 13: Split bill ——————————————————————————————————————————————
+  SCENES.split = {
+    id: "split",
+    name: "Split bill",
+    short: "13",
+    desc: "Four friends — <strong>Patty</strong>, <strong>Abhi</strong>, <strong>Tridib</strong>, and <strong>Sara</strong> — sit down at the Bistro. Each agent computes its share against the merchant's signed line-items and pays simultaneously. The merchant sees one settlement event: a complete bill. Drop-in for fintech apps that today require a single payer + chase-up later.",
+    enter() {
+      setVisible(["bob", "eli", "gus", "sara", "merchant"]);
+      A.bob.balance = 30; A.eli.balance = 30; A.gus.balance = 30; A.sara.balance = 30;
+      A.merchant.balance = 0;
+      this.total = 48.00;
+      this.share = this.total / 4;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      setCaption("step 1 / 3", `Bill: <code>${this.total.toFixed(2)} USDC</code>. Four agents see the signed itemized receipt and compute their share (${this.share.toFixed(2)} each).`);
+      log(`<span class="info">split</span> scene loaded · bill 48.00 USDC · Patty + Abhi + Tridib + Sara`);
+    },
+    layout() {
+      A.merchant.pos = { x: W * 0.5, y: H * 0.5 };
+      ring(["bob", "eli", "gus", "sara"], W * 0.5, H * 0.5, Math.min(W, H) * 0.3);
+    },
+    drawUnderlay(ctx, W, H) {
+      // round "table" behind the merchant
+      ctx.save();
+      const cx = W * 0.5, cy = H * 0.5, r = Math.min(W, H) * 0.22;
+      const g = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, r);
+      g.addColorStop(0, "rgba(251, 191, 36, 0.06)");
+      g.addColorStop(1, "rgba(251, 191, 36, 0.0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(251, 191, 36, 0.22)";
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          ["bob", "eli", "gus", "sara"].forEach(id => emit("merchant", id, { kind: "data", label: "receipt", speed: 0.024 }));
+          log(`Bistro sends signed line-items to all four agents`);
+          this.phase = 1; this.cool = 70;
+          setCaption("step 2 / 3", "Each agent verifies the merchant's signature and the line-items it's accountable for, then fires its share.");
+          break;
+        case 1:
+          ["bob", "eli", "gus", "sara"].forEach((id, i) => {
+            setTimeout(() => {
+              emit(id, "merchant", { kind: "offer", label: this.share.toFixed(2),
+                amount: this.share, speed: 0.024,
+                onArrive: () => {
+                  A[id].balance -= this.share; A.merchant.balance += this.share;
+                  if (Math.abs(A.merchant.balance - this.total) < 0.001) {
+                    log(`<span class="ok">bill settled</span> · 4 payers, one event`);
+                    jobs++; jobsEl.textContent = jobs;
+                  }
+                }});
+              log(`${A[id].name} → Bistro: ${this.share.toFixed(2)} USDC`);
+            }, i * 140);
+          });
+          this.phase = 2; this.cool = 200;
+          setCaption("step 3 / 3", "Merchant receives all four packets within one settlement window. No chasing, no Venmo IOU thread.");
+          break;
+        case 2:
+          A.bob.balance = 30; A.eli.balance = 30; A.gus.balance = 30; A.sara.balance = 30;
+          A.merchant.balance = 0;
+          this.phase = 0; this.cool = 80;
+          break;
+      }
+    },
+  };
+
+  // — Scene 14: Native ETH escrow (Patty ↔ Abhi) ——————————————————————————
+  // Plain ETH msg.value path through AgentEscrow.sol — no ERC-20 approve,
+  // no token contract, no wrapped assets. Works on any EVM chain out of
+  // the box. The cheapest, most universal A2A settlement primitive.
+  SCENES.ethEscrow = {
+    id: "ethEscrow",
+    name: "Native ETH escrow",
+    short: "14",
+    desc: "<strong>Patty</strong> hires <strong>Abhi</strong> for a one-shot inference job priced in <strong>ETH</strong>. No ERC-20 dance — funds lock via <code>createPayment{value: 0.05 ether}(...)</code> in <code>AgentEscrow.sol</code>. Abhi delivers, Patty confirms, escrow releases. Universal across EVM chains.",
+    enter() {
+      setVisible(["bob", "eli", "escrow"]);
+      A.bob.balance = 0.50; A.bob.spent = 0; A.bob.dailyCap = 1.0;       // ETH this scene
+      A.eli.balance = 0.00;
+      A.escrow.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 60;
+      this.gasEth = 0.0008;
+      setCaption("step 1 / 6", "<strong>Patty</strong> commissions <strong>Abhi</strong> for a custom inference job. Quote: <code>0.05 ETH</code>. No tokens, no wrappers.");
+      log(`<span class="info">eth-escrow</span> scene loaded · 0.05 ETH job`);
+    },
+    layout() {
+      A.bob.pos    = { x: W * 0.20, y: H * 0.5 };
+      A.eli.pos    = { x: W * 0.80, y: H * 0.5 };
+      A.escrow.pos = { x: W * 0.50, y: H * 0.78 };
+    },
+    drawOverlay(ctx, W, H) {
+      // ETH plaque next to the escrow
+      const x = A.escrow.pos.x, y = A.escrow.pos.y + A.escrow.radius + 22;
+      ctx.fillStyle = "rgba(231, 233, 238, 0.85)";
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      const locked = A.escrow.balance.toFixed(3);
+      ctx.fillText(`locked: ${locked} ETH`, x, y);
+      ctx.fillStyle = "rgba(138, 147, 163, 0.85)";
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      ctx.fillText(`createPayment{value: msg.value}`, x, y + 14);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      switch (this.phase) {
+        case 0:
+          emit("eli", "bob", { kind: "data", label: "signed quote · 0.05 ETH", speed: 0.022 });
+          log(`Abhi → Patty: PQ-signed quote · 0.05 ETH`);
+          this.phase = 1; this.cool = 70;
+          setCaption("step 2 / 6", "Abhi returns a PQ-signed quote. Patty's agent verifies, accepts, prepares the on-chain tx.");
+          break;
+        case 1:
+          // Patty's wallet pays gas + sends value into escrow
+          emit("bob", "escrow", { kind: "offer", label: "createPayment 0.05 ETH", amount: 0.05, speed: 0.018,
+            onArrive: () => {
+              A.bob.balance -= (0.05 + this.gasEth);
+              A.escrow.balance += 0.05;
+            }});
+          log(`Patty → Escrow: <code>createPayment(reqId, abhi, 100, 10){value: 0.05 ETH}</code>`);
+          this.phase = 2; this.cool = 90;
+          setCaption("step 3 / 6", `<strong>0.05 ETH</strong> locks in escrow. <code>msg.value</code> sits in <code>payments[reqId].amount</code>. Patty also paid ~${this.gasEth.toFixed(4)} ETH gas.`);
+          break;
+        case 2:
+          emit("eli", "bob", { kind: "data", label: "deliverable", speed: 0.020 });
+          log(`Abhi → Patty: deliverable (inference result + receipt)`);
+          this.phase = 3; this.cool = 80;
+          setCaption("step 4 / 6", "Abhi performs the work off-chain, delivers the result with a PQ-signed receipt. Patty verifies output and signature.");
+          break;
+        case 3:
+          emit("bob", "escrow", { kind: "request", label: "confirmPayment", speed: 0.022,
+            onArrive: () => {
+              emit("escrow", "eli", { kind: "proof", label: "released 0.05 ETH", speed: 0.022,
+                onArrive: () => {
+                  A.escrow.balance -= 0.05; A.eli.balance += 0.05;
+                  jobs++; jobsEl.textContent = jobs;
+                }});
+            }});
+          log(`Patty → Escrow: <code>confirmPayment(reqId)</code> · funds release to Abhi`);
+          this.phase = 4; this.cool = 130;
+          setCaption("step 5 / 6", "Patty calls <code>confirmPayment()</code>. Escrow's internal accounting transitions <code>State.Locked → State.Released</code> and <code>.call{value: amount}(\"\")</code> forwards ETH to Abhi.");
+          break;
+        case 4:
+          setCaption("step 6 / 6", `Done. Abhi's wallet credited <code>0.05 ETH</code> directly — no token approval, no wrap, no relayer. Same primitive on Ethereum, Base, Lux, Arbitrum.`);
+          log(`<span class="ok">handover complete</span> · Abhi balance ${A.eli.balance.toFixed(3)} ETH`);
+          this.phase = 5; this.cool = 220;
+          break;
+        case 5:
+          A.bob.balance = 0.50; A.eli.balance = 0;
+          A.escrow.balance = 0;
+          this.phase = 0; this.cool = 80;
+          break;
+      }
+    },
+  };
+
+  // — Scene 15: Subscription with auto-cap ————————————————————————————————
+  // Patty subscribes to Abhi's API. Monthly renewal hits inside her
+  // standing cap; cancellation = revoke the cap. Pattern composes from
+  // primitives the protocol already has: x402 + per-period gas budget.
+  SCENES.subscribe = {
+    id: "subscribe",
+    name: "Subscription",
+    short: "15",
+    desc: "<strong>Patty</strong> subscribes to <strong>Abhi</strong>'s API at 2 USDC/period under a 10 USDC/month cap. Renewal hits automatically while inside the cap, fails loudly outside. Cancel = revoke the cap; no merchant trust, no zombie charges.",
+    enter() {
+      setVisible(["bob", "eli"]);
+      A.bob.balance = 20; A.bob.spent = 0; A.bob.dailyCap = 10;
+      A.eli.balance = 0;
+      this.layout();
+      this.phase = 0; this.cool = 40;
+      this.period = 0; this.maxPeriods = 6;
+      this.fee = 2.0;
+      setCaption("step 1 / 3", "Subscription opens. Cap: 10 USDC / month. Fee: 2 USDC / period. Patty's agent will renew autonomously while inside the cap.");
+      log(`<span class="info">subscribe</span> scene loaded · cap 10 USDC / 5 periods`);
+    },
+    layout() {
+      A.bob.pos = { x: W * 0.28, y: H * 0.5 };
+      A.eli.pos = { x: W * 0.72, y: H * 0.5 };
+    },
+    drawOverlay(ctx, W, H) {
+      // bar between Patty + Abhi showing cap usage
+      const x = (A.bob.pos.x + A.eli.pos.x) / 2, y = (A.bob.pos.y + A.eli.pos.y) / 2 - 90;
+      const w = 240, h = 22;
+      const pct = Math.min(1, A.bob.spent / Math.max(0.01, A.bob.dailyCap));
+      ctx.fillStyle = "rgba(13, 16, 21, 0.85)";
+      ctx.strokeStyle = "rgba(35, 39, 47, 0.9)";
+      ctx.fillRect(x - w/2, y, w, h);
+      ctx.strokeRect(x - w/2, y, w, h);
+      ctx.fillStyle = pct < 0.85 ? "rgba(125, 211, 252, 0.7)" : "rgba(248, 113, 113, 0.85)";
+      ctx.fillRect(x - w/2 + 2, y + 2, (w - 4) * pct, h - 4);
+      ctx.fillStyle = "rgba(231, 233, 238, 0.85)";
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`monthly cap ${A.bob.spent.toFixed(2)} / ${A.bob.dailyCap.toFixed(0)} USDC · period ${this.period} / ${this.maxPeriods}`, x, y - 6);
+    },
+    tick(t) {
+      if (this.cool > 0) { this.cool--; return; }
+      if (this.period >= this.maxPeriods) {
+        if (!this.cancelled) {
+          this.cancelled = true;
+          log(`<span class="warn">subscription cancelled</span> · cap revoked`);
+          setCaption("step 3 / 3", "Patty's agent revokes the cap. No further charges possible. Demonstrates the cancel path: no merchant cooperation needed.");
+        }
+        if (t % 240 === 0) { A.bob.balance = 20; A.bob.spent = 0; A.eli.balance = 0;
+                             this.period = 0; this.cancelled = false; }
+        return;
+      }
+      if (A.bob.spent + this.fee > A.bob.dailyCap) {
+        log(`<span class="hot">renewal blocked</span> · would exceed monthly cap`);
+        setCaption("step 3 / 3", "Renewal would breach Patty's monthly cap → blocked at the wallet layer, never reaches Abhi.");
+        this.period = this.maxPeriods;
+        this.cool = 60;
+        return;
+      }
+      emit("bob", "eli", { kind: "stream", label: `${this.fee.toFixed(2)} USDC`, amount: this.fee, speed: 0.026,
+        onArrive: () => {
+          A.bob.balance -= this.fee; A.bob.spent += this.fee;
+          A.eli.balance += this.fee;
+          jobs++; jobsEl.textContent = jobs;
+        }});
+      log(`renewal #${this.period + 1} · 2.00 USDC → Abhi`);
+      if (this.period === 0) setCaption("step 2 / 3", "First period charges immediately. Subsequent renewals hit on schedule, gated by the cap.");
+      this.period++;
+      this.cool = 90;
+    },
+  };
+
+  // ─── scene registry & switcher ────────────────────────────────────────────
+  const SCENE_ORDER = [
+    "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
+    "taxi", "cafe", "delivery", "split", "ethEscrow", "subscribe",
+  ];
+
+  function selectScene(id, force) {
+    if (!force && currentScene && currentScene.id === id) return;
+    packets.length = 0;
+    clearApprovals();
+    sceneTick = 0;
+    for (const s of ALL) { s.state = "active"; s.spent = 0; }
+    currentScene = SCENES[id];
+    // Initialize ctl bag from declared controls (if any) before enter() runs.
+    currentScene.ctl = {};
+    (currentScene.controls || []).forEach(c => {
+      currentScene.ctl[c.id] = c.default;
+    });
+    currentScene.enter();
+    // header
+    document.getElementById("sceneTitle").textContent = currentScene.name;
+    document.getElementById("sceneDesc").innerHTML   = currentScene.desc;
+    document.querySelectorAll("#sceneBar button").forEach(b => {
+      b.classList.toggle("active", b.dataset.scene === id);
+    });
+    renderControls(currentScene);
+    renderWhyCard(currentScene);
+    log(`<span class="seg">— scene switched to <strong>${currentScene.name}</strong> —</span>`);
+  }
+
+  function renderControls(scene) {
+    const panel = document.getElementById("ctlPanel");
+    const list = document.getElementById("ctlList");
+    const resetBtn = document.getElementById("ctlReset");
+    if (!scene.controls || scene.controls.length === 0) {
+      panel.style.display = "none";
+      list.innerHTML = "";
+      return;
+    }
+    panel.style.display = "block";
+    list.innerHTML = "";
+    scene.controls.forEach(c => {
+      const row = document.createElement("div"); row.className = "ctl-row";
+      if (c.type === "range") {
+        const valSpan = `<span class="val" id="ctl-${c.id}-val">${scene.ctl[c.id].toFixed(c.decimals ?? 2)}${c.suffix ? " " + c.suffix : ""}</span>`;
+        row.innerHTML = `<label>${c.label}${valSpan}</label>
+          <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${scene.ctl[c.id]}" id="ctl-${c.id}">`;
+        list.appendChild(row);
+        const input = row.querySelector("input");
+        input.addEventListener("input", () => {
+          const v = parseFloat(input.value);
+          scene.ctl[c.id] = v;
+          document.getElementById(`ctl-${c.id}-val`).textContent =
+            v.toFixed(c.decimals ?? 2) + (c.suffix ? " " + c.suffix : "");
+          if (scene.onCtlChange) scene.onCtlChange(c.id, v);
+        });
+      } else if (c.type === "preset") {
+        row.innerHTML = `<label>${c.label}</label><div class="preset" id="preset-${c.id}"></div>`;
+        list.appendChild(row);
+        const wrap = row.querySelector(".preset");
+        c.options.forEach(opt => {
+          const b = document.createElement("button");
+          b.textContent = opt.label;
+          b.dataset.value = opt.value;
+          if (opt.value === scene.ctl[c.id]) b.classList.add("active");
+          b.addEventListener("click", () => {
+            scene.ctl[c.id] = opt.value;
+            wrap.querySelectorAll("button").forEach(x => x.classList.toggle("active", x.dataset.value === opt.value));
+            if (scene.onCtlChange) scene.onCtlChange(c.id, opt.value);
+            if (opt.applyPreset && scene.applyPreset) scene.applyPreset(opt.value);
+          });
+          wrap.appendChild(b);
+        });
+      }
+    });
+    resetBtn.onclick = () => selectScene(scene.id, true);
+  }
+
+  function renderWhyCard(scene) {
+    // Detach any previous why-card before re-mounting.
+    const existing = document.getElementById("whyCard");
+    if (existing) existing.remove();
+    if (!scene.why) return;
+    const aside = document.querySelector("aside.left");
+    const card = document.createElement("div");
+    card.className = "why-card";
+    card.id = "whyCard";
+    card.innerHTML = `<span class="lbl">why this matters</span>${scene.why}`;
+    // Insert directly after the scene description block.
+    const descEl = document.getElementById("sceneDesc");
+    descEl.parentNode.insertBefore(card, descEl.nextSibling);
+  }
+
+  // Group scene-bar by category for readability.
+  // Group A: protocol primitives. Group B: real-world use cases.
+  // Group C: meta (PQ proposal, stack).
+  const SCENE_GROUPS = [
+    { label: "primitives", ids: ["x402","escrow","stream","auction","hitl","fanout","oracle"] },
+    { label: "use cases",  ids: ["taxi","cafe","delivery","split","ethEscrow","subscribe"] },
+    { label: "meta",       ids: ["pq","stack"] },
+  ];
+
+  const sceneBar = document.getElementById("sceneBar");
+  SCENE_GROUPS.forEach((group, gi) => {
+    if (gi > 0) {
+      const sep = document.createElement("span"); sep.className = "sep"; sceneBar.appendChild(sep);
+    }
+    group.ids.forEach(id => {
+      const s = SCENES[id];
+      if (!s) return;
+      const b = document.createElement("button");
+      b.dataset.scene = id;
+      b.innerHTML = `<span class="num">${s.short}</span>${s.name}`;
+      b.title = s.name + " — " + group.label;
+      b.addEventListener("click", () => selectScene(id));
+      sceneBar.appendChild(b);
+    });
+  });
+
+  // "Add yours" CTA — invites developers to contribute a scene.
+  {
+    const sep = document.createElement("span"); sep.className = "sep"; sceneBar.appendChild(sep);
+    const b = document.createElement("a");
+    b.href = "https://github.com/kcolbchain/switchboard/blob/main/web/SCENES.md";
+    b.target = "_blank"; b.rel = "noopener";
+    b.className = "add-scene";
+    b.innerHTML = `<span class="plus">＋</span>Add your scene`;
+    b.title = "Open the scene template — fork, drop in, send a PR";
+    sceneBar.appendChild(b);
+  }
+
+  // ─── split-flap "switchboard" title ───────────────────────────────────────
+  const SB_CHARS = "abcdefghijklmnopqrstuvwxyz0123456789-_/";
+  const sbTitle = document.getElementById("sbTitle");
+  const sbLetters = Array.from(sbTitle.querySelectorAll(".sb-char"));
+  const sbTargets = sbLetters.map(c => c.dataset.target);
+  let sbBusy = false;
+
+  function scrambleSwitchboard() {
+    if (sbBusy) return;
+    sbBusy = true;
+    let remaining = sbLetters.length;
+    sbLetters.forEach((c, i) => {
+      c.classList.remove("settled");
+      c.classList.add("scrambling");
+      let ticks = 6 + i * 2;             // stagger: left settles first
+      const id = setInterval(() => {
+        if (--ticks <= 0) {
+          c.textContent = sbTargets[i];
+          c.classList.remove("scrambling");
+          c.classList.add("settled");
+          clearInterval(id);
+          if (--remaining === 0) sbBusy = false;
+          return;
+        }
+        c.textContent = SB_CHARS[Math.floor(Math.random() * SB_CHARS.length)];
+      }, 45);
+    });
+  }
+  sbTitle.addEventListener("mouseenter", scrambleSwitchboard);
+
+  // ─── go ───────────────────────────────────────────────────────────────────
+  resize();
+  selectScene("x402");
+  scrambleSwitchboard();
+  requestAnimationFrame(step);
+})();
+</script>
+
+</body>
+</html>
