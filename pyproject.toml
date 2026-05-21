@@ -1,6 +1,6 @@
 [project]
 name = "switchboard-agents"
-version = "0.1.0"
+version = "0.1.1"
 description = "Programmable payments for AI agents — HTTP/402, on-chain escrow, ZAP binary wire, gas budgets, nonce safety."
 readme = "README.md"
 requires-python = ">=3.11"
