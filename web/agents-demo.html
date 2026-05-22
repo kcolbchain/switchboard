@@ -2844,40 +2844,69 @@
     id: "trip",
     name: "Multi-city trip",
     short: "16",
-    desc: "<strong>Patty</strong> and <strong>Abhi</strong>'s travel agent threads a 5-city work trip — Tokyo → LA → Goa → London → Dubai. It books taxis, flights, hotels with a <strong>rolling escrow</strong>: per-night release, rebook on slip, final release at checkout. The humans work in the air; the logistics happen between cities.",
-    why: "Booking sites today need full payment up-front and refunds are a discretionary middleman. <strong>Rolling escrow</strong> matches actual stay: the hotel sees funds nightly, the rider sees funds on each leg, and an interrupted itinerary (delayed flight, swap city) rebooks against the same budget without a refund cycle.",
+    desc: "<strong>Patty</strong> and <strong>Abhi</strong> ride together. Their travel agent threads a 5-city work trip — Tokyo → LA → Goa → London → Dubai → loop. It books taxis, flights, hotels with a <strong>rolling escrow</strong>: per-night release, rebook on slip, final release at checkout. The humans work in the air; the logistics happen between cities.",
+    why: "Booking sites today need full payment up-front and refunds are a discretionary middleman. <strong>Rolling escrow</strong> matches actual stay: the hotel sees funds nightly, the airline on departure, and an interrupted itinerary (delayed flight, swap city) rebooks against the same budget without a refund cycle. Patty + Abhi never sign a card; they ride and work.",
     controls: [
-      { id: "budget", type: "range", label: "Trip budget", min: 2000, max: 15000, step: 100, default: 6500, suffix: "USDC", decimals: 0 },
-      { id: "nightly", type: "range", label: "Hotel / night",  min: 80,   max: 600,   step: 5,   default: 220,  suffix: "USDC", decimals: 0 },
-      { id: "nights",  type: "range", label: "Nights / city",  min: 1,    max: 4,     step: 1,   default: 2,    suffix: "n",    decimals: 0 },
+      { id: "budget",   type: "range", label: "Trip budget",  min: 2000, max: 15000, step: 100, default: 6500, suffix: "USDC", decimals: 0 },
+      { id: "nightly",  type: "range", label: "Hotel / night",  min: 80,   max: 600,   step: 5,   default: 220,  suffix: "USDC", decimals: 0 },
+      { id: "nights",   type: "range", label: "Nights / city",  min: 1,    max: 4,     step: 1,   default: 2,    suffix: "n",    decimals: 0 },
+      { id: "delayRate",type: "range", label: "Delay frequency",min: 0,    max: 100,   step: 5,   default: 35,   suffix: "%",    decimals: 0 },
     ],
     cities: [
-      { id: "tokyo",  label: "Tokyo",   x: 0.85, y: 0.22, hue: 350, flag: "🗼" },
-      { id: "la",     label: "LA",      x: 0.18, y: 0.30, hue: 210, flag: "🌴" },
-      { id: "goa",    label: "Goa",     x: 0.66, y: 0.66, hue:  28, flag: "🏖" },
-      { id: "london", label: "London",  x: 0.42, y: 0.20, hue: 130, flag: "🎡" },
-      { id: "dubai",  label: "Dubai",   x: 0.74, y: 0.50, hue:  50, flag: "🌆" },
+      { id: "tokyo",  label: "Tokyo",   x: 0.86, y: 0.24, hue: 350, flag: "🗼" },
+      { id: "la",     label: "LA",      x: 0.15, y: 0.32, hue: 210, flag: "🌴" },
+      { id: "goa",    label: "Goa",     x: 0.66, y: 0.68, hue:  28, flag: "🏖" },
+      { id: "london", label: "London",  x: 0.40, y: 0.20, hue: 130, flag: "🎡" },
+      { id: "dubai",  label: "Dubai",   x: 0.72, y: 0.52, hue:  50, flag: "🌆" },
     ],
+    // ── prices & timing (single source of truth) ──
+    PRICES: { taxi: 25, flight: 380, rebookFee: 18 },
+    DURATIONS: { atCity: 50, booking: 70, flight: 320, landing: 60, taxiToHotel: 60, night: 90, checkout: 40 },
     enter() {
       setVisible(["bob", "eli", "escrow"]);
-      A.bob.balance = this.ctl.budget * 0.6;
-      A.eli.balance = this.ctl.budget * 0.4;
+      A.bob.balance = this.ctl.budget * 0.55;
+      A.eli.balance = this.ctl.budget * 0.45;
       A.escrow.balance = 0;
       this.layout();
-      // 0=at-city,1=taxi-to-airport,2=flight,3=hotel-stay → loop
-      this.phase = 0; this.cool = 60;
-      this.legIdx = 0;          // 0 → cities.length-1, then back to 0
+      // phases:
+      //  0 atCity        (settled at current city pin)
+      //  1 booking       (taxi + flight escrow packets fly out)
+      //  2 boarding      (agents move to airport — slight east shift)
+      //  3 inFlight      (plane animates along bezier; agents ride with it)
+      //  4 landed        (release taxi+flight escrow; agents teleport to next city)
+      //  5 taxiToHotel   (agents slide from pin to hotel block)
+      //  6 staying       (per-night release × ctl.nights)
+      //  7 checkout      (loop reset; advance leg)
+      this.phase = 0; this.cool = this.DURATIONS.atCity;
+      this.legIdx = 0;
       this.planeT = 0;
+      this.boardT = 0;
+      this.hotelT = 0;
       this.nightsLeft = this.ctl.nights;
-      this.nightlyReleased = 0;
       this.totalSpent = 0;
       this.atCity = this.cities[0];
       this.nextCity = this.cities[1];
-      A.bob.pos = { x: this.atCity.x * W - 18, y: this.atCity.y * H };
-      A.eli.pos = { x: this.atCity.x * W + 18, y: this.atCity.y * H };
-      A.escrow.pos = { x: W * 0.5, y: H * 0.9 };
-      setCaption("event 1 · planning", `Trip planned: <strong>${this.cities.map(c => c.label).join(" → ")}</strong>. Budget ${this.ctl.budget} USDC. Agent will book per-city.`);
-      log(`<span class="info">trip</span> scene loaded · ${this.cities.length} cities · ${this.ctl.budget} USDC budget`);
+      this._hotelBooked = false;
+      this._delayed = false;
+      this._delayHandled = false;
+      this._workingPulse = 0;
+      A.bob.pos = this._slotAt(this.atCity, "L");
+      A.eli.pos = this._slotAt(this.atCity, "R");
+      A.escrow.pos = { x: W * 0.5, y: H * 0.92 };
+      setCaption("event 1 · plan", `<strong>${this.cities.map(c => c.label).join(" → ")}</strong>. Budget <strong>${this.ctl.budget} USDC</strong>. Agent handles everything; Patty + Abhi work.`);
+      log(`<span class="info">trip</span> scene loaded · ${this.cities.length} cities · ${this.ctl.budget} USDC budget · delay rate ${this.ctl.delayRate}%`);
+    },
+    _slotAt(city, slot) {
+      // Position helper: "L" puts agent 16px left of pin center, "R" 16px right.
+      // Used both at city pins and at the hotel block.
+      const x = city.x * W + (slot === "L" ? -16 : 16);
+      const y = city.y * H + 26;          // just below the pin square
+      return { x, y };
+    },
+    _hotelSlot(city, slot) {
+      const hx = city.x * W + 44;
+      const hy = city.y * H + 8;
+      return { x: hx + (slot === "L" ? 0 : 26), y: hy };
     },
     layout() {
       A.escrow.pos = { x: W * 0.5, y: H * 0.92 };
@@ -2958,10 +2987,11 @@
       }
     },
     drawOverlay(ctx, W, H) {
-      // HUD pinned bottom-left of the canvas (caption is top-left)
-      const x = 20, y = H - 132, w = 200, h = 116;
+      // HUD pinned bottom-left of the canvas (caption is top-left, stats are
+      // top-right; bottom-left is the only clear corner).
+      const x = 20, y = H - 156, w = 218, h = 140;
       ctx.save();
-      ctx.fillStyle = "rgba(13, 16, 21, 0.7)";
+      ctx.fillStyle = "rgba(13, 16, 21, 0.72)";
       ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
       ctx.lineWidth = 1;
       ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
@@ -2969,49 +2999,98 @@
       ctx.font = "9px ui-monospace, Menlo, monospace";
       ctx.fillText("ITINERARY", x + 8, y + 12);
 
+      const phaseNames = ["at city","booking","boarding","in flight","landed","→ hotel","staying","checkout"];
       ctx.fillStyle = "rgba(231, 233, 238, 0.95)";
       ctx.font = "11px ui-monospace, Menlo, monospace";
-      const phases = ["at city", "→ airport", "in flight", "hotel stay"];
-      ctx.fillText(`leg ${this.legIdx + 1}/${this.cities.length}  ${this.atCity ? this.atCity.label : ""}` +
-                   (this.phase === 2 || this.phase === 1 ? ` → ${this.nextCity.label}` : ""),
+      ctx.fillText(`leg ${this.legIdx + 1}/${this.cities.length}  ${this.atCity.label}` +
+                   ((this.phase >= 1 && this.phase <= 3) ? ` → ${this.nextCity.label}` : ""),
                    x + 8, y + 28);
-      ctx.fillText(`phase  ${phases[this.phase] || "—"}`, x + 8, y + 42);
-      ctx.fillText(`escrow ${A.escrow.balance.toFixed(0)} USDC`, x + 8, y + 56);
-      ctx.fillText(`spent  ${this.totalSpent.toFixed(0)} / ${this.ctl.budget}`, x + 8, y + 70);
+      ctx.fillText(`phase   ${phaseNames[this.phase] || "—"}`, x + 8, y + 42);
+      ctx.fillText(`escrow  ${A.escrow.balance.toFixed(0)} USDC`, x + 8, y + 56);
+      ctx.fillText(`spent   ${this.totalSpent.toFixed(0)} / ${this.ctl.budget}`, x + 8, y + 70);
       // budget bar
       const pct = Math.min(1, this.totalSpent / this.ctl.budget);
       ctx.fillStyle = "rgba(35, 39, 47, 0.8)";
       ctx.fillRect(x + 8, y + 82, w - 16, 6);
       ctx.fillStyle = pct < 0.85 ? "rgba(52, 211, 153, 0.85)" : "rgba(248, 113, 113, 0.85)";
       ctx.fillRect(x + 8, y + 82, (w - 16) * pct, 6);
+      // contextual third line
       ctx.fillStyle = "rgba(138, 147, 163, 0.85)";
       ctx.font = "9px ui-monospace, Menlo, monospace";
-      ctx.fillText(`nights here  ${this.ctl.nights - this.nightsLeft}/${this.ctl.nights}` +
-                   (this.phase === 3 ? "  · night release fires" : ""),
-                   x + 8, y + 102);
+      let line3 = "";
+      if (this.phase === 3) {
+        const eta = Math.max(0, Math.ceil((1 - this.planeT) * 10));
+        line3 = `ETA  ${eta} min` + (this._delayed ? "  · ⚠ delay detected" : "");
+      } else if (this.phase === 6) {
+        line3 = `nights  ${this.ctl.nights - this.nightsLeft}/${this.ctl.nights}  · per-night ${this.ctl.nightly} USDC`;
+      } else if (this.phase === 1) {
+        line3 = "agent locking taxi + flight";
+      } else if (this.phase === 4) {
+        line3 = "escrow → taxi + flight released";
+      } else if (this.phase === 7) {
+        line3 = "checkout · final release fired";
+      } else {
+        line3 = "—";
+      }
+      ctx.fillText(line3, x + 8, y + 102);
+      // routes summary
+      ctx.fillStyle = "rgba(96, 165, 250, 0.85)";
+      ctx.font = "9px ui-monospace, Menlo, monospace";
+      ctx.fillText(`route  ${this.cities.map(c => c.label).join(" → ")}`, x + 8, y + 122);
       ctx.restore();
 
-      // Animate the plane between cities during flight
-      if (this.phase === 2 && this.atCity && this.nextCity) {
-        const ax = this.atCity.x * W, ay = this.atCity.y * H;
-        const bx = this.nextCity.x * W, by = this.nextCity.y * H;
-        const cx = (ax + bx) / 2, cy = Math.min(ay, by) - 90;     // arc
-        const t01 = Math.min(1, this.planeT);
-        const u = 1 - t01;
-        const px = u * u * ax + 2 * u * t01 * cx + t01 * t01 * bx;
-        const py = u * u * ay + 2 * u * t01 * cy + t01 * t01 * by;
-        // tangent for heading
-        const tx = 2 * u * (cx - ax) + 2 * t01 * (bx - cx);
-        const ty = 2 * u * (cy - ay) + 2 * t01 * (by - cy);
-        this.drawPlane(ctx, px, py, Math.atan2(ty, tx));
+      // Animate the plane between cities during flight; Patty + Abhi
+      // positions follow it so they're visibly aboard.
+      if (this.phase === 3 && this.atCity && this.nextCity) {
+        const p = this._planeXY();
+        this.drawPlane(ctx, p.x, p.y, p.heading);
         // dashed remaining path
         ctx.save();
         ctx.strokeStyle = "rgba(125, 211, 252, 0.4)";
         ctx.setLineDash([4, 6]); ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+        ctx.moveTo(p.x, p.y); ctx.lineTo(this.nextCity.x * W, this.nextCity.y * H); ctx.stroke();
         ctx.setLineDash([]); ctx.restore();
       }
+
+      // "Working" indicator during the stay phase — small typing dots above
+      // both agents to imply they're getting actual work done.
+      if (this.phase === 6) {
+        this._workingPulse = (this._workingPulse + 0.08) % (Math.PI * 2);
+        [A.bob, A.eli].forEach((a, idx) => {
+          for (let i = 0; i < 3; i++) {
+            const phase = this._workingPulse + i * 0.6 + idx * 0.3;
+            const alpha = 0.4 + 0.5 * Math.sin(phase);
+            ctx.fillStyle = `rgba(231, 233, 238, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(a.pos.x - 8 + i * 8, a.pos.y - a.radius - 14, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        });
+        // tiny "WORKING" tag near the hotel block
+        const hx = this.atCity.x * W + 44, hy = this.atCity.y * H + 32;
+        ctx.fillStyle = "rgba(52, 211, 153, 0.92)";
+        ctx.fillRect(hx, hy, 64, 12);
+        ctx.strokeStyle = inkColor(); ctx.lineWidth = 1.2;
+        ctx.strokeRect(hx, hy, 64, 12);
+        ctx.fillStyle = inkColor();
+        ctx.font = "bold 8px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("WORKING", hx + 32, hy + 9);
+      }
+    },
+    _planeXY() {
+      const ax = this.atCity.x * W, ay = this.atCity.y * H;
+      const bx = this.nextCity.x * W, by = this.nextCity.y * H;
+      // arc above the path; great-circle-ish for visual appeal
+      const cx = (ax + bx) / 2, cy = Math.min(ay, by) - 90;
+      const t01 = Math.min(1, this.planeT);
+      const u = 1 - t01;
+      const px = u * u * ax + 2 * u * t01 * cx + t01 * t01 * bx;
+      const py = u * u * ay + 2 * u * t01 * cy + t01 * t01 * by;
+      const tx = 2 * u * (cx - ax) + 2 * t01 * (bx - cx);
+      const ty = 2 * u * (cy - ay) + 2 * t01 * (by - cy);
+      return { x: px, y: py, heading: Math.atan2(ty, tx) };
     },
     drawPlane(ctx, x, y, heading) {
       ctx.save();
@@ -3030,109 +3109,168 @@
       ctx.restore();
     },
     advanceLeg() {
-      // arrive at nextCity; advance the leg index
+      // arrive at nextCity; advance the leg index. agent positions update.
       this.legIdx++;
       if (this.legIdx >= this.cities.length) {
-        // trip complete — reset for loop
+        // Trip complete — loop reset
         this.legIdx = 0;
         this.totalSpent = 0;
-        A.bob.balance = this.ctl.budget * 0.6;
-        A.eli.balance = this.ctl.budget * 0.4;
+        A.bob.balance = this.ctl.budget * 0.55;
+        A.eli.balance = this.ctl.budget * 0.45;
         A.escrow.balance = 0;
-        log(`<span class="ok">trip complete</span> · loop`);
+        log(`<span class="ok">trip complete · loop reset</span>`);
       }
       this.atCity = this.cities[this.legIdx];
       this.nextCity = this.cities[(this.legIdx + 1) % this.cities.length];
       this.nightsLeft = this.ctl.nights;
-      A.bob.pos = { x: this.atCity.x * W - 18, y: this.atCity.y * H };
-      A.eli.pos = { x: this.atCity.x * W + 18, y: this.atCity.y * H };
+      this._hotelBooked = false;
+      this._delayed = false;
+      this._delayHandled = false;
+      A.bob.pos = this._slotAt(this.atCity, "L");
+      A.eli.pos = this._slotAt(this.atCity, "R");
     },
     tick(t) {
       if (this.cool > 0) { this.cool--; return; }
+      const D = this.DURATIONS;
       switch (this.phase) {
-        case 0: {
-          // At city — agent books taxi to airport for next leg
-          const taxiFare = 25;
-          emit("bob", "escrow", { kind: "offer", label: `taxi · ${taxiFare}`,
-            amount: taxiFare, speed: 0.022,
-            onArrive: () => {
-              A.bob.balance -= taxiFare; A.escrow.balance += taxiFare;
-              this.totalSpent += taxiFare;
-            }});
-          log(`${this.atCity.label} · agent books taxi to airport (${taxiFare} USDC escrow)`);
-          setCaption("event · taxi", `<strong>${this.atCity.label}</strong> — agent locks <strong>${taxiFare} USDC</strong> escrow for the taxi to airport.`);
-          this.phase = 1; this.cool = 100;
+        case 0: {                             // at city — settled, plan next leg
+          setCaption(`leg ${this.legIdx + 1} · settled`,
+            `In <strong>${this.atCity.label}</strong>. Agent prepares the next leg → <strong>${this.nextCity.label}</strong>.`);
+          this.phase = 1; this.cool = D.atCity;
           break;
         }
-        case 1: {
-          // Flight booked — escrow it
-          const flight = 380;
-          emit("eli", "escrow", { kind: "offer", label: `flight · ${flight}`,
-            amount: flight, speed: 0.022,
+        case 1: {                             // booking taxi + flight in one beat each
+          const taxi = this.PRICES.taxi;
+          emit("bob", "escrow", { kind: "offer", label: `taxi · ${taxi}`,
+            amount: taxi, speed: 0.026,
             onArrive: () => {
-              A.eli.balance -= flight; A.escrow.balance += flight;
-              this.totalSpent += flight;
+              A.bob.balance -= taxi; A.escrow.balance += taxi;
+              this.totalSpent += taxi;
             }});
-          log(`${this.atCity.label} → ${this.nextCity.label} · flight (${flight} USDC escrow)`);
-          setCaption("event · flight booked", `Flight ${this.atCity.label} → <strong>${this.nextCity.label}</strong> locked at <strong>380 USDC</strong>. Boarding next.`);
-          this.phase = 2; this.cool = 80; this.planeT = 0;
-          break;
-        }
-        case 2: {
-          // In flight — animate plane; mid-flight, agent books hotel + taxi at destination
-          this.planeT += 0.0045;
-          // mid-flight side-effect: hotel booked
-          if (!this._hotelBooked && this.planeT > 0.4) {
-            const hotelTotal = this.ctl.nightly * this.ctl.nights;
-            emit("bob", "escrow", { kind: "offer", label: `hotel · ${hotelTotal}`,
-              amount: hotelTotal, speed: 0.028,
+          const flight = this.PRICES.flight;
+          setTimeout(() => {
+            emit("eli", "escrow", { kind: "offer", label: `flight · ${flight}`,
+              amount: flight, speed: 0.026,
               onArrive: () => {
-                A.bob.balance -= hotelTotal; A.escrow.balance += hotelTotal;
-                this.totalSpent += hotelTotal;
+                A.eli.balance -= flight; A.escrow.balance += flight;
+                this.totalSpent += flight;
               }});
-            log(`mid-flight · agent books hotel in ${this.nextCity.label} (${this.ctl.nights} nights × ${this.ctl.nightly} = ${hotelTotal} USDC escrow)`);
-            setCaption("event · mid-flight booking", `Mid-flight, agent reserves the <strong>${this.nextCity.label}</strong> hotel for ${this.ctl.nights} nights — funds locked, per-night release on arrival.`);
+          }, 360);
+          log(`${this.atCity.label} · agent locks taxi (${taxi}) + flight (${flight}) USDC`);
+          setCaption("event · booking", `Agent locks <strong>taxi (${taxi})</strong> and <strong>flight (${flight})</strong> in escrow. Patty + Abhi don't sign anything.`);
+          this.phase = 2; this.cool = D.booking;
+          break;
+        }
+        case 2: {                             // boarding — short slide east to "airport"
+          this.boardT = Math.min(1, this.boardT + 0.04);
+          const fromL = this._slotAt(this.atCity, "L"), fromR = this._slotAt(this.atCity, "R");
+          // ease both toward the plane's take-off point
+          const departX = this.atCity.x * W;
+          const departY = this.atCity.y * H - 8;
+          A.bob.pos = { x: lerp(fromL.x, departX - 8, this.boardT), y: lerp(fromL.y, departY, this.boardT) };
+          A.eli.pos = { x: lerp(fromR.x, departX + 8, this.boardT), y: lerp(fromR.y, departY, this.boardT) };
+          if (this.boardT >= 1) {
+            this.boardT = 0; this.planeT = 0;
+            // Roll for delay this leg
+            this._delayed = (Math.random() * 100 < this.ctl.delayRate);
+            log(`${this.atCity.label} → ${this.nextCity.label} · boarding complete · ` +
+                (this._delayed ? `<span class="warn">delay rolled</span>` : `on time`));
+            setCaption("event · departing", `Boarding complete. Plane lifts off ${this.atCity.label} → <strong>${this.nextCity.label}</strong>.${this._delayed ? " <span style=\"color:var(--warn)\">(delayed roll)</span>" : ""}`);
+            this.phase = 3; this.cool = 20;
+          }
+          break;
+        }
+        case 3: {                             // in flight — plane animates; agents ride it
+          const speed = this._delayed ? 0.0035 : 0.0050;
+          this.planeT += speed;
+          const p = this._planeXY();
+          // Place Patty + Abhi on the plane (one slot offset each)
+          A.bob.pos = { x: p.x - 14, y: p.y + 4 };
+          A.eli.pos = { x: p.x + 14, y: p.y + 4 };
+          // Mid-flight: pre-book the destination hotel
+          if (!this._hotelBooked && this.planeT > 0.38) {
+            const total = this.ctl.nightly * this.ctl.nights;
+            emit("bob", "escrow", { kind: "offer", label: `hotel · ${total}`,
+              amount: total, speed: 0.030,
+              onArrive: () => {
+                A.bob.balance -= total; A.escrow.balance += total;
+                this.totalSpent += total;
+              }});
+            log(`mid-flight · hotel ${this.nextCity.label} ${this.ctl.nights}n × ${this.ctl.nightly} = ${total} USDC escrowed`);
+            setCaption("event · mid-flight book", `Mid-flight, agent reserves <strong>${this.nextCity.label}</strong> hotel for ${this.ctl.nights} nights = <strong>${total} USDC</strong>.`);
             this._hotelBooked = true;
           }
-          // arrive
+          // Delay branch: agent rebooks for late check-in
+          if (this._delayed && !this._delayHandled && this.planeT > 0.62) {
+            const fee = this.PRICES.rebookFee;
+            emit("bob", "escrow", { kind: "offer", label: `rebook · ${fee}`,
+              amount: fee, speed: 0.032,
+              onArrive: () => {
+                A.bob.balance -= fee; A.escrow.balance += fee;
+                this.totalSpent += fee;
+              }});
+            log(`<span class="warn">flight delay detected</span> · agent rebooks hotel for late check-in (+${fee} USDC fee)`);
+            setCaption("event · delay → rebook", `Flight slipped. Agent re-shops the hotel for late check-in; <strong>+${fee} USDC</strong> rebook fee from the same escrow budget — no refund cycle.`);
+            this._delayHandled = true;
+          }
           if (this.planeT >= 1) {
-            this._hotelBooked = false;
-            // release taxi + flight escrow on landing
-            const taxi = 25, flight = 380;
-            emit("escrow", "bob", { kind: "proof", label: `taxi+flight released`, speed: 0.024,
-              onArrive: () => { A.escrow.balance -= (taxi + flight); }});
-            log(`${this.nextCity.label} landing · taxi + flight escrow released (${taxi + flight} USDC)`);
+            // Release taxi + flight escrow on landing (released to the providers
+            // conceptually; we visually return them to bob to keep agents tight)
+            const released = this.PRICES.taxi + this.PRICES.flight;
+            emit("escrow", "bob", { kind: "proof", label: `taxi+flight released`, speed: 0.028,
+              onArrive: () => { A.escrow.balance -= released; }});
+            log(`${this.nextCity.label} · landed · taxi+flight escrow released (${released} USDC)`);
             this.advanceLeg();
-            setCaption("event · arrived", `Landed in <strong>${this.atCity.label}</strong>. Hotel pre-booked; per-night escrow will fire each day of stay.`);
-            this.phase = 3; this.cool = 60;
+            setCaption("event · landed", `Touched down in <strong>${this.atCity.label}</strong>. Taxi + flight tranches released to providers; hotel waits.`);
+            this.phase = 4; this.cool = D.landing;
           }
           break;
         }
-        case 3: {
-          // Hotel stay — fire one night-release per cool cycle until nightsLeft = 0
+        case 4: {                             // landed → ground taxi → hotel
+          setCaption("event · ground taxi", `Ground taxi pre-booked. Agents en route to the hotel.`);
+          this.hotelT = 0;
+          this.phase = 5; this.cool = D.taxiToHotel;
+          break;
+        }
+        case 5: {                             // animate agents to the hotel block
+          this.hotelT = Math.min(1, this.hotelT + 0.03);
+          const fromL = this._slotAt(this.atCity, "L"), fromR = this._slotAt(this.atCity, "R");
+          const toL = this._hotelSlot(this.atCity, "L"), toR = this._hotelSlot(this.atCity, "R");
+          A.bob.pos = { x: lerp(fromL.x, toL.x, this.hotelT), y: lerp(fromL.y, toL.y, this.hotelT) };
+          A.eli.pos = { x: lerp(fromR.x, toR.x, this.hotelT), y: lerp(fromR.y, toR.y, this.hotelT) };
+          if (this.hotelT >= 1) {
+            setCaption("event · checked in", `Checked in to the <strong>${this.atCity.label}</strong> hotel. Per-night release will fire each day of stay.`);
+            this.phase = 6; this.cool = D.night;
+          }
+          break;
+        }
+        case 6: {                             // hotel stay — per-night release
           if (this.nightsLeft > 0) {
             const nightly = this.ctl.nightly;
             emit("escrow", "bob", { kind: "proof", label: `night · ${nightly}`,
-              amount: nightly, speed: 0.030,
+              amount: nightly, speed: 0.034,
               onArrive: () => {
                 A.escrow.balance -= nightly;
-                // the night payment goes to the hotel — not tracked as an
-                // agent for visual brevity; conceptually escrow → hotel.
-                this.nightlyReleased += nightly;
                 jobs++; jobsEl.textContent = jobs;
               }});
-            log(`${this.atCity.label} · night ${this.ctl.nights - this.nightsLeft + 1}/${this.ctl.nights} release · ${nightly} USDC`);
-            setCaption("event · night release", `<strong>${this.atCity.label}</strong> night ${this.ctl.nights - this.nightsLeft + 1}/${this.ctl.nights} · ${nightly} USDC released from escrow to the hotel.`);
+            const nightNum = this.ctl.nights - this.nightsLeft + 1;
+            log(`${this.atCity.label} · night ${nightNum}/${this.ctl.nights} · ${nightly} USDC released`);
+            setCaption(`night ${nightNum}/${this.ctl.nights}`,
+              `<strong>${this.atCity.label}</strong> · night ${nightNum} release. Hotel sees funds today's stay-worth; rest stays in escrow for tomorrow.`);
             this.nightsLeft--;
-            this.cool = 90;
+            this.cool = D.night;
           } else {
-            // checkout — move to next city
-            log(`${this.atCity.label} · checkout · final release`);
-            setCaption("event · checkout", `Checkout from <strong>${this.atCity.label}</strong>. Final tranche cleared. Agent prepares next leg.`);
-            // if we've cycled through all cities, the loop reset already
-            // handled at the top of advanceLeg().
-            this.phase = 0; this.cool = 60;
+            this.phase = 7; this.cool = D.checkout;
           }
+          break;
+        }
+        case 7: {                             // checkout — agents back to city pin
+          setCaption("event · checkout", `Checked out of <strong>${this.atCity.label}</strong>. Final tranche cleared; agent prepares next leg.`);
+          log(`${this.atCity.label} · checkout · all hotel tranches released`);
+          // Agents return to the city pin
+          A.bob.pos = this._slotAt(this.atCity, "L");
+          A.eli.pos = this._slotAt(this.atCity, "R");
+          this.phase = 0; this.cool = D.atCity;
           break;
         }
       }
