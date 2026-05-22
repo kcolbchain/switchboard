@@ -101,7 +101,7 @@ def test_scramble_logic_present(lab_script: str) -> None:
 
 EXPECTED_SCENES = [
     "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
-    "taxi", "cafe", "delivery", "split", "ethEscrow", "subscribe",
+    "taxi", "cafe", "delivery", "split", "ethEscrow", "subscribe", "trip",
 ]
 
 
@@ -340,3 +340,29 @@ def test_taxi_is_elaborated(lab_script: str) -> None:
     for needle in ("wp = [", "wpTotal", "drawTaxi", "posAtDistance",
                    "fareBase", "perKm", "tripKm", "RIDE TELEMETRY"):
         assert needle in taxi_block, f"taxi scene missing: {needle}"
+
+
+def test_cafe_walkby(lab_script: str) -> None:
+    """Café scene reworked: Patty walks past, agent pre-orders ahead, coffee ready on arrival."""
+    cafe_block = lab_script.split("SCENES.cafe = {")[1].split("SCENES.delivery")[0]
+    # named after Work-In-Progress (real shop)
+    assert "Work-In-Progress" in cafe_block, "café scene must reference Work-In-Progress"
+    # walking + brewing both modeled
+    for needle in ("walkT", "brewT", "brewing", "ready", "handover",
+                   "proximity ping", "Siolim"):
+        assert needle in cafe_block, f"café walk-by missing: {needle}"
+
+
+def test_venues_renamed(lab_script: str) -> None:
+    """Real Siolim venues named in the registry."""
+    assert 'name: "Work-In-Progress POS"' in lab_script
+    assert 'name: "Eat Pray Love POS"' in lab_script
+
+
+def test_trip_scene(lab_script: str) -> None:
+    """Multi-city trip scene: 5 cities, rolling escrow, plane animation."""
+    trip_block = lab_script.split("SCENES.trip = {")[1].split("// ─── scene registry")[0]
+    for needle in ("tokyo", "la", "goa", "london", "dubai",
+                   "drawPlane", "planeT", "nightsLeft", "advanceLeg",
+                   "ITINERARY", "rolling escrow"):
+        assert needle in trip_block, f"trip scene missing: {needle}"
