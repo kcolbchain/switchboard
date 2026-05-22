@@ -360,9 +360,17 @@ def test_venues_renamed(lab_script: str) -> None:
 
 
 def test_trip_scene(lab_script: str) -> None:
-    """Multi-city trip scene: 5 cities, rolling escrow, plane animation."""
+    """Multi-city trip scene: 5 cities, rolling escrow, plane animation,
+    agents ride the plane, delay/rebook branch, working pulse during stay."""
     trip_block = lab_script.split("SCENES.trip = {")[1].split("// ─── scene registry")[0]
+    # core scaffolding
     for needle in ("tokyo", "la", "goa", "london", "dubai",
                    "drawPlane", "planeT", "nightsLeft", "advanceLeg",
                    "ITINERARY", "rolling escrow"):
         assert needle in trip_block, f"trip scene missing: {needle}"
+    # polish — agents on the plane, delay branch, working state, slot helpers
+    for needle in ("_slotAt", "_hotelSlot", "_planeXY",
+                   "boarding", "_delayed", "rebook",
+                   "WORKING", "_workingPulse",
+                   "delayRate"):
+        assert needle in trip_block, f"trip-scene polish element missing: {needle}"
