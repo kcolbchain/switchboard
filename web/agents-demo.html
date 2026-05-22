@@ -498,6 +498,12 @@
   let speedMul = 1;                        // playback rate (0.5 / 1 / 2 / 4)
   let stepWatcher = null;                  // { startPhase, scene } when stepping
 
+  // Tunable: how slowly the default "1×" runs. Per user feedback the
+  // earlier value of 1.0 advanced phases faster than captions could be
+  // read. 1.6 = ~60% slower for the same scene; 2× / 4× speed selector
+  // still divides through this.
+  const BASE_PACING = 1.6;
+
   function resize() {
     const rect = cvs.parentElement.getBoundingClientRect();
     W = rect.width; H = rect.height;
@@ -753,20 +759,21 @@
       }
     }
 
-    // hover: signature ring — solid arc segments, hard transitions
+    // hover: soft single-hue glow halo + thin outline ring. Light + calm;
+    // no multicolor rainbow. Uses the agent's own hue so the identity
+    // marker is still legible.
     if (hovered) {
-      const ang = (tick * 0.04) % (Math.PI * 2);
-      const sigR = r + 16;
-      for (let i = 0; i < 16; i++) {
-        const a0 = ang + (i / 16) * Math.PI * 2;
-        const a1 = ang + ((i + 0.7) / 16) * Math.PI * 2;
-        const hue = (a.hue + i * 22) % 360;
-        ctx.beginPath(); ctx.arc(x, y, sigR, a0, a1);
-        ctx.strokeStyle = hsla(hue, 85, 55, 0.85);
-        ctx.lineWidth = 5;
-        ctx.lineCap = "butt";
-        ctx.stroke();
-      }
+      const haloR = r + 28;
+      const halo = ctx.createRadialGradient(x, y, r + 1, x, y, haloR);
+      halo.addColorStop(0,    hsla(a.hue, 80, 65, 0.45));
+      halo.addColorStop(0.55, hsla(a.hue, 80, 65, 0.18));
+      halo.addColorStop(1,    hsla(a.hue, 80, 65, 0.00));
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(x, y, haloR, 0, Math.PI * 2); ctx.fill();
+      // crisp accent ring just outside the body
+      ctx.strokeStyle = hsla(a.hue, 85, 65, 0.65);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x, y, r + 5, 0, Math.PI * 2); ctx.stroke();
     }
 
     // body — dispatch on shape; each body draws its own hard-edged shadow
@@ -820,6 +827,26 @@
       ctx.fillStyle = "rgba(138, 147, 163, 0.85)";
       ctx.font = "10px ui-monospace, Menlo, monospace";
       ctx.fillText(a.role, x, y + r + 30);
+    }
+
+    // Balance chip — opt-in per scene via showBalanceChips. Renders
+    // "12.50 USDC" style pill below the name so live balances are
+    // visible without tooltip pin.
+    if (currentScene && currentScene.showBalanceChips
+        && a.kind !== "contract" && a.wallet !== "contract") {
+      const currency = currentScene.currency || "USDC";
+      const decimals = currency === "ETH" ? 3 : 2;
+      const txt = `${a.balance.toFixed(decimals)} ${currency}`;
+      ctx.font = "10px ui-monospace, Menlo, monospace";
+      const tw = ctx.measureText(txt).width;
+      const chipW = tw + 12, chipH = 14, chipX = x - chipW / 2, chipY = y + r + 22;
+      ctx.fillStyle = hsla(a.hue, 30, a.state === "passive" ? 15 : 22, 0.85);
+      ctx.fillRect(chipX, chipY, chipW, chipH);
+      ctx.strokeStyle = inkColor(); ctx.lineWidth = 1;
+      ctx.strokeRect(chipX, chipY, chipW, chipH);
+      ctx.fillStyle = "rgba(231, 233, 238, 0.92)";
+      ctx.textAlign = "center";
+      ctx.fillText(txt, x, chipY + 10);
     }
   }
 
@@ -1055,18 +1082,38 @@
   }
 
   // ─── tick loop ────────────────────────────────────────────────────────────
-  // speedMul is applied by running the scene's tick() multiple times per
-  // animation frame at 2× / 4×, or skipping every other frame at 0.5×.
-  let _halfStep = false;
+  // Accumulator-based pacing. Effective scene-tick rate per frame is
+  // speedMul / BASE_PACING. Each animation frame we add that to an
+  // accumulator; when it crosses 1, we fire one scene.tick(); extra
+  // integer crossings fire additional inner loops (so 2× / 4× really
+  // does run faster, not just looks-faster).
+  let _pacingAccum = 0;
   function step() {
-    let advance = !paused;
-    if (advance && speedMul < 1) { _halfStep = !_halfStep; advance = _halfStep; }
-    const innerLoops = (paused || speedMul < 1) ? 1 : Math.max(1, Math.round(speedMul));
-    if (advance) { tick++; sceneTick++; }
+    let advance = false;
+    let innerLoops = 0;
+    if (!paused) {
+      _pacingAccum += speedMul / BASE_PACING;
+      if (_pacingAccum >= 1) {
+        innerLoops = Math.floor(_pacingAccum);
+        _pacingAccum -= innerLoops;
+        advance = true;
+      }
+    }
+    if (advance) { tick += innerLoops; sceneTick += innerLoops; }
     sceneTimeEl.textContent = (sceneTick / 60).toFixed(1) + "s";
     tickEl.textContent = tick;
     if (currentScene && typeof currentScene.phase === "number") {
       phaseLabel.textContent = String(currentScene.phase);
+    }
+
+    // Balance chips — only on scenes that opt in (use-case scenes set
+    // showBalanceChips: true). Renders a small "<balance> <currency>"
+    // pill below each visible agent's name, separate from the tooltip
+    // so values are visible at a glance.
+    if (currentScene && currentScene.showBalanceChips && !paused) {
+      // pill drawing is done inside drawAgent via a draw-time hook so it
+      // composes with the existing label; we don't need to do anything
+      // extra here. This guard is for future per-frame work.
     }
 
     // glow phase + auto state
@@ -2056,6 +2103,8 @@
     id: "taxi",
     name: "Taxi handover",
     short: "10",
+    currency: "USDC",
+    showBalanceChips: true,
     desc: "<strong>Patty</strong>'s agent books a ride. It RFQs <strong>Dispatch</strong>, picks <strong>Sai</strong> on price+ETA, validates the signed quote, locks funds in escrow, watches the GPS handshake at pickup, rides A→B along city streets, and releases on dropoff. Zero taps once policy is set.",
     why: "Ride-share apps today are three-trust black boxes: rider trusts the app, app trusts the driver, driver trusts the app to pay. An <strong>agentic</strong> ride routes through one on-chain escrow — the driver knows funds exist before they roll; the rider's funds release only when both agents confirm the dropoff. No middleman, no chargeback, signed receipt.",
     controls: [
@@ -2316,6 +2365,8 @@
     id: "cafe",
     name: "Café walk-by",
     short: "11",
+    currency: "USDC",
+    showBalanceChips: true,
     desc: "<strong>Patty</strong> is walking down the street in <strong>Siolim</strong>. Her agent detects <strong>Work-In-Progress</strong> (Abhi's coffee place) coming up, pings the shop, picks a latte off the signed menu, pays 4.50 USDC, and the shop starts brewing while Patty's still walking. By the time she arrives, the cup is ready — zero wait at the counter.",
     why: "This is the everyday case for agentic payments. The shop's queue today serializes the slowest step (human + payment) onto the customer's wait time. Letting the buyer's <em>agent</em> handle the order + payment in parallel with the walk collapses the wait to zero — the human never queues, the shop never idles. Same primitives as scene 01 (x402 paywall), no special infrastructure.",
     enter() {
@@ -2504,6 +2555,8 @@
     id: "delivery",
     name: "Food delivery",
     short: "12",
+    currency: "USDC",
+    showBalanceChips: true,
     desc: "Three-party flow. <strong>Patty</strong> orders from <strong>Tridib</strong>'s restaurant <em>Eat Pray Love</em> (Siolim); <strong>Kiran</strong> (rider) takes the delivery slot. Escrow splits the payout: food to Tridib on pickup, tip to Kiran on delivery confirm.",
     enter() {
       setVisible(["bob", "gus", "rest", "rider", "escrow"]);
@@ -2604,6 +2657,8 @@
     id: "split",
     name: "Split bill",
     short: "13",
+    currency: "USDC",
+    showBalanceChips: true,
     desc: "Four friends — <strong>Patty</strong>, <strong>Abhi</strong>, <strong>Tridib</strong>, and <strong>Sara</strong> — sit down at the Bistro. Each agent computes its share against the merchant's signed line-items and pays simultaneously. The merchant sees one settlement event: a complete bill. Drop-in for fintech apps that today require a single payer + chase-up later.",
     enter() {
       setVisible(["bob", "eli", "gus", "sara", "merchant"]);
@@ -2679,6 +2734,8 @@
     id: "ethEscrow",
     name: "Native ETH escrow",
     short: "14",
+    currency: "ETH",
+    showBalanceChips: true,
     desc: "<strong>Patty</strong> hires <strong>Abhi</strong> for a one-shot inference job priced in <strong>ETH</strong>. No ERC-20 dance — funds lock via <code>createPayment{value: 0.05 ether}(...)</code> in <code>AgentEscrow.sol</code>. Abhi delivers, Patty confirms, escrow releases. Universal across EVM chains.",
     enter() {
       setVisible(["bob", "eli", "escrow"]);
@@ -2769,6 +2826,8 @@
     id: "subscribe",
     name: "Subscription",
     short: "15",
+    currency: "USDC",
+    showBalanceChips: true,
     desc: "<strong>Patty</strong> subscribes to <strong>Abhi</strong>'s API at 2 USDC/period under a 10 USDC/month cap. Renewal hits automatically while inside the cap, fails loudly outside. Cancel = revoke the cap; no merchant trust, no zombie charges.",
     enter() {
       setVisible(["bob", "eli"]);
@@ -2844,6 +2903,8 @@
     id: "trip",
     name: "Multi-city trip",
     short: "16",
+    currency: "USDC",
+    showBalanceChips: true,
     desc: "<strong>Patty</strong> and <strong>Abhi</strong> ride together. Their travel agent threads a 5-city work trip — Tokyo → LA → Goa → London → Dubai → loop. It books taxis, flights, hotels with a <strong>rolling escrow</strong>: per-night release, rebook on slip, final release at checkout. The humans work in the air; the logistics happen between cities.",
     why: "Booking sites today need full payment up-front and refunds are a discretionary middleman. <strong>Rolling escrow</strong> matches actual stay: the hotel sees funds nightly, the airline on departure, and an interrupted itinerary (delayed flight, swap city) rebooks against the same budget without a refund cycle. Patty + Abhi never sign a card; they ride and work.",
     controls: [
