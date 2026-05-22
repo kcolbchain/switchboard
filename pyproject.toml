@@ -49,6 +49,9 @@ web3 = [
 zap = [
     "zap-py",
 ]
+pq = [
+    "liboqs-python>=0.10",
+]
 
 [project.urls]
 Homepage = "https://github.com/kcolbchain/switchboard"
