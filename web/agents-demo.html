@@ -120,7 +120,7 @@
     background: rgba(96, 165, 250, 0.08); text-decoration: none; }
   .scene-bar .add-scene .plus { color: var(--accent); font-size: 14px; line-height: 1; }
 
-  .layout { display: grid; grid-template-columns: 250px 1fr 300px;
+  .layout { display: grid; grid-template-columns: 260px 1fr;
     height: calc(100vh - 95px); gap: 0; }
 
   aside { padding: 16px 16px 18px 16px; overflow-y: auto;
@@ -279,7 +279,44 @@
     background: var(--panel); border: 1px solid var(--border); font-size: 10px;
     color: var(--muted); margin: 0 3px; font-family: var(--mono); }
 
-  .tt { position: fixed; pointer-events: none; z-index: 50;
+  /* Right-edge tooltip panel — pinned inside the stage, always visible.
+     Replaces the floating cursor tooltip on desktop. */
+  .tt-panel { position: absolute; top: 18px; right: 18px; bottom: 90px;
+    width: 248px; z-index: 3; pointer-events: none;
+    background: var(--glass);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid var(--glass-stroke);
+    border-radius: 10px; padding: 12px 14px;
+    overflow-y: auto;
+    font-size: 11.5px; color: var(--fg);
+    display: flex; flex-direction: column;
+    transition: border-color 0.15s; }
+  .tt-panel.has-agent { border-color: rgba(96, 165, 250, 0.4); }
+  .tt-empty { display: flex; flex-direction: column; gap: 4px; padding-top: 8px;
+    text-align: center; font-family: var(--mono); font-size: 11px; }
+  .tt-empty .muted { color: var(--muted); }
+  .tt-empty .muted-2 { color: var(--muted-2); font-size: 10px; }
+  .tt-body .ttname { font-weight: 600; font-size: 13px; color: var(--fg); }
+  .tt-body .ttrole { color: var(--muted); font-size: 10.5px; margin-bottom: 8px; }
+  .tt-body .ttrow { display: flex; gap: 5px; margin-bottom: 6px; flex-wrap: wrap; }
+  .tt-body .ttkind { display: inline-block; padding: 1px 7px; border-radius: 999px;
+    border: 1px solid currentColor; font-size: 9.5px; font-family: var(--mono);
+    line-height: 1.5; letter-spacing: 0.02em; }
+  .tt-body .ttdesc { color: var(--muted); font-size: 10.5px; margin-bottom: 8px;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(255,255,255,0.06); }
+  .tt-body .ttproto-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+  .tt-body .ttproto { display: inline-block; padding: 1px 6px; border-radius: 3px;
+    background: rgba(96, 165, 250, 0.12); border: 1px solid rgba(96, 165, 250, 0.28);
+    color: var(--info); font-size: 10px; font-family: var(--mono); }
+  .tt-body dl { margin: 0; display: grid; grid-template-columns: auto 1fr;
+    gap: 3px 10px; font-family: var(--mono); font-size: 10.5px; }
+  .tt-body dt { color: var(--muted-2); }
+  .tt-body dd { margin: 0; color: var(--fg); text-align: right; }
+
+  /* Legacy floating tooltip — only used on phone (where stage area is smaller
+     and a right-panel doesn't fit). Hidden on desktop. */
+  .tt { display: none; position: fixed; pointer-events: none; z-index: 50;
     background: rgba(13, 16, 21, 0.88);
     backdrop-filter: blur(14px) saturate(150%);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
@@ -365,7 +402,10 @@
     .caption { top: 102px; left: 12px; right: 12px;
       max-width: none; padding: 10px 12px; font-size: 12px;
       max-height: 32vh; overflow-y: auto; }
-    .tt { min-width: 200px; max-width: 240px; font-size: 11px; padding: 10px 12px; }
+    /* Phone: hide the right tooltip panel, fall back to floating tooltip
+       that follows the touch point. */
+    .tt-panel { display: none; }
+    .tt { display: block; min-width: 200px; max-width: 240px; font-size: 11px; padding: 10px 12px; }
     .theme-btn { width: 36px; height: 36px; font-size: 16px; }
     .log-toggle, .info-toggle { width: 36px; height: 36px; font-size: 16px; }
     .scene-bar button { padding: 8px 12px; font-size: 12px; min-height: 36px; }
@@ -452,6 +492,9 @@
       Rip this apart — every scene is ~150 lines.
       <a href="https://github.com/kcolbchain/switchboard/blob/main/web/SCENES.md" target="_blank" rel="noopener" style="color:var(--accent)">scene template ↗</a>
     </div>
+
+    <h2>Activity log</h2>
+    <div id="log" class="log"></div>
   </aside>
 
   <div class="stage">
@@ -480,12 +523,15 @@
     <div class="caption" id="caption">
       <span class="step">—</span> Pick a scene above to begin.
     </div>
-  </div>
 
-  <aside class="right">
-    <h2>Activity log</h2>
-    <div id="log" class="log"></div>
-  </aside>
+    <aside id="ttPanel" class="tt-panel">
+      <div class="tt-empty" id="ttEmpty">
+        <div class="muted">tap or hover an agent</div>
+        <div class="muted-2">balances, protocols, signature, last seen</div>
+      </div>
+      <div class="tt-body" id="ttBody" hidden></div>
+    </aside>
+  </div>
 
 </div>
 
@@ -517,10 +563,10 @@
   let stepWatcher = null;                  // { startPhase, scene } when stepping
 
   // Tunable: how slowly the default "1×" runs. Per user feedback the
-  // earlier value of 1.0 advanced phases faster than captions could be
-  // read. 1.6 = ~60% slower for the same scene; 2× / 4× speed selector
-  // still divides through this.
-  const BASE_PACING = 1.6;
+  // earlier 1.0 was too fast to read captions; bumped to 2.0 so each
+  // event sits on screen for ~1.5-3s depending on its `cool` value.
+  // 2× / 4× speed selector still divides through this.
+  const BASE_PACING = 2.0;
 
   function resize() {
     const rect = cvs.parentElement.getBoundingClientRect();
@@ -1239,11 +1285,11 @@
 
     draw();
 
-    // Tooltip + inspector live-refresh while a hover is active. Without this,
-    // a tooltip pinned on Patty wouldn't show her balance dropping after a
-    // packet arrives — the user would have to wiggle the mouse to refresh.
-    // No throttle — innerHTML update of a small card is cheap and the user
-    // wants instant feedback.
+    // Tooltip + inspector live-refresh. updateTtPanel() runs every frame so
+    // the pinned right-edge panel reflects current balances even when the
+    // user isn't moving the mouse. Floating-tooltip fallback for phone only
+    // updates while hovering.
+    updateTtPanel();
     if (hoverId) {
       renderInfo();
       if (lastClient.x >= 0) renderTooltip(lastClient.x, lastClient.y);
@@ -1277,7 +1323,68 @@
     `;
   }
 
+  const ttPanel = document.getElementById("ttPanel");
+  const ttEmpty = document.getElementById("ttEmpty");
+  const ttBody  = document.getElementById("ttBody");
+
+  function buildTooltipBody(a) {
+    const walletDesc = {
+      agentic:  "autonomous · auto-pays under cap",
+      hitl:     "human approves spend above threshold",
+      treasury: "rebalancer · fleet funder",
+      provider: "sells work · receives payments",
+      oracle:   "sells signed data · pay-per-query",
+      contract: "on-chain settlement contract",
+    }[a.wallet] || "";
+    const kindLabel = {
+      human: "human-operated",
+      bot:   "autonomous agent",
+      contract: "on-chain contract",
+    }[a.kind] || a.kind;
+    const kindGlyph = { human: "◐", bot: "⬢", contract: "⬡" }[a.kind] || "•";
+    const wColor = walletColor(a.wallet);
+    const protoList = (a.protocols || []).map(p => `<span class="ttproto">${p}</span>`).join("");
+    const lastSeenLabel = a.lastSeen ? `${Math.max(0, tick - a.lastSeen)} ticks ago` : "idle";
+    return `
+      <div class="ttname">${kindGlyph} ${a.name}</div>
+      <div class="ttrole">${a.role}</div>
+      <div class="ttrow">
+        <span class="ttkind" style="color:${wColor};border-color:${wColor}">${a.wallet}</span>
+        <span class="ttkind" style="color:var(--muted)">${kindLabel}</span>
+      </div>
+      <div class="ttdesc">${walletDesc}</div>
+      <div class="ttproto-row">${protoList || '<span class="ttproto" style="opacity:0.5">—</span>'}</div>
+      <dl>
+        <dt>balance</dt><dd>${a.balance.toFixed(2)} USDC</dd>
+        <dt>daily cap</dt><dd>${a.dailyCap.toFixed(0)} USDC</dd>
+        <dt>spent</dt><dd>${a.spent.toFixed(2)} USDC</dd>
+        <dt>state</dt><dd>${a.state}</dd>
+        <dt>sig alg</dt><dd>${a.sigAlg}</dd>
+        <dt>last seen</dt><dd>${lastSeenLabel}</dd>
+        <dt>sig hue</dt><dd>h${a.hue}°</dd>
+      </dl>
+    `;
+  }
+
+  function updateTtPanel() {
+    if (!ttPanel) return;
+    if (!hoverId) {
+      ttPanel.classList.remove("has-agent");
+      ttEmpty.style.display = "flex";
+      ttBody.hidden = true;
+      return;
+    }
+    ttPanel.classList.add("has-agent");
+    ttEmpty.style.display = "none";
+    ttBody.hidden = false;
+    ttBody.innerHTML = buildTooltipBody(A[hoverId]);
+  }
+
   function renderTooltip(clientX, clientY) {
+    // Desktop: writes into the pinned right-edge #ttPanel.
+    // Phone (≤800px): the floating .tt card is used as a fallback because
+    // the right panel is hidden on phone (no room).
+    updateTtPanel();
     if (!hoverId) { ttEl.classList.remove("show"); return; }
     const a = A[hoverId];
     const walletDesc = {
@@ -1660,12 +1767,13 @@
     },
     layout() {
       // Clean placement: Iris on the left, providers stacked vertically on
-      // the right with comfortable spacing, escrow tucked at the bottom.
-      A.iris.pos   = { x: W * 0.22, y: H * 0.5  };
-      A.eli.pos    = { x: W * 0.72, y: H * 0.22 };
-      A.gus.pos    = { x: W * 0.78, y: H * 0.5  };
-      A.hana.pos   = { x: W * 0.72, y: H * 0.78 };
-      A.escrow.pos = { x: W * 0.46, y: H * 0.82 };
+      // the right with comfortable spacing, escrow tucked at the bottom-LEFT
+      // (well clear of Hana, who was previously crowding it).
+      A.iris.pos   = { x: W * 0.22, y: H * 0.42 };
+      A.eli.pos    = { x: W * 0.74, y: H * 0.20 };
+      A.gus.pos    = { x: W * 0.80, y: H * 0.48 };
+      A.hana.pos   = { x: W * 0.74, y: H * 0.76 };
+      A.escrow.pos = { x: W * 0.28, y: H * 0.82 };
     },
     drawOverlay(ctx, W, H) {
       // Show each provider's current bid floating above them.
