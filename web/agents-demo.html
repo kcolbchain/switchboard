@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=yes" />
 <title>agent payments — interactive lab</title>
 <meta name="description" content="Interactive canvas lab of agent-to-agent payment patterns: HTTP-402 paywalls, on-chain escrow, streaming micropayments, AI compute auctions, human-in-the-loop, treasury rebalance, oracle pull." />
 <style>
@@ -218,7 +218,12 @@
     border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px;
     box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.35); }
   canvas { display: block; width: 100%; height: 100%; cursor: crosshair;
-    position: relative; z-index: 1; }
+    position: relative; z-index: 1;
+    /* Stop the browser from intercepting touch as scroll/zoom — the scene
+       loop owns the gesture entirely. */
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none; user-select: none; }
 
   .stats { position: absolute; top: 60px; right: 20px; z-index: 3;
     background: var(--glass);
@@ -350,14 +355,27 @@
     }
     body.info-open aside.left { transform: translateX(0); }
     .info-toggle { display: inline-flex; }
-    .stats { font-size: 9.5px; padding: 4px 10px; gap: 10px;
-      top: 46px; right: 12px; left: auto; }
-    .transport { top: 10px; right: 12px; padding: 3px 6px; }
-    .transport button { width: 26px; height: 26px; font-size: 13px; }
+    .stats { font-size: 10px; padding: 5px 12px; gap: 12px;
+      top: 56px; right: 12px; left: auto; }
+    .transport { top: 10px; right: 12px; padding: 5px 8px; }
+    /* Touch targets bumped to ~40px (Apple HIG min: 44pt) — much easier
+       to tap on a phone than the 26px desktop size. */
+    .transport button { width: 38px; height: 38px; font-size: 16px; }
     .transport .speed { display: none; }     /* save space */
-    .caption { top: 86px; left: 12px; right: 12px;
-      max-width: none; padding: 8px 12px; font-size: 11px; }
-    .tt { min-width: 180px; max-width: 220px; font-size: 10.5px; }
+    .caption { top: 102px; left: 12px; right: 12px;
+      max-width: none; padding: 10px 12px; font-size: 12px;
+      max-height: 32vh; overflow-y: auto; }
+    .tt { min-width: 200px; max-width: 240px; font-size: 11px; padding: 10px 12px; }
+    .theme-btn { width: 36px; height: 36px; font-size: 16px; }
+    .log-toggle, .info-toggle { width: 36px; height: 36px; font-size: 16px; }
+    .scene-bar button { padding: 8px 12px; font-size: 12px; min-height: 36px; }
+    .scene-bar .add-scene { padding: 8px 12px; font-size: 12px; min-height: 36px; }
+    /* Fade-edges on the horizontally-scrolling scene-bar so users
+       discover there's more off-screen. */
+    .scene-bar { position: relative;
+      -webkit-overflow-scrolling: touch;
+      mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+              mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%); }
   }
   /* Drawer toggle buttons hidden by default; shown only on narrow viewports */
   .log-toggle, .info-toggle { display: none;
@@ -618,6 +636,71 @@
     if (!hoverId || !currentScene.onAgentClick) return;
     currentScene.onAgentClick(A[hoverId]);
   });
+
+  // ─── touch handlers (mobile) ──────────────────────────────────────────────
+  // On a phone there's no `mousemove` to drive hover. Treat a single-finger
+  // touch as a "sticky" pointer: tap an agent to inspect (tooltip + ripple +
+  // info panel), drag the finger to move the pointer, tap empty stage to
+  // dismiss. Quick taps (< 250ms with little movement) on an agent fire the
+  // scene's onAgentClick — same as desktop click.
+  let _touchStart = 0, _touchStartXY = { x: 0, y: 0 };
+  function touchPoint(e) {
+    const t = e.touches?.[0] || e.changedTouches?.[0];
+    if (!t) return null;
+    const r = cvs.getBoundingClientRect();
+    return { x: t.clientX - r.left, y: t.clientY - r.top, cx: t.clientX, cy: t.clientY };
+  }
+  cvs.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    const p = touchPoint(e); if (!p) return;
+    mouse.x = p.x; mouse.y = p.y;
+    lastClient.x = p.cx; lastClient.y = p.cy;
+    const prevHover = hoverId;
+    hoverId = pickAgent(p.x, p.y, 14);   // +14px finger fudge
+    if (hoverId && hoverId !== prevHover) {
+      const a = A[hoverId];
+      a._ripples = a._ripples || [];
+      a._ripples.push({ t: 0, r: a.radius });
+    }
+    if (!hoverId) {
+      // tap empty stage → dismiss tooltip
+      ttEl.classList.remove("show");
+    }
+    renderInfo();
+    if (hoverId) renderTooltip(p.cx, p.cy);
+    _touchStart = performance.now();
+    _touchStartXY = { x: p.x, y: p.y };
+  }, { passive: false });
+  cvs.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    const p = touchPoint(e); if (!p) return;
+    mouse.x = p.x; mouse.y = p.y;
+    lastClient.x = p.cx; lastClient.y = p.cy;
+    const prevHover = hoverId;
+    hoverId = pickAgent(p.x, p.y);
+    if (hoverId && hoverId !== prevHover) {
+      const a = A[hoverId];
+      a._ripples = a._ripples || [];
+      a._ripples.push({ t: 0, r: a.radius });
+    }
+    renderInfo();
+    if (hoverId) renderTooltip(p.cx, p.cy);
+    else ttEl.classList.remove("show");
+  }, { passive: false });
+  cvs.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    // Quick tap on an agent = click (delegate to scene)
+    const dt = performance.now() - _touchStart;
+    const p = touchPoint(e);
+    const moved = p ? Math.hypot(p.x - _touchStartXY.x, p.y - _touchStartXY.y) : 0;
+    if (dt < 250 && moved < 10 && hoverId && currentScene.onAgentClick) {
+      currentScene.onAgentClick(A[hoverId]);
+    }
+    // Sticky hover: leave hoverId set so the tooltip stays until next tap
+  }, { passive: false });
+  cvs.addEventListener("touchcancel", () => {
+    /* keep hover sticky on cancel too — only an outside-tap dismisses */
+  });
   window.addEventListener("keydown", e => {
     if (e.code === "Space") { paused = !paused; updateTransportUI(); e.preventDefault(); }
     if (e.key === "r" && currentScene) selectScene(currentScene.id, true);
@@ -648,11 +731,14 @@
   speedSel.addEventListener("change",    () => { speedMul = parseFloat(speedSel.value) || 1; });
   updateTransportUI();
 
-  function pickAgent(x, y) {
+  function pickAgent(x, y, fudge = 0) {
+    // `fudge` widens the hit area; touch handlers pass +14px so fingers
+    // don't miss small agents (octagons + squircles render ~64-72px wide).
     for (const a of ALL) {
       if (!a._visible) continue;
       const dx = x - a.pos.x, dy = y - a.pos.y;
-      if (dx*dx + dy*dy <= (a.radius + 6) * (a.radius + 6)) return a.id;
+      const r = a.radius + 6 + fudge;
+      if (dx*dx + dy*dy <= r * r) return a.id;
     }
     return null;
   }
