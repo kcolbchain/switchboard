@@ -43,6 +43,17 @@ Built and maintained by [kcolbchain](https://kcolbchain.com). Aligned with [Lux 
 | `switchboard/nonce_manager.py` | ✅ shipped (PR [#11](https://github.com/kcolbchain/switchboard/pull/11)) | Client-side **nonce manager** with reorg protection. The thing every shipping agent eventually has to write. |
 | `contracts/AgentEscrow.sol` + `src/payment_protocol.py` | ✅ shipped (PR [#8](https://github.com/kcolbchain/switchboard/pull/8)) | **Trustless escrow** with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI. |
 | `web/` | ✅ shipped (PR [#15](https://github.com/kcolbchain/switchboard/pull/15)) | Side-by-side **explorer** for x402 / MPP / AP2 / Circle / on-chain escrow. The clearest public comparison of agent-payment rails today. |
+| `web/agents-demo.html` + [`SCENES.md`](web/SCENES.md) | ✅ shipped (PR [#39](https://github.com/kcolbchain/switchboard/pull/39), polish [#40](https://github.com/kcolbchain/switchboard/pull/40)) | Interactive **agent-payments lab** — 16 animated scenes covering x402 paywalls, escrow + refund, streaming MPP, AI compute auctions, HITL, treasury rebalance, signed oracle pulls, the PQ envelope proposal, taxi handover, café walk-by, food delivery, split bill, native ETH escrow, subscription, multi-city trip. Single static HTML, no build. |
+
+---
+
+## Try the lab
+
+**Live:** [https://kcolbchain.github.io/switchboard/agents-demo.html](https://kcolbchain.github.io/switchboard/agents-demo.html)
+
+Single-file canvas demo (no build, no deps). Hover any agent for an informatics-rich tooltip; toggle light/dark; step through events with the transport bar (`space` play/pause, `n` step, `r` restart); scrub simulation sliders. Renames map to real places: **Work-In-Progress** is Abhi's coffee shop in Siolim, **Eat Pray Love** is Tridib's restaurant.
+
+The lab is intentionally fork-and-extend friendly: every scene is ~150 lines and follows the contract in [`web/SCENES.md`](web/SCENES.md). The pill bar already has a `+ Add your scene` slot that links to it. PRs welcome.
 
 ---
 
