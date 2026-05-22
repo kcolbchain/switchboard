@@ -679,6 +679,10 @@
     ttEl.classList.remove("show");
   });
   cvs.addEventListener("click", () => {
+    if (currentScene && currentScene._comingSoon && currentScene._url) {
+      window.open(currentScene._url, "_blank", "noopener");
+      return;
+    }
     if (!hoverId || !currentScene.onAgentClick) return;
     currentScene.onAgentClick(A[hoverId]);
   });
@@ -3532,10 +3536,101 @@
     },
   };
 
+  // — Coming-soon placeholder scenes —————————————————————————————————————————
+  // Stub scenes that render a centered "Coming soon" card pointing at the
+  // tracking issue. The pill bar surfaces them under a `soon` group so
+  // visitors see what's planned and have an obvious CTA to contribute.
+  function makeComingSoonScene(opts) {
+    return {
+      id: opts.id, name: opts.name, short: opts.short,
+      desc: opts.desc,
+      enter() {
+        setVisible([]);
+        this.phase = 0; this.cool = 1_000_000;     // never advances
+        setCaption("coming soon", opts.caption);
+        log(`<span class="info">${opts.id}</span> · coming soon — see <a href="${opts.url}" target="_blank">${opts.label}</a>`);
+      },
+      tick() { /* no-op */ },
+      drawOverlay(ctx, W, H) {
+        const cx = W / 2, cy = H / 2;
+        const cw = Math.min(440, W - 80), ch = 180;
+        // hard-shadow brutalist card
+        ctx.save();
+        ctx.fillStyle = shadowInk();
+        ctx.fillRect(cx - cw/2 + 5, cy - ch/2 + 5, cw, ch);
+        ctx.fillStyle = "rgba(96, 165, 250, 0.12)";
+        ctx.fillRect(cx - cw/2, cy - ch/2, cw, ch);
+        ctx.strokeStyle = inkColor(); ctx.lineWidth = 3;
+        ctx.strokeRect(cx - cw/2, cy - ch/2, cw, ch);
+        // tag stripe
+        ctx.fillStyle = "rgba(96, 165, 250, 0.85)";
+        ctx.fillRect(cx - cw/2, cy - ch/2, cw, 22);
+        ctx.strokeStyle = inkColor(); ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - cw/2, cy - ch/2, cw, 22);
+        ctx.fillStyle = inkColor();
+        ctx.font = "bold 11px ui-monospace, Menlo, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText("COMING SOON", cx, cy - ch/2 + 15);
+        // title
+        ctx.fillStyle = "rgba(231, 233, 238, 0.95)";
+        ctx.font = "bold 24px -apple-system, system-ui, sans-serif";
+        ctx.fillText(opts.title, cx, cy - 10);
+        // sub
+        ctx.fillStyle = "rgba(138, 147, 163, 0.95)";
+        ctx.font = "13px -apple-system, system-ui, sans-serif";
+        ctx.fillText(opts.subtitle, cx, cy + 14);
+        // CTA pill
+        ctx.fillStyle = "rgba(125, 211, 252, 0.9)";
+        ctx.fillRect(cx - 80, cy + 36, 160, 26);
+        ctx.strokeStyle = inkColor(); ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - 80, cy + 36, 160, 26);
+        ctx.fillStyle = inkColor();
+        ctx.font = "bold 11px ui-monospace, Menlo, monospace";
+        ctx.fillText(opts.cta + "  →", cx, cy + 53);
+        ctx.restore();
+      },
+      onAgentClick() { window.open(opts.url, "_blank", "noopener"); },
+      // Stage-level click → open the issue URL
+      _comingSoon: true, _url: opts.url,
+    };
+  }
+
+  SCENES.mermaid_soon = makeComingSoonScene({
+    id: "mermaid_soon", name: "soon · mermaid", short: "17",
+    desc: "<strong>Coming soon.</strong> Each scene gets a synced mermaid sequence diagram next to the canvas; nodes highlight as the scene's phase advances. Tracked on switchboard issue #47 — pick it up as a contributor.",
+    caption: "Mermaid diagrams synced with every scene's phase. Contribute via <a href='https://github.com/kcolbchain/switchboard/issues/47' target='_blank'>switchboard#47</a>.",
+    title: "Mermaid diagrams · synced",
+    subtitle: "Sequence diagrams that highlight with the animation.",
+    cta: "Open issue #47",
+    label: "switchboard#47",
+    url: "https://github.com/kcolbchain/switchboard/issues/47",
+  });
+  SCENES.simulator_soon = makeComingSoonScene({
+    id: "simulator_soon", name: "soon · simulator", short: "18",
+    desc: "<strong>Coming soon.</strong> A scene-builder for the lab — pick a template, currency, parameters; output a URL-shareable scenario config. Tracked on switchboard issue #48.",
+    caption: "Scene-builder: pick template, currency, params → URL-shareable config. Contribute via <a href='https://github.com/kcolbchain/switchboard/issues/48' target='_blank'>switchboard#48</a>.",
+    title: "switchboard-simulator",
+    subtitle: "Compose scenes with currencies + parameters.",
+    cta: "Open issue #48",
+    label: "switchboard#48",
+    url: "https://github.com/kcolbchain/switchboard/issues/48",
+  });
+  SCENES.oracleGame_soon = makeComingSoonScene({
+    id: "oracleGame_soon", name: "soon · oracle game", short: "19",
+    desc: "<strong>Coming soon.</strong> A protocol-tuning + adversarial + compose game for the new <a href='https://github.com/kcolbchain/escrow-oracles' target='_blank'>escrow-oracles</a> network. Tracked on escrow-oracles issue #7.",
+    caption: "Tradeoff explorer + adversarial scenarios + oracle-pipeline composer for the new escrow-oracles network. Contribute via <a href='https://github.com/kcolbchain/escrow-oracles/issues/7' target='_blank'>escrow-oracles#7</a>.",
+    title: "escrow-oracle game",
+    subtitle: "Tune the protocol, adversarial scenarios, compose oracles.",
+    cta: "Open issue #7",
+    label: "escrow-oracles#7",
+    url: "https://github.com/kcolbchain/escrow-oracles/issues/7",
+  });
+
   // ─── scene registry & switcher ────────────────────────────────────────────
   const SCENE_ORDER = [
     "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
     "taxi", "cafe", "delivery", "split", "ethEscrow", "subscribe", "trip",
+    "mermaid_soon", "simulator_soon", "oracleGame_soon",
   ];
 
   function selectScene(id, force) {
@@ -3630,8 +3725,9 @@
   // Group C: meta (PQ proposal, stack).
   const SCENE_GROUPS = [
     { label: "primitives", ids: ["x402","escrow","stream","auction","hitl","fanout","oracle"] },
-    { label: "use cases",  ids: ["taxi","cafe","delivery","split","ethEscrow","subscribe"] },
+    { label: "use cases",  ids: ["taxi","cafe","delivery","split","ethEscrow","subscribe","trip"] },
     { label: "meta",       ids: ["pq","stack"] },
+    { label: "soon",       ids: ["mermaid_soon","simulator_soon","oracleGame_soon"] },
   ];
 
   const sceneBar = document.getElementById("sceneBar");
