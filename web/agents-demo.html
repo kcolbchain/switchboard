@@ -279,9 +279,41 @@
     background: var(--panel); border: 1px solid var(--border); font-size: 10px;
     color: var(--muted); margin: 0 3px; font-family: var(--mono); }
 
+  /* Bottom mermaid strip — flow diagram synced with the scene's phase.
+     Hidden when the active scene declares no mermaid graph; auto-hides on
+     phone (no room). */
+  .mer-strip { position: absolute; left: 18px; right: 282px; bottom: 18px;
+    height: 168px; z-index: 3;
+    background: var(--glass);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid var(--glass-stroke);
+    border-radius: 10px; padding: 8px 14px;
+    overflow: auto; display: none; }
+  .mer-strip.active { display: block; }
+  .mer-strip .mer-hdr { display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 4px;
+    letter-spacing: 0.06em; text-transform: uppercase; }
+  .mer-strip .mer-toggle { background: transparent; color: var(--muted); border: 1px solid var(--glass-stroke);
+    border-radius: 4px; padding: 1px 7px; font: inherit; font-size: 10px; cursor: pointer; }
+  .mer-strip .mer-toggle:hover { color: var(--fg); border-color: var(--accent); }
+  .mer-strip .mer-body { display: flex; align-items: center; justify-content: center;
+    height: calc(100% - 24px); }
+  .mer-strip .mer-body svg { max-width: 100%; max-height: 100%; }
+  /* phase highlight — message arrows + actors */
+  .mer-strip .mer-body .messageText.active,
+  .mer-strip .mer-body .messageLine0.active,
+  .mer-strip .mer-body .messageLine1.active {
+    stroke: #fbbf24 !important; fill: #fbbf24 !important; stroke-width: 2.5 !important; }
+  .mer-strip.collapsed { height: 32px; padding: 6px 14px; }
+  .mer-strip.collapsed .mer-body { display: none; }
+  @media (max-width: 900px) {
+    .mer-strip { display: none !important; }
+  }
+
   /* Right-edge tooltip panel — pinned inside the stage, always visible.
      Replaces the floating cursor tooltip on desktop. */
-  .tt-panel { position: absolute; top: 18px; right: 18px; bottom: 90px;
+  .tt-panel { position: absolute; top: 18px; right: 18px; bottom: 18px;
     width: 248px; z-index: 3; pointer-events: none;
     background: var(--glass);
     backdrop-filter: blur(14px) saturate(140%);
@@ -530,6 +562,14 @@
         <div class="muted-2">balances, protocols, signature, last seen</div>
       </div>
       <div class="tt-body" id="ttBody" hidden></div>
+    </aside>
+
+    <aside id="merStrip" class="mer-strip">
+      <div class="mer-hdr">
+        <span>flow diagram</span>
+        <button id="merToggle" class="mer-toggle" title="collapse">−</button>
+      </div>
+      <div class="mer-body" id="merBody"></div>
     </aside>
   </div>
 
@@ -1240,6 +1280,11 @@
     tickEl.textContent = tick;
     if (currentScene && typeof currentScene.phase === "number") {
       phaseLabel.textContent = String(currentScene.phase);
+      // Re-highlight the mermaid diagram on phase transition
+      if (currentScene._lastPhaseSeen !== currentScene.phase) {
+        currentScene._lastPhaseSeen = currentScene.phase;
+        applyMermaidPhaseHighlight(currentScene);
+      }
     }
 
     // Balance chips — only on scenes that opt in (use-case scenes set
@@ -1506,6 +1551,19 @@
     id: "x402",
     name: "HTTP-402 paywall",
     short: "01",
+    mermaid: `sequenceDiagram
+    participant P as Patty
+    participant A as Abhi
+    P->>A: GET /inference
+    A-->>P: 402 + accepts[]
+    P->>A: X-Payment-Proof (0.001 USDC)
+    A-->>P: 200 OK + result`,
+    mermaidPhaseMap: {
+      0: { messages: [0] },
+      1: { messages: [1] },
+      2: { messages: [2] },
+      3: { messages: [3] },
+    },
     desc: "An <code>x402</code>-style paywall. Caller hits a paid endpoint, gets back <code>402 Payment Required</code> with an <code>accepts[]</code> envelope, signs an <code>X-Payment-Proof</code> header, retries, and is served. Off-chain HTTP, on-chain settlement on the bottom rail.",
     enter() {
       setVisible(["bob", "eli"]);
@@ -1554,6 +1612,26 @@
     id: "escrow",
     name: "Escrow + refund",
     short: "02",
+    mermaid: `sequenceDiagram
+    participant A as Alice
+    participant E as Escrow
+    participant T as Tridib
+    participant D as Deva
+    participant H as Hana
+    A->>E: lock 2.5 USDC
+    T-->>A: deliverable
+    A->>E: confirmPayment()
+    E-->>T: released 2.5 USDC
+    D->>E: lock 1.0 USDC
+    Note over H: silent past timeout
+    E-->>D: refund 1.0 USDC`,
+    mermaidPhaseMap: {
+      0: { messages: [0] },
+      1: { messages: [1] },
+      2: { messages: [2, 3] },
+      3: { messages: [4] },
+      4: { messages: [5, 6] },
+    },
     desc: "Trust-minimized A2A via <code>AgentEscrow.sol</code>. Payer locks funds, payee delivers, payer confirms → release. If payee goes silent past <code>timeout_blocks + challenge_period</code>, payer reclaims.",
     why: `An <strong>agentic payment escrow</strong> is the only on-chain primitive that interoperates cleanly across every other rail in this lab:
       <ul>
@@ -1725,6 +1803,29 @@
     id: "auction",
     name: "AI compute auction",
     short: "04",
+    mermaid: `sequenceDiagram
+    participant I as Iris
+    participant A as Abhi
+    participant T as Tridib
+    participant H as Hana
+    participant E as Escrow
+    I->>A: RFQ
+    I->>T: RFQ
+    I->>H: RFQ
+    A-->>I: bid 1.20
+    T-->>I: bid 0.90
+    H-->>I: bid 1.05
+    I->>E: lock at lowest valid bid
+    T-->>I: deliverable
+    I->>E: confirm → release
+    E-->>T: paid`,
+    mermaidPhaseMap: {
+      0: { messages: [0, 1, 2] },
+      1: { messages: [3, 4, 5] },
+      2: { messages: [3, 4, 5] },     // winner pick (no new message, keep bids highlighted)
+      3: { messages: [6] },
+      4: { messages: [7, 8, 9] },
+    },
     desc: "Marketplace flow. <strong>Iris</strong> posts a transcription job. <strong>Abhi</strong>, <strong>Tridib</strong>, and <strong>Hana</strong> bid. Cheapest valid bid wins; payment goes through escrow. Drag the sliders below to change bid prices or Iris's budget — watch the outcome change.",
     why: "Marketplaces today batch up bids on a centralized server and only emit one event when a winner is picked. Agents need <strong>granular events</strong> (each RFQ, each bid, the validation outcome) so they can react in-flight — drop out, re-bid, or refuse a winner whose signature doesn't validate. Switchboard models the marketplace as a sequence of small signed packets, not a single API call.",
     controls: [
@@ -1906,6 +2007,21 @@
     id: "hitl",
     name: "Human-in-the-loop gate",
     short: "05",
+    mermaid: `sequenceDiagram
+    participant D as Deva
+    participant W as Wallet
+    participant P as Provider
+    D->>W: spend request (1.5 USDC)
+    W-->>P: auto-pay (sub-threshold)
+    D->>W: spend request (12 USDC)
+    W-->>D: ⚠ requires approval
+    D->>W: approve
+    W-->>P: 12 USDC released`,
+    mermaidPhaseMap: {
+      0: { messages: [0, 1] },
+      1: { messages: [2, 3] },
+      2: { messages: [4, 5] },
+    },
     desc: "Risky spend? <strong>Deva</strong> is a HITL wallet. Any spend above a threshold raises an <strong>Approve</strong> button — release requires a human click. Small spends pass automatically.",
     enter() {
       setVisible(["deva", "eli", "gus"]);
@@ -2303,6 +2419,31 @@
     short: "10",
     currency: "USDC",
     showBalanceChips: true,
+    mermaid: `sequenceDiagram
+    participant P as Patty
+    participant D as Dispatch
+    participant S as Sai
+    participant E as Escrow
+    P->>D: requestRide(A→B)
+    D->>S: forward RFQ
+    S-->>D: signed quote (5.20, 3 min)
+    D-->>P: forward offer
+    P->>P: verify sig + price + ETA
+    P->>E: lock 5.20 USDC
+    S-->>P: GPS handshake at pickup
+    Note over P,S: ride A→B
+    P->>E: confirm dropoff
+    E-->>S: released 5.20`,
+    mermaidPhaseMap: {
+      0: { messages: [0] },
+      1: { messages: [1, 2] },
+      2: { messages: [3] },
+      3: { messages: [4] },
+      4: { messages: [5] },
+      5: { messages: [6] },
+      6: { messages: [8, 9] },
+      7: { messages: [8, 9] },
+    },
     desc: "<strong>Patty</strong>'s agent books a ride. It RFQs <strong>Dispatch</strong>, picks <strong>Sai</strong> on price+ETA, validates the signed quote, locks funds in escrow, watches the GPS handshake at pickup, rides A→B along city streets, and releases on dropoff. Zero taps once policy is set.",
     why: "Ride-share apps today are three-trust black boxes: rider trusts the app, app trusts the driver, driver trusts the app to pay. An <strong>agentic</strong> ride routes through one on-chain escrow — the driver knows funds exist before they roll; the rider's funds release only when both agents confirm the dropoff. No middleman, no chargeback, signed receipt.",
     controls: [
@@ -2565,6 +2706,24 @@
     short: "11",
     currency: "USDC",
     showBalanceChips: true,
+    mermaid: `sequenceDiagram
+    participant P as Patty
+    participant W as Work-In-Progress
+    Note over P: walking down the street
+    P->>W: proximity ping (~30m out)
+    W-->>P: signed menu
+    P->>W: order + X-Payment-Proof (4.50)
+    Note over W: brewing… (Patty still walking)
+    W-->>P: ☕ ready at counter
+    Note over P,W: hand-off on arrival`,
+    mermaidPhaseMap: {
+      0: { messages: [0] },
+      1: { messages: [1] },
+      2: { messages: [2] },
+      3: { messages: [2] },
+      4: { messages: [3] },
+      5: { messages: [3] },
+    },
     desc: "<strong>Patty</strong> is walking down the street in <strong>Siolim</strong>. Her agent detects <strong>Work-In-Progress</strong> (Abhi's coffee place) coming up, pings the shop, picks a latte off the signed menu, pays 4.50 USDC, and the shop starts brewing while Patty's still walking. By the time she arrives, the cup is ready — zero wait at the counter.",
     why: "This is the everyday case for agentic payments. The shop's queue today serializes the slowest step (human + payment) onto the customer's wait time. Letting the buyer's <em>agent</em> handle the order + payment in parallel with the walk collapses the wait to zero — the human never queues, the shop never idles. Same primitives as scene 01 (x402 paywall), no special infrastructure.",
     enter() {
@@ -3103,6 +3262,35 @@
     short: "16",
     currency: "USDC",
     showBalanceChips: true,
+    mermaid: `sequenceDiagram
+    participant P as Patty+Abhi
+    participant A as Agent
+    participant E as Escrow
+    participant H as Hotel
+    A->>E: lock taxi (25 USDC)
+    A->>E: lock flight (380 USDC)
+    Note over P,A: boarding
+    Note over P,A: in flight
+    A->>E: lock hotel (N×nightly)
+    opt delay rolled
+        A->>E: rebook fee (18 USDC)
+    end
+    Note over P,A: landed at next city
+    E-->>A: release taxi + flight
+    loop per night
+        E-->>H: night release
+    end
+    A->>E: checkout`,
+    mermaidPhaseMap: {
+      0: { messages: [] },
+      1: { messages: [0, 1] },
+      2: { messages: [0, 1] },
+      3: { messages: [2, 3] },
+      4: { messages: [5] },
+      5: { messages: [5] },
+      6: { messages: [6] },
+      7: { messages: [7] },
+    },
     desc: "<strong>Patty</strong> and <strong>Abhi</strong> ride together. Their travel agent threads a 5-city work trip — Tokyo → LA → Goa → London → Dubai → loop. It books taxis, flights, hotels with a <strong>rolling escrow</strong>: per-night release, rebook on slip, final release at checkout. The humans work in the air; the logistics happen between cities.",
     why: "Booking sites today need full payment up-front and refunds are a discretionary middleman. <strong>Rolling escrow</strong> matches actual stay: the hotel sees funds nightly, the airline on departure, and an interrupted itinerary (delayed flight, swap city) rebooks against the same budget without a refund cycle. Patty + Abhi never sign a card; they ride and work.",
     controls: [
@@ -3595,16 +3783,6 @@
     };
   }
 
-  SCENES.mermaid_soon = makeComingSoonScene({
-    id: "mermaid_soon", name: "soon · mermaid", short: "17",
-    desc: "<strong>Coming soon.</strong> Each scene gets a synced mermaid sequence diagram next to the canvas; nodes highlight as the scene's phase advances. Tracked on switchboard issue #47 — pick it up as a contributor.",
-    caption: "Mermaid diagrams synced with every scene's phase. Contribute via <a href='https://github.com/kcolbchain/switchboard/issues/47' target='_blank'>switchboard#47</a>.",
-    title: "Mermaid diagrams · synced",
-    subtitle: "Sequence diagrams that highlight with the animation.",
-    cta: "Open issue #47",
-    label: "switchboard#47",
-    url: "https://github.com/kcolbchain/switchboard/issues/47",
-  });
   SCENES.simulator_soon = makeComingSoonScene({
     id: "simulator_soon", name: "soon · simulator", short: "18",
     desc: "<strong>Coming soon.</strong> A scene-builder for the lab — pick a template, currency, parameters; output a URL-shareable scenario config. Tracked on switchboard issue #48.",
@@ -3630,7 +3808,7 @@
   const SCENE_ORDER = [
     "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
     "taxi", "cafe", "delivery", "split", "ethEscrow", "subscribe", "trip",
-    "mermaid_soon", "simulator_soon", "oracleGame_soon",
+    "simulator_soon", "oracleGame_soon",
   ];
 
   function selectScene(id, force) {
@@ -3654,6 +3832,7 @@
     });
     renderControls(currentScene);
     renderWhyCard(currentScene);
+    renderMermaidForScene(currentScene);
     log(`<span class="seg">— scene switched to <strong>${currentScene.name}</strong> —</span>`);
   }
 
@@ -3727,7 +3906,7 @@
     { label: "primitives", ids: ["x402","escrow","stream","auction","hitl","fanout","oracle"] },
     { label: "use cases",  ids: ["taxi","cafe","delivery","split","ethEscrow","subscribe","trip"] },
     { label: "meta",       ids: ["pq","stack"] },
-    { label: "soon",       ids: ["mermaid_soon","simulator_soon","oracleGame_soon"] },
+    { label: "soon",       ids: ["simulator_soon","oracleGame_soon"] },
   ];
 
   const sceneBar = document.getElementById("sceneBar");
@@ -3758,6 +3937,102 @@
     b.title = "Open the scene template — fork, drop in, send a PR";
     sceneBar.appendChild(b);
   }
+
+  // ─── mermaid flow diagrams (per-scene, phase-highlighted) ─────────────────
+  // Lazy-loads mermaid.js from CDN the first time a scene declares a
+  // `mermaid` graph. Renders into #merStrip below the canvas; phase changes
+  // toggle CSS classes on message arrows for sequence diagrams.
+  const merStripEl = document.getElementById("merStrip");
+  const merBodyEl  = document.getElementById("merBody");
+  const merToggleBtn = document.getElementById("merToggle");
+  let _mermaidReady = null;
+  function loadMermaidOnce() {
+    if (_mermaidReady) return _mermaidReady;
+    _mermaidReady = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js";
+      s.crossOrigin = "anonymous";
+      s.onload = () => {
+        try {
+          window.mermaid.initialize({
+            startOnLoad: false,
+            theme: "base",
+            themeVariables: {
+              fontFamily: "ui-monospace, Menlo, Consolas, monospace",
+              fontSize: "11px",
+              primaryColor: "#13161b",
+              primaryTextColor: "#e7e9ee",
+              primaryBorderColor: "#60a5fa",
+              lineColor: "#8a93a3",
+              secondaryColor: "#0f1216",
+              actorBkg: "#13161b",
+              actorBorder: "#60a5fa",
+              actorTextColor: "#e7e9ee",
+              actorLineColor: "#5a6270",
+              signalColor: "#e7e9ee",
+              signalTextColor: "#e7e9ee",
+              labelBoxBkgColor: "#0f1216",
+              labelBoxBorderColor: "#23272f",
+            },
+          });
+          resolve();
+        } catch (e) { reject(e); }
+      };
+      s.onerror = (e) => reject(e);
+      document.head.appendChild(s);
+    });
+    return _mermaidReady;
+  }
+
+  let _merCurrentSceneId = null;
+  async function renderMermaidForScene(scene) {
+    if (!scene.mermaid) {
+      merStripEl.classList.remove("active");
+      _merCurrentSceneId = null;
+      return;
+    }
+    merStripEl.classList.add("active");
+    if (_merCurrentSceneId === scene.id) return;   // same diagram already up
+    _merCurrentSceneId = scene.id;
+    try {
+      await loadMermaidOnce();
+      const id = "mer_" + scene.id + "_" + Date.now();
+      const { svg } = await window.mermaid.render(id, scene.mermaid);
+      merBodyEl.innerHTML = svg;
+    } catch (e) {
+      merBodyEl.innerHTML = `<div style="color:var(--muted);font-size:10px;">mermaid failed to load: ${e?.message || e}</div>`;
+    }
+  }
+
+  function applyMermaidPhaseHighlight(scene) {
+    if (!scene || !scene.mermaid || !scene.mermaidPhaseMap) return;
+    const target = scene.mermaidPhaseMap[scene.phase];
+    if (!target) return;
+    const svg = merBodyEl.querySelector("svg");
+    if (!svg) return;
+    // Clear previous highlights
+    svg.querySelectorAll(".active").forEach(el => el.classList.remove("active"));
+    // Mermaid sequence diagrams emit messages as paths with classes
+    // "messageLine0" / "messageLine1" and text as "messageText". They appear
+    // in source order so we can index by the message number.
+    if (target.messages) {
+      const allLines = svg.querySelectorAll(".messageLine0, .messageLine1");
+      const allTexts = svg.querySelectorAll(".messageText");
+      target.messages.forEach(i => {
+        if (allLines[i]) allLines[i].classList.add("active");
+        if (allTexts[i]) allTexts[i].classList.add("active");
+      });
+    }
+  }
+
+  // Toggle collapse / expand the strip
+  let _merCollapsed = false;
+  merToggleBtn.addEventListener("click", () => {
+    _merCollapsed = !_merCollapsed;
+    merStripEl.classList.toggle("collapsed", _merCollapsed);
+    merToggleBtn.textContent = _merCollapsed ? "+" : "−";
+    merToggleBtn.title = _merCollapsed ? "expand" : "collapse";
+  });
 
   // ─── responsive drawer toggles (narrow viewports) ─────────────────────────
   const logToggle  = document.getElementById("logToggleBtn");
