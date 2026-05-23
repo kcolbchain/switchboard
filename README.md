@@ -113,7 +113,41 @@ req = client.create_payment(
 client.confirm_payment(req.request_id)   # release funds
 ```
 
-### 4. Speak ZAP binary on a hot path
+### 4. Native ETH escrow — no token, no approve, every EVM chain
+
+The cheapest, most universal A2A primitive. No ERC-20 dance, no wrapped assets, no per-chain stablecoin contracts. Just `msg.value` directly into the escrow.
+
+```python
+from payment_protocol import PaymentClient
+
+# Patty commissions Abhi for a one-shot inference job priced in ETH.
+client = PaymentClient(patty_priv_key, escrow_address, rpc_url)
+
+# Lock funds — createPayment{value: 0.05 ether}
+req = client.create_payment(
+    payee="0xAbhi…",
+    amount_wei=5 * 10**16,        # 0.05 ETH
+    timeout_blocks=100,
+    challenge_period_blocks=10,
+)
+# Abhi delivers off-chain (URL / hash / event — verifiable by Patty)
+client.confirm_payment(req.request_id)   # → escrow .call{value:}(payee)
+```
+
+Or from Solidity directly:
+
+```solidity
+// Direct call from any agent contract — no approve(), no transferFrom()
+IAgentEscrow(escrow).createPayment{value: 0.05 ether}(
+    "req-7f3e", abhi, /*timeout*/ 100, /*challenge*/ 10
+);
+```
+
+Same code works on Lux, Base, Optimism, Arbitrum, Polygon, Ethereum mainnet — and any future EVM chain — without changing a line. ETH is the only asset universally available on every EVM chain without a token contract.
+
+See scene 14 (`native-ETH escrow`) in [the lab](https://kcolbchain.github.io/switchboard/agents-demo.html) for an animated walkthrough. The primitive is on the EIP track — see [issue #50](https://github.com/kcolbchain/switchboard/issues/50) and the [draft EIP](https://github.com/kcolbchain/switchboard/blob/eip/native-eth-a2a-escrow/eips/draft-native-eth-a2a-escrow.md) on branch `eip/native-eth-a2a-escrow`.
+
+### 5. Speak ZAP binary on a hot path
 
 ```python
 from switchboard.zap_transport import encode_offer, decode_offer, PaymentOffer, PaymentScheme
