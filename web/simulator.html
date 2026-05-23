@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>switchboard-simulator — compose a scenario</title>
+<meta name="description" content="Compose an agentic-payments scenario: pick a template, currency, and parameters. Outputs a shareable URL that opens the switchboard lab with your scenario applied." />
+<style>
+  :root,
+  :root[data-theme="dark"] {
+    --bg: #0b0d10; --panel: #13161b; --panel-2: #0f1216; --border: #23272f;
+    --fg: #e7e9ee; --muted: #8a93a3; --muted-2: #5a6270;
+    --accent: #60a5fa; --ok: #34d399; --warn: #fbbf24; --hot: #f87171; --info: #7dd3fc;
+    --bg-grad-1: #11161d; --bg-grad-2: #0b0d10; --bg-grad-3: #131922;
+    --glass: rgba(15, 18, 22, 0.55);
+    --glass-stroke: rgba(255, 255, 255, 0.06);
+    --ink: #0b0d10; --shadow-ink: rgba(0, 0, 0, 0.55);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f3ec; --panel: #ffffff; --panel-2: #fbf9f2; --border: #d8d4c8;
+    --fg: #1a1a1a; --muted: #5a5a5a; --muted-2: #9a958a;
+    --accent: #1e40af; --ok: #047857; --warn: #b45309; --hot: #b91c1c; --info: #0e7490;
+    --bg-grad-1: #efece2; --bg-grad-2: #f5f3ec; --bg-grad-3: #e8e4d6;
+    --glass: rgba(255, 255, 255, 0.7);
+    --glass-stroke: rgba(0, 0, 0, 0.08);
+    --ink: #1a1a1a; --shadow-ink: rgba(0, 0, 0, 0.18);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0;
+    background:
+      radial-gradient(1200px 800px at 20% 0%, var(--bg-grad-1) 0%, var(--bg-grad-2) 60%),
+      radial-gradient(900px 600px at 100% 100%, var(--bg-grad-3) 0%, var(--bg-grad-2) 60%);
+    background-attachment: fixed;
+    color: var(--fg);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header { padding: 14px 24px; border-bottom: 1px solid var(--glass-stroke);
+    background: var(--glass);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 10; }
+  header h1 { margin: 0; font-size: 14px; font-weight: 500; color: var(--muted);
+    letter-spacing: 0.02em; }
+  header h1 strong { color: var(--fg); font-weight: 600; }
+  header .crumbs { color: var(--muted-2); font-size: 11px; display: flex; gap: 10px; align-items: center; }
+  header .crumbs a { color: var(--muted-2); }
+  header .crumbs a:hover { color: var(--fg); }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 36px 24px 80px; }
+  .hero { margin-bottom: 32px; }
+  .hero h2 { margin: 0 0 8px 0; font-size: 24px; font-weight: 600; }
+  .hero p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.55; max-width: 720px; }
+
+  .grid { display: grid; gap: 24px; grid-template-columns: 1fr 360px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+  section.panel { background: var(--glass);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid var(--glass-stroke);
+    border-radius: 12px; padding: 20px 22px; margin-bottom: 18px; }
+  section.panel h3 { margin: 0 0 4px 0; font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+  section.panel .panel-sub { color: var(--muted); font-size: 12.5px; margin-bottom: 16px; }
+
+  /* Template gallery */
+  .templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+  .template { background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-stroke);
+    border-radius: 8px; padding: 12px 14px; cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.15s; }
+  .template:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .template.active { background: rgba(96, 165, 250, 0.12); border-color: var(--accent); }
+  .template .name { font-weight: 600; font-size: 13px; color: var(--fg); margin-bottom: 4px; }
+  .template .desc { color: var(--muted); font-size: 11px; line-height: 1.45; }
+  .template .tag { display: inline-block; font-family: var(--mono); font-size: 9.5px;
+    color: var(--info); margin-top: 6px; padding: 1px 6px; border-radius: 999px;
+    background: rgba(96, 165, 250, 0.10); border: 1px solid rgba(96, 165, 250, 0.25); }
+
+  /* Currency pills */
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { background: rgba(255, 255, 255, 0.02); border: 1px solid var(--glass-stroke);
+    border-radius: 999px; padding: 5px 12px; cursor: pointer; font: inherit; font-size: 12px;
+    color: var(--muted); transition: all 0.15s; }
+  .pill:hover { color: var(--fg); border-color: rgba(255, 255, 255, 0.18); }
+  .pill.active { background: rgba(96, 165, 250, 0.14); color: var(--fg); border-color: var(--accent); }
+
+  /* Param form */
+  .params { display: flex; flex-direction: column; gap: 14px; }
+  .param { display: flex; flex-direction: column; gap: 4px; }
+  .param label { display: flex; justify-content: space-between; align-items: baseline;
+    color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .param label .val { color: var(--fg); }
+  .param input[type=range] { width: 100%; accent-color: var(--accent); }
+  .param-empty { color: var(--muted-2); font-style: italic; font-size: 12px;
+    text-align: center; padding: 20px 0; }
+
+  /* Preview / output panel */
+  .out { display: flex; flex-direction: column; gap: 14px; }
+  .url-out { background: var(--panel); border: 1px solid var(--glass-stroke);
+    border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 11px;
+    color: var(--info); word-break: break-all; line-height: 1.5;
+    max-height: 120px; overflow-y: auto; }
+  .json-out { background: var(--panel); border: 1px solid var(--glass-stroke);
+    border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 10.5px;
+    color: var(--fg); white-space: pre-wrap; word-break: break-all; line-height: 1.5;
+    max-height: 240px; overflow-y: auto; margin: 0; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { background: rgba(96, 165, 250, 0.14); color: var(--fg);
+    border: 1px solid var(--accent); border-radius: 8px; padding: 8px 14px;
+    font: inherit; font-size: 12px; cursor: pointer; transition: background 0.15s; }
+  .btn:hover { background: rgba(96, 165, 250, 0.24); }
+  .btn.ghost { background: transparent; color: var(--muted); border-color: var(--glass-stroke); }
+  .btn.ghost:hover { color: var(--fg); border-color: var(--accent); background: rgba(96, 165, 250, 0.08); }
+  .btn .copied { color: var(--ok); margin-left: 6px; opacity: 0; transition: opacity 0.2s; }
+  .btn .copied.show { opacity: 1; }
+
+  footer { text-align: center; padding: 20px; color: var(--muted-2);
+    font-family: var(--mono); font-size: 10.5px; }
+  footer a { color: var(--muted-2); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><strong>switchboard-simulator</strong> · compose a scenario</h1>
+  <div class="crumbs">
+    <a href="./index.html">explorer</a>
+    <span>·</span>
+    <a href="./agents-demo.html">lab</a>
+    <span>·</span>
+    <a href="https://github.com/kcolbchain/switchboard" target="_blank">source</a>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <h2>Compose a switchboard scenario.</h2>
+    <p>Pick a template, choose a currency, tune the parameters. The simulator outputs a shareable URL that opens the
+       <a href="./agents-demo.html">switchboard lab</a> with your exact scenario applied. Drop the link in a thread,
+       and anyone who clicks it sees the same scene with the same numbers.</p>
+  </div>
+
+  <div class="grid">
+    <div>
+
+      <section class="panel">
+        <h3>1 · Template</h3>
+        <p class="panel-sub">A scene shape from the lab. The simulator pre-fills its parameters; you customize from there.</p>
+        <div class="templates" id="templates"></div>
+      </section>
+
+      <section class="panel">
+        <h3>2 · Currency</h3>
+        <p class="panel-sub">Display currency for balance chips and captions. Per-scene defaults apply when supported.</p>
+        <div class="pills" id="currencies"></div>
+      </section>
+
+      <section class="panel">
+        <h3>3 · Parameters</h3>
+        <p class="panel-sub">Each template exposes a different set of sliders. Hover the labels for what they mean.</p>
+        <div class="params" id="params">
+          <div class="param-empty">Pick a template above to see its parameters.</div>
+        </div>
+      </section>
+
+    </div>
+
+    <div class="out">
+      <section class="panel">
+        <h3>Share URL</h3>
+        <p class="panel-sub">Click <strong>Open in lab</strong> to launch your scenario. Or copy the URL.</p>
+        <div class="url-out" id="urlOut">—</div>
+        <div class="actions" style="margin-top:12px">
+          <button class="btn" id="openBtn">Open in lab&nbsp;↗</button>
+          <button class="btn ghost" id="copyBtn">Copy URL<span class="copied" id="copiedFlag">✓</span></button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3>Scene config</h3>
+        <p class="panel-sub">The JSON the lab consumes via URL fragment.</p>
+        <pre class="json-out" id="jsonOut">—</pre>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <a href="https://github.com/kcolbchain/switchboard">github.com/kcolbchain/switchboard</a>
+</footer>
+
+<script>
+(() => {
+  // ── Apply persisted theme so we match the lab ─────────────────────────────
+  try {
+    const saved = localStorage.getItem("swb.theme") || "dark";
+    document.documentElement.setAttribute("data-theme", saved);
+  } catch (e) { /* localStorage unavailable */ }
+
+  // ── Template catalogue. Each entry mirrors a real lab scene id; the
+  // params here match the scene's controls (so the URL fragment lines up).
+  // Keep this in sync with web/agents-demo.html SCENES.<id>.controls.
+  const TEMPLATES = [
+    {
+      id: "taxi",
+      name: "Taxi handover",
+      desc: "Patty's agent books a ride. Sai bids, escrow locks, GPS handshake, ride animates A→B.",
+      tag: "marketplace",
+      params: [
+        { id: "fareBase", label: "Base fare",    min: 2.0,  max: 12.0, step: 0.1,  default: 3.50 },
+        { id: "perKm",    label: "Per-km rate",  min: 0.2,  max: 2.5,  step: 0.05, default: 0.85 },
+        { id: "tripKm",   label: "Trip distance",min: 0.5,  max: 12,   step: 0.1,  default: 4.20 },
+      ],
+    },
+    {
+      id: "cafe",
+      name: "Café walk-by",
+      desc: "Patty walks past Work-In-Progress in Siolim; agent pre-orders; cup ready on arrival.",
+      tag: "proximity",
+      params: [],
+    },
+    {
+      id: "delivery",
+      name: "Food delivery",
+      desc: "Order from Tridib's Eat Pray Love; Kiran rides; escrow splits payout (food + tip).",
+      tag: "3-party",
+      params: [],
+    },
+    {
+      id: "split",
+      name: "Split bill",
+      desc: "Four friends share a tab. Each agent pays its share simultaneously against the signed receipt.",
+      tag: "fintech",
+      params: [],
+    },
+    {
+      id: "ethEscrow",
+      name: "Native ETH escrow",
+      desc: "Plain msg.value escrow between Patty and Abhi — no ERC-20 dance, every EVM chain.",
+      tag: "ETH",
+      params: [],
+    },
+    {
+      id: "subscribe",
+      name: "Subscription",
+      desc: "Recurring auto-pay under a monthly cap. Cancel = revoke the cap.",
+      tag: "recurring",
+      params: [],
+    },
+    {
+      id: "trip",
+      name: "Multi-city trip",
+      desc: "Tokyo → LA → Goa → London → Dubai. Rolling escrow per night + per leg, with delay rebook.",
+      tag: "rolling-escrow",
+      params: [
+        { id: "budget",    label: "Trip budget",  min: 2000, max: 15000, step: 100, default: 6500 },
+        { id: "nightly",   label: "Hotel / night",min: 80,   max: 600,   step: 5,   default: 220 },
+        { id: "nights",    label: "Nights / city",min: 1,    max: 4,     step: 1,   default: 2 },
+        { id: "delayRate", label: "Delay frequency (%)", min: 0, max: 100, step: 5, default: 35 },
+      ],
+    },
+    {
+      id: "auction",
+      name: "AI compute auction",
+      desc: "Iris RFQs three providers; lowest valid bid wins; escrow-settled. Tunable bids + budget.",
+      tag: "auction",
+      params: [
+        { id: "budget",   label: "Iris's max budget", min: 0.40, max: 3.00, step: 0.05, default: 1.50 },
+        { id: "bid_eli",  label: "Abhi's bid",         min: 0.30, max: 3.00, step: 0.05, default: 1.20 },
+        { id: "bid_gus",  label: "Tridib's bid",       min: 0.30, max: 3.00, step: 0.05, default: 0.90 },
+        { id: "bid_hana", label: "Hana's bid",         min: 0.30, max: 3.00, step: 0.05, default: 1.05 },
+      ],
+    },
+  ];
+
+  const CURRENCIES = ["USDC", "ETH", "EUR-stable", "JPY-stable", "INR-stable"];
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let selectedTemplate = TEMPLATES[0];
+  let currency = "USDC";
+  const values = {};                  // current slider values keyed by param.id
+
+  function resetValues() {
+    for (const k of Object.keys(values)) delete values[k];
+    (selectedTemplate.params || []).forEach(p => { values[p.id] = p.default; });
+  }
+
+  // ── Render functions ──────────────────────────────────────────────────────
+  function renderTemplates() {
+    const root = document.getElementById("templates");
+    root.innerHTML = "";
+    TEMPLATES.forEach(t => {
+      const el = document.createElement("div");
+      el.className = "template" + (t.id === selectedTemplate.id ? " active" : "");
+      el.innerHTML = `
+        <div class="name">${t.name}</div>
+        <div class="desc">${t.desc}</div>
+        <span class="tag">${t.tag}</span>
+      `;
+      el.addEventListener("click", () => {
+        selectedTemplate = t;
+        resetValues();
+        renderTemplates();
+        renderParams();
+        renderOutput();
+      });
+      root.appendChild(el);
+    });
+  }
+  function renderCurrencies() {
+    const root = document.getElementById("currencies");
+    root.innerHTML = "";
+    CURRENCIES.forEach(c => {
+      const b = document.createElement("button");
+      b.className = "pill" + (c === currency ? " active" : "");
+      b.textContent = c;
+      b.addEventListener("click", () => { currency = c; renderCurrencies(); renderOutput(); });
+      root.appendChild(b);
+    });
+  }
+  function renderParams() {
+    const root = document.getElementById("params");
+    root.innerHTML = "";
+    const params = selectedTemplate.params || [];
+    if (params.length === 0) {
+      root.innerHTML = `<div class="param-empty">This template has no tunable parameters — the scenario runs with its defaults.</div>`;
+      return;
+    }
+    params.forEach(p => {
+      const row = document.createElement("div");
+      row.className = "param";
+      const decimals = (p.step < 1) ? 2 : 0;
+      row.innerHTML = `
+        <label>
+          <span>${p.label}</span>
+          <span class="val" id="val-${p.id}">${values[p.id].toFixed(decimals)}</span>
+        </label>
+        <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${values[p.id]}" id="in-${p.id}">
+      `;
+      root.appendChild(row);
+      row.querySelector("input").addEventListener("input", (e) => {
+        const v = parseFloat(e.target.value);
+        values[p.id] = v;
+        document.getElementById(`val-${p.id}`).textContent = v.toFixed(decimals);
+        renderOutput();
+      });
+    });
+  }
+  function buildFragment() {
+    const params = new URLSearchParams();
+    params.set("scene", selectedTemplate.id);
+    params.set("currency", currency);
+    (selectedTemplate.params || []).forEach(p => {
+      params.set(p.id, String(values[p.id]));
+    });
+    return params.toString();
+  }
+  function renderOutput() {
+    const frag = buildFragment();
+    const url  = "./agents-demo.html#" + frag;
+    document.getElementById("urlOut").textContent = location.origin + location.pathname.replace(/simulator\.html$/, "agents-demo.html") + "#" + frag;
+    const cfg = {
+      scene: selectedTemplate.id,
+      currency,
+      params: { ...values },
+    };
+    document.getElementById("jsonOut").textContent = JSON.stringify(cfg, null, 2);
+    document.getElementById("openBtn").onclick = () => { window.open(url, "_blank"); };
+    document.getElementById("copyBtn").onclick = () => {
+      const fullUrl = location.origin + location.pathname.replace(/simulator\.html$/, "agents-demo.html") + "#" + frag;
+      navigator.clipboard.writeText(fullUrl).then(() => {
+        const flag = document.getElementById("copiedFlag");
+        flag.classList.add("show");
+        setTimeout(() => flag.classList.remove("show"), 1500);
+      });
+    };
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  resetValues();
+  renderTemplates();
+  renderCurrencies();
+  renderParams();
+  renderOutput();
+})();
+</script>
+</body>
+</html>

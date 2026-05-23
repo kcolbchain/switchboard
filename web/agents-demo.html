@@ -3783,16 +3783,6 @@
     };
   }
 
-  SCENES.simulator_soon = makeComingSoonScene({
-    id: "simulator_soon", name: "soon · simulator", short: "18",
-    desc: "<strong>Coming soon.</strong> A scene-builder for the lab — pick a template, currency, parameters; output a URL-shareable scenario config. Tracked on switchboard issue #48.",
-    caption: "Scene-builder: pick template, currency, params → URL-shareable config. Contribute via <a href='https://github.com/kcolbchain/switchboard/issues/48' target='_blank'>switchboard#48</a>.",
-    title: "switchboard-simulator",
-    subtitle: "Compose scenes with currencies + parameters.",
-    cta: "Open issue #48",
-    label: "switchboard#48",
-    url: "https://github.com/kcolbchain/switchboard/issues/48",
-  });
   SCENES.oracleGame_soon = makeComingSoonScene({
     id: "oracleGame_soon", name: "soon · oracle game", short: "19",
     desc: "<strong>Coming soon.</strong> A protocol-tuning + adversarial + compose game for the new <a href='https://github.com/kcolbchain/escrow-oracles' target='_blank'>escrow-oracles</a> network. Tracked on escrow-oracles issue #7.",
@@ -3808,7 +3798,7 @@
   const SCENE_ORDER = [
     "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
     "taxi", "cafe", "delivery", "split", "ethEscrow", "subscribe", "trip",
-    "simulator_soon", "oracleGame_soon",
+    "oracleGame_soon",
   ];
 
   function selectScene(id, force) {
@@ -3906,7 +3896,7 @@
     { label: "primitives", ids: ["x402","escrow","stream","auction","hitl","fanout","oracle"] },
     { label: "use cases",  ids: ["taxi","cafe","delivery","split","ethEscrow","subscribe","trip"] },
     { label: "meta",       ids: ["pq","stack"] },
-    { label: "soon",       ids: ["simulator_soon","oracleGame_soon"] },
+    { label: "soon",       ids: ["oracleGame_soon"] },
   ];
 
   const sceneBar = document.getElementById("sceneBar");
@@ -4090,9 +4080,44 @@
   }
   sbTitle.addEventListener("mouseenter", scrambleSwitchboard);
 
+  // ─── deep-link via URL fragment ───────────────────────────────────────────
+  // The switchboard-simulator emits a fragment like
+  //   #scene=taxi&fareBase=4.50&perKm=1.20&tripKm=8&currency=EUR
+  // We parse it here, pre-select the scene, then override any matching
+  // scene.controls values before the first enter().
+  function parseFragmentConfig() {
+    const raw = location.hash.startsWith("#") ? location.hash.slice(1) : "";
+    if (!raw) return null;
+    const params = new URLSearchParams(raw);
+    const sceneId = params.get("scene");
+    if (!sceneId || !SCENES[sceneId]) return null;
+    const overrides = {};
+    for (const [k, v] of params) {
+      if (k === "scene") continue;
+      const n = parseFloat(v);
+      overrides[k] = Number.isFinite(n) && !isNaN(n) ? n : v;
+    }
+    return { sceneId, overrides };
+  }
+  function applyFragmentOverrides(scene, overrides) {
+    if (!scene.controls) return;
+    scene.controls.forEach(c => {
+      if (overrides[c.id] !== undefined) c.default = overrides[c.id];
+    });
+    // Also stash so onCtlChange-aware logic in enter() picks it up
+    scene.ctl = Object.assign({}, scene.ctl, overrides);
+  }
+
   // ─── go ───────────────────────────────────────────────────────────────────
   resize();
-  selectScene("x402");
+  const _fragCfg = parseFragmentConfig();
+  if (_fragCfg) {
+    const targetScene = SCENES[_fragCfg.sceneId];
+    if (targetScene) applyFragmentOverrides(targetScene, _fragCfg.overrides);
+    selectScene(_fragCfg.sceneId);
+  } else {
+    selectScene("x402");
+  }
   scrambleSwitchboard();
   requestAnimationFrame(step);
 })();

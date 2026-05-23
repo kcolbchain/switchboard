@@ -102,6 +102,7 @@ def test_scramble_logic_present(lab_script: str) -> None:
 EXPECTED_SCENES = [
     "x402", "escrow", "stream", "auction", "hitl", "fanout", "oracle", "pq", "stack",
     "taxi", "cafe", "delivery", "split", "ethEscrow", "subscribe", "trip",
+    "oracleGame_soon",
 ]
 
 
@@ -114,10 +115,14 @@ def test_scene_order_matches(lab_script: str) -> None:
 
 def test_every_scene_has_definition(lab_script: str) -> None:
     for scene_id in EXPECTED_SCENES:
-        assert f"SCENES.{scene_id} = {{" in lab_script, f"SCENES.{scene_id} missing"
-        # each should have a name and short label
+        # accept either `SCENES.x = {` (inline scene def) or
+        # `SCENES.x = makeComingSoonScene({` (factory pattern for placeholders)
+        inline  = f"SCENES.{scene_id} = {{" in lab_script
+        factory = f"SCENES.{scene_id} = make" in lab_script
+        assert inline or factory, f"SCENES.{scene_id} missing (neither inline nor factory)"
+        # each should have a name and short label somewhere in its def
         block_m = re.search(
-            rf"SCENES\.{scene_id}\s*=\s*{{[^}}]*?id:\s*\"{scene_id}\".*?name:\s*\"([^\"]+)\".*?short:\s*\"([^\"]+)\"",
+            rf"SCENES\.{scene_id}\s*=.*?id:\s*\"{scene_id}\".*?name:\s*\"([^\"]+)\".*?short:\s*\"([^\"]+)\"",
             lab_script, re.DOTALL,
         )
         assert block_m, f"scene {scene_id} missing name/short"
