@@ -24,3 +24,8 @@ htmlcov/
 *.swp
 .idea/
 .vscode/
+
+# Foundry
+cache/
+out/
+broadcast/
