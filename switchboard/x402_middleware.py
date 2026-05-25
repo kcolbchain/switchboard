@@ -59,6 +59,7 @@ class PaymentOffer:
     recipient: str                 # Payee address
     chain_id: int
     scheme: PaymentScheme = PaymentScheme.EXACT
+    signature_alg: str = "none"
     description: str = ""
     endpoint: str = ""
     nonce: str = ""
@@ -94,17 +95,23 @@ class PaymentProof:
     payer: str
     amount_wei: int
     nonce: str = ""
+    signature_alg: str = "none"
+    signature: str = ""
     timestamp: float = field(default_factory=time.time)
 
     def to_header(self) -> str:
-        return json.dumps({
+        d = {
             "txHash": self.tx_hash,
             "chainId": self.chain_id,
             "payer": self.payer,
             "amount": self.amount_wei,
             "nonce": self.nonce,
             "timestamp": int(self.timestamp),
-        })
+        }
+        if self.signature_alg != "none":
+            d["signatureAlg"] = self.signature_alg
+            d["signature"] = self.signature
+        return json.dumps(d)
 
 
 @dataclass
