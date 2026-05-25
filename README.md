@@ -277,6 +277,6 @@ tests/test_zap_transport.py          ✅ 11 passed   (with luxfi-zap installed)
 
 MIT. Built by [kcolbchain](https://kcolbchain.com) — [@abhicris](https://github.com/abhicris).
 
-If you're building agent-payment infrastructure and want to compare notes — open an issue, or [services@kcolbchain.com](mailto:services@kcolbchain.com).
+If you're building agent-payment infrastructure and want to compare notes — open an issue, or [research@kcolbchain.com](mailto:research@kcolbchain.com).
 
 > **kcolb** = "block" reversed. We've been at this since 2015. The agent-payment rails are the part of crypto that finally has a real customer: AI.
