@@ -1,422 +1,1094 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>switchboard — agent payments infrastructure</title>
-<meta name="description" content="Agent wallets, gas budgets, agent-to-agent escrow. x402 / MPP / AP2 / Circle-Nanopayments compatibility map. By kcolbchain." />
-<style>
-  :root {
-    --bg: #0b0d10; --panel: #13161b; --panel-2: #0f1216; --border: #23272f;
-    --fg: #e7e9ee; --muted: #8a93a3;
-    --accent: #60a5fa; --ok: #34d399; --warn: #fbbf24; --hot: #f87171; --info: #7dd3fc;
-    --payer: #7dd3fc; --payee: #f59e0b; --escrow: #a78bfa;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  header { padding: 22px 32px; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:12px; }
-  header h1 { margin:0; font-size: 20px; }
-  header h1 .dot { color: var(--accent); }
-  header p { margin:0; color: var(--muted); font-size: 13px; }
-  main { padding: 24px 32px 80px 32px; max-width: 1200px; margin: 0 auto; }
-  h2 { font-size: 16px; margin: 28px 0 10px 0; }
-  h2:first-of-type { margin-top: 0; }
-  h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px 0; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
-  .two-col { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
-  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
-  .tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
-  .tab { background: var(--panel); color: var(--muted); border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13px; }
-  .tab.active { background: var(--panel-2); color: var(--fg); border-color: var(--accent); }
-  .tab:hover { color: var(--fg); }
-  .controls { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-  .field { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; gap: 10px; }
-  .field label { color: var(--muted); font-size: 12px; flex: 1; }
-  .field select, .field input { background: var(--panel-2); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; }
-  .field select { width: 150px; }
-  .field input[type=number] { width: 100px; font-family: var(--mono); text-align: right; }
-  .viz { position: relative; min-height: 360px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  svg.flow { display: block; width: 100%; height: 360px; }
-  svg.flow .lane { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
-  svg.flow .lane-label { fill: var(--muted); font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em; }
-  svg.flow .actor { fill: var(--panel); stroke: var(--border); stroke-width: 1; }
-  svg.flow .actor.payer { stroke: var(--payer); }
-  svg.flow .actor.payee { stroke: var(--payee); }
-  svg.flow .actor.escrow { stroke: var(--escrow); }
-  svg.flow .actor-label { fill: var(--fg); font-size: 13px; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-  svg.flow .msg { stroke: var(--accent); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-  svg.flow .msg.active { stroke: var(--warn); stroke-width: 2.5; }
-  svg.flow .msg-label { fill: var(--muted); font-size: 11px; font-family: var(--mono); }
-  svg.flow .msg-label.active { fill: var(--warn); font-weight: 600; }
-  table.matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.matrix th, table.matrix td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
-  table.matrix thead th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
-  table.matrix td.label { color: var(--muted); width: 200px; }
-  table.matrix .y   { color: var(--ok); }
-  table.matrix .n   { color: var(--hot); }
-  table.matrix .p   { color: var(--warn); }
-  table.matrix .na  { color: var(--muted); opacity: 0.6; }
-  table.matrix .cell { width: 15%; }
-  .logo-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-  .tag { font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 99px; background: #1f232b; color: var(--muted); }
-  .tag.kcb { background: #0e2a1e; color: var(--ok); }
-  .steps { list-style: none; padding: 0; margin: 0; font-size: 13px; }
-  .steps li { padding: 8px 10px; margin: 4px 0; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); cursor: pointer; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
-  .steps li:hover { border-color: var(--muted); }
-  .steps li.active { border-color: var(--warn); background: #2a220e; }
-  .steps li .num { font-family: var(--mono); color: var(--muted); font-size: 12px; }
-  .steps li.active .num { color: var(--warn); }
-  .steps li .body { color: var(--muted); font-size: 12px; margin-top: 2px; }
-  .steps li.active .body { color: var(--fg); }
-  pre { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.55; margin: 0; }
-  .kw  { color: #c4b5fd; }
-  .str { color: #86efac; }
-  .com { color: var(--muted); font-style: italic; }
-  .typ { color: var(--info); }
-  .fn  { color: var(--warn); }
-  .prop { color: var(--accent); }
-  footer { padding: 20px 32px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>switchboard — programmable payments for agents</title>
+  <meta name="description" content="Chain-agnostic, token-agnostic, post-quantum agent-to-agent payments. One Python library, one contract suite, one binary wire. By kcolbchain." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://kcolbchain.github.io/brand/tokens.css" />
+  <style>
+    /* ---------- base ---------- */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      font-size: var(--t-3);   /* 15px body — larger, no compression */
+      line-height: 1.65;
+      background: var(--bg);
+      color: var(--fg-muted);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a {
+      color: var(--fg);
+      text-decoration: none;
+      border-bottom: 1px solid var(--line);
+      transition: border-color .15s ease, color .15s ease;
+    }
+    a:hover { color: var(--mark); border-bottom-color: var(--mark); }
+    code {
+      font-family: var(--font);
+      color: var(--fg);
+      background: var(--bg-elev);
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-size: 0.92em;
+    }
+
+    /* ---------- header ---------- */
+    header.top {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--s-3) var(--s-5);
+      background: rgba(11, 11, 13, 0.86);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+      gap: var(--s-4); flex-wrap: wrap;
+    }
+    header.top .wm {
+      font-family: var(--font);
+      font-size: var(--t-3);
+      font-weight: 500;
+      color: var(--fg);
+      letter-spacing: -0.01em;
+      border-bottom: none;
+      white-space: nowrap;
+    }
+    header.top .wm em {
+      color: var(--mark);
+      font-style: normal;
+      font-weight: 700;
+    }
+    header.top .wm .sep  { color: var(--fg-faint); font-weight: 400; margin: 0 var(--s-2); }
+    header.top .wm .desc { color: var(--fg-muted); font-weight: 400; }
+    header.top nav { display: flex; gap: var(--s-4); flex-wrap: wrap; font-size: var(--t-2); }
+    header.top nav a { color: var(--fg-faint); border-bottom: none; }
+    header.top nav a:hover { color: var(--mark); }
+
+    /* ---------- container ---------- */
+    .container {
+      max-width: var(--col-wide);
+      margin: 0 auto;
+      padding: 0 var(--s-5);
+    }
+    @media (max-width: 720px) { .container { padding: 0 var(--s-3); } }
+
+    /* ---------- hero ---------- */
+    .hero {
+      padding: var(--s-7) 0 var(--s-6);
+      position: relative;
+    }
+    .hero h1 {
+      font-family: var(--font);
+      font-size: clamp(32px, 6vw, 64px);
+      font-weight: 500;
+      color: var(--fg);
+      letter-spacing: -0.025em;
+      line-height: 1.02;
+      margin-bottom: var(--s-4);
+      max-width: 18ch;
+    }
+    .hero h1 em { color: var(--mark); font-style: normal; font-weight: 700; }
+    .hero .lead {
+      font-size: var(--t-4);    /* 20px lead */
+      color: var(--fg-muted);
+      max-width: 56ch;
+      line-height: 1.5;
+      margin-bottom: var(--s-5);
+    }
+    .hero-chips {
+      display: flex; gap: var(--s-2); flex-wrap: wrap;
+    }
+    .hero-chips .chip {
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--bg-elev);
+      color: var(--fg-muted);
+      font-size: var(--t-2);
+      border: 1px solid var(--line);
+      white-space: nowrap;
+    }
+    .hero-chips .chip.mark {
+      background: var(--mark-soft);
+      color: var(--mark);
+      border-color: transparent;
+    }
+
+    /* ---------- section ---------- */
+    section.s {
+      padding: var(--s-6) 0 var(--s-5);
+      border-top: 1px solid var(--line);
+    }
+    section.s:first-of-type { border-top: none; }
+    section.s .head {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: var(--s-3); flex-wrap: wrap;
+      margin-bottom: var(--s-5);
+    }
+    section.s .head h2 {
+      font-family: var(--font);
+      font-size: var(--t-5);
+      font-weight: 500;
+      color: var(--fg);
+      letter-spacing: -0.01em;
+    }
+    section.s .head .meta {
+      font-family: var(--font);
+      font-size: var(--t-1);
+      color: var(--fg-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    section.s .intro {
+      font-size: var(--t-3);
+      color: var(--fg-muted);
+      max-width: 62ch;
+      margin-bottom: var(--s-5);
+    }
+
+    /* ---------- grid ---------- */
+    .grid {
+      display: grid;
+      gap: var(--s-3);
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 640px) {
+      .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+      .grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 960px) {
+      .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+      .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+    }
+    .grid.auto {
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    /* ---------- stat ---------- */
+    .stat {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--s-4);
+    }
+    .stat .stat-label {
+      font-family: var(--font);
+      font-size: var(--t-1);
+      color: var(--fg-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: var(--s-2);
+    }
+    .stat .stat-value {
+      font-family: var(--font);
+      font-size: var(--t-6);
+      font-weight: 500;
+      color: var(--fg);
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+    .stat .stat-sub {
+      font-size: var(--t-2);
+      color: var(--fg-muted);
+      margin-top: var(--s-2);
+    }
+
+    /* ---------- chip ---------- */
+    .chip {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--bg);
+      color: var(--fg-muted);
+      font-family: var(--font);
+      font-size: var(--t-1);
+      border: 1px solid var(--line);
+    }
+    .chip.ok   { background: var(--ok-soft);   color: var(--ok);   border-color: transparent; }
+    .chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+    .chip.hot  { background: var(--hot-soft);  color: var(--hot);  border-color: transparent; }
+    .chip.mark { background: var(--mark-soft); color: var(--mark); border-color: transparent; }
+
+    /* ---------- card (module) ---------- */
+    .card {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--s-4);
+      display: flex; flex-direction: column;
+    }
+    .card .card-top {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: var(--s-3);
+      gap: var(--s-2);
+    }
+    .card .card-top h3 {
+      font-family: var(--font);
+      font-size: var(--t-3);
+      font-weight: 500;
+      color: var(--fg);
+    }
+    .card .card-body {
+      flex: 1;
+      font-size: var(--t-2);
+      color: var(--fg-muted);
+      margin-bottom: var(--s-3);
+      line-height: 1.6;
+    }
+    .card .card-foot {
+      display: flex; gap: var(--s-3); flex-wrap: wrap;
+      padding-top: var(--s-3);
+      border-top: 1px solid var(--line);
+      font-size: var(--t-1);
+    }
+    .card .card-foot a {
+      color: var(--fg-faint);
+      border-bottom: none;
+    }
+    .card .card-foot a:hover { color: var(--mark); }
+    .card .card-foot .sep { color: var(--fg-faint); border: none; }
+
+    /* ---------- matrix (compatibility) ---------- */
+    .matrix-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-elev);
+    }
+    table.matrix {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--t-2);
+      min-width: 720px;
+    }
+    table.matrix th, table.matrix td {
+      padding: var(--s-3) var(--s-4);
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+    }
+    table.matrix thead th {
+      font-family: var(--font);
+      color: var(--fg-faint);
+      font-weight: 500;
+      font-size: var(--t-1);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    table.matrix tbody td.label {
+      color: var(--fg);
+      width: 22%;
+      font-weight: 500;
+    }
+    table.matrix .y  { color: var(--ok);    font-family: var(--font); }
+    table.matrix .n  { color: var(--hot);   font-family: var(--font); }
+    table.matrix .p  { color: var(--warn);  font-family: var(--font); }
+    table.matrix .na { color: var(--fg-faint); }
+    table.matrix tbody tr:last-child td { border-bottom: none; }
+
+    /* ---------- chain map ---------- */
+    .chain-map {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--s-3);
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--s-5);
+    }
+    @media (min-width: 880px) {
+      .chain-map {
+        grid-template-columns: 1fr auto 1fr;
+        align-items: stretch;
+      }
+    }
+    .chain-map .col {
+      display: flex; flex-direction: column; gap: var(--s-2);
+    }
+    .chain-map .col h4 {
+      font-family: var(--font);
+      font-size: var(--t-1);
+      color: var(--fg-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: var(--s-2);
+    }
+    .chain-map .rail {
+      padding: var(--s-3);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--fg);
+      font-family: var(--font);
+      display: flex; justify-content: space-between; align-items: center;
+      gap: var(--s-3);
+    }
+    .chain-map .rail .rail-meta { color: var(--fg-faint); font-size: var(--t-1); }
+    .chain-map .rail.lux {
+      background: var(--mark-soft);
+      border-color: var(--mark);
+      color: var(--mark);
+    }
+    .chain-map .arrow {
+      display: flex; align-items: center; justify-content: center;
+      color: var(--fg-faint);
+      font-family: var(--font);
+      font-size: var(--t-4);
+      padding: 0 var(--s-3);
+    }
+    @media (max-width: 879px) {
+      .chain-map .arrow { transform: rotate(90deg); padding: var(--s-3) 0; }
+    }
+
+    /* ---------- code ---------- */
+    pre.code {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--s-4) var(--s-5);
+      font-family: var(--font);
+      font-size: var(--t-2);
+      color: var(--fg);
+      line-height: 1.65;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    pre.code .kw  { color: #c4b5fd; }
+    pre.code .str { color: #86efac; }
+    pre.code .com { color: var(--fg-faint); font-style: italic; }
+    pre.code .fn  { color: var(--mark); }
+
+    /* ---------- scenes ---------- */
+    .scene-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: var(--s-2);
+    }
+    .scene-grid a.scene {
+      padding: var(--s-3);
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--fg);
+      border-bottom: 1px solid var(--line);
+      transition: all .15s ease;
+    }
+    .scene-grid a.scene:hover {
+      border-color: var(--mark);
+      color: var(--mark);
+    }
+    .scene-grid a.scene .num {
+      font-family: var(--font);
+      font-size: var(--t-1);
+      color: var(--fg-faint);
+    }
+    .scene-grid a.scene .name {
+      font-family: var(--font);
+      font-size: var(--t-2);
+      margin-top: var(--s-1);
+    }
+
+    /* ---------- footer ---------- */
+    footer.bottom {
+      padding: var(--s-6) 0 var(--s-7);
+      border-top: 1px solid var(--line);
+      margin-top: var(--s-6);
+    }
+    footer.bottom .row {
+      display: flex; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap;
+      font-size: var(--t-2);
+    }
+    footer.bottom .row .links {
+      display: flex; gap: var(--s-4); flex-wrap: wrap;
+    }
+    footer.bottom .row .links a {
+      color: var(--fg-faint);
+      border-bottom: none;
+    }
+    footer.bottom .row .links a:hover { color: var(--mark); }
+    footer.bottom .legal {
+      margin-top: var(--s-3);
+      font-size: var(--t-1);
+      color: var(--fg-faint);
+    }
+
+    /* ---------- responsive bump for very small ---------- */
+    @media (max-width: 480px) {
+      body { font-size: var(--t-2); }
+      .hero { padding: var(--s-5) 0 var(--s-4); }
+      section.s { padding: var(--s-5) 0 var(--s-4); }
+      section.s .head h2 { font-size: var(--t-4); }
+    }
+  </style>
 </head>
 <body>
 
-<header>
-  <div>
-    <h1>switchboard<span class="dot">.</span> <span style="color:var(--muted);font-weight:400">agent payments infrastructure</span></h1>
-    <p>Agent wallets, gas budgets, agent-to-agent escrow. Compatible with the open agent-payment rails of 2026: x402, MPP, AP2, Circle Nanopayments.</p>
-  </div>
-  <div style="display:flex;gap:14px;align-items:center">
+<header class="top">
+  <a class="wm" href="./">
+    <em>kcolb</em>chain<span class="sep">/</span><span class="desc">switchboard</span>
+  </a>
+  <nav>
+    <a href="#modules">modules</a>
+    <a href="#multichain">multi-chain</a>
+    <a href="#rails">rails</a>
+    <a href="#novel">novel</a>
+    <a href="#pq">post-quantum</a>
+    <a href="./docs.html">docs</a>
     <a href="./agents-demo.html">lab ↗</a>
     <a href="./simulator.html">simulator ↗</a>
-    <a href="https://github.com/kcolbchain/switchboard">source</a>
-    <a href="https://docs.kcolbchain.com/switchboard/">docs</a>
-  </div>
+    <a href="https://github.com/kcolbchain/switchboard">source ↗</a>
+  </nav>
 </header>
 
-<main>
+<div class="container">
 
-  <h2>Protocol flow</h2>
-  <div class="tabs" id="tabs">
-    <button class="tab active" data-p="x402">x402 <span class="tag">Linux Foundation</span></button>
-    <button class="tab" data-p="mpp">MPP <span class="tag">Tempo / Stripe</span></button>
-    <button class="tab" data-p="ap2">AP2 <span class="tag">Google</span></button>
-    <button class="tab" data-p="nano">Circle Nanopayments</button>
-    <button class="tab" data-p="switchboard">switchboard escrow <span class="tag kcb">this repo</span></button>
-  </div>
+  <!-- ============== HERO ============== -->
+  <section class="hero">
+    <h1>programmable payments for <em>agents</em>.</h1>
+    <p class="lead">
+      One Python library, one contract suite, one binary wire — so two AI agents
+      from different teams can pay each other for work, without a human in the loop.
+    </p>
+    <div class="hero-chips">
+      <span class="chip mark">post-quantum</span>
+      <span class="chip">chain-agnostic</span>
+      <span class="chip">token-agnostic</span>
+      <span class="chip">agent-native</span>
+      <span class="chip">HTTP 402 · MPP · AP2 · ZAP wire</span>
+    </div>
+  </section>
 
-  <div class="two-col">
-    <div>
-      <div class="controls" id="info">
-        <h3 id="infoTitle">—</h3>
-        <div style="color: var(--muted); font-size: 12.5px; line-height: 1.55" id="infoBlurb"></div>
-        <div style="margin-top: 10px" class="logo-row" id="infoTags"></div>
+  <!-- ============== STATS ============== -->
+  <section class="s" id="stats">
+    <div class="head">
+      <h2>at a glance</h2>
+      <span class="meta">v0.1.1 · active</span>
+    </div>
+    <div class="grid cols-4">
+      <div class="stat">
+        <div class="stat-label">modules</div>
+        <div class="stat-value">12</div>
+        <div class="stat-sub">11 shipped, 1 in PR</div>
       </div>
-      <div style="margin-top: 12px">
-        <h3>Steps</h3>
-        <ol class="steps" id="stepsList"></ol>
+      <div class="stat">
+        <div class="stat-label">PRs merged</div>
+        <div class="stat-value">30+</div>
+        <div class="stat-sub">x402 · MPP · MPC · PQ · escrow · oracle</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">lab scenes</div>
+        <div class="stat-value">16</div>
+        <div class="stat-sub">animated, fork-and-extend</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">chains targeted</div>
+        <div class="stat-value">5</div>
+        <div class="stat-sub">LUX · ETH · Base · AVAX · TRON</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== MODULES ============== -->
+  <section class="s" id="modules">
+    <div class="head">
+      <h2>modules</h2>
+      <span class="meta">one library, twelve pieces</span>
+    </div>
+    <p class="intro">
+      Each module ships independently and is composable with the rest. Pick the ones
+      you need — gate an HTTP route, hold funds in escrow, sign a payment with a
+      post-quantum key, or write your own adapter. The contract surface is small,
+      the wire format is open, and every piece is auditable.
+    </p>
+
+    <div class="grid auto">
+
+      <div class="card">
+        <div class="card-top">
+          <h3>x402_middleware</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          Server-side HTTP <code>402</code> gate. Drop into FastAPI or Flask;
+          verifies <code>X-PAYMENT</code> signatures and emits the standard
+          <code>accepts[]</code> envelope. The whole pay-per-call story in one
+          middleware.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#x402_middleware">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/19">PR #19</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/blob/main/switchboard/x402_middleware.py">source</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>zap_transport</h3>
+          <span class="chip warn">in PR</span>
+        </div>
+        <div class="card-body">
+          Binary wire for <code>PaymentOffer</code> / <code>PaymentProof</code>
+          over <a href="https://github.com/luxfi/zap">luxfi/zap</a>. Zero-allocation,
+          roughly an order of magnitude smaller than JSON. First production
+          consumer of <code>zap_py</code>.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#zap_transport">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/21">PR #21</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>gas_tracker · gas_budget</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          Hard gas budgets — per-hour, per-day — so a runaway agent loop can't
+          drain its own treasury. Closes the #1 footgun of autonomous on-chain
+          agents.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#gas_budget">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/14">PR #14</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>nonce_manager</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          Client-side nonce manager with reorg protection. The piece every
+          shipping agent eventually has to write — written once, here.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#nonce_manager">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/11">PR #11</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>AgentEscrow.sol</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          Trustless escrow with timeout, challenge period, and mutual cancel.
+          Solidity contract + Python client + CLI. The native-ETH variant is
+          drafted as an EIP.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#agent_escrow">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/8">PR #8</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/50">EIP draft</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>pq · post-quantum</h3>
+          <span class="chip mark">north star</span>
+        </div>
+        <div class="card-body">
+          <code>liboqs</code> wrapper for PQ signatures (Dilithium / Falcon /
+          SPHINCS+). Every <code>PaymentProof</code> carries a
+          <code>signature_alg</code> + signature; the wire format is PQ-ready out
+          of the box. <a href="https://github.com/kcolbchain/switchboard/issues/33">PQ-0 → PQ-5</a>.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#pq">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/33">spec</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>a2a_x402 adapter</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          Adapter between Google's A2A (Agent-to-Agent) framework and x402.
+          Lets an A2A agent be paid in the open x402 protocol.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#a2a_x402">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/29">PR #29</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>multi-chain settlement</h3>
+          <span class="chip ok">design v0.1</span>
+        </div>
+        <div class="card-body">
+          The chain-agnostic settlement surface. Notary attestation for v1,
+          ZK-relay for v2, native PQ verification on LUX. Spec landed in
+          <code>docs/multi-chain-settlement.md</code>.
+        </div>
+        <div class="card-foot">
+          <a href="#multichain">how it fits</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md">spec</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/71">PR #71</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>mpc_wallet</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          Multi-party-computation wallet — threshold signatures across an
+          agent fleet, no single key on any one machine.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#mpc_wallet">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>mpp/session</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          Multi-party payment sessions — open a streaming channel under a
+          budget cap, settle on close. The Tempo / Stripe-style rail for
+          long-running agent work.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#mpp_session">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>adapters/lucidly</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          syUSD auto-park for idle agent balances. Any USDC the agent isn't
+          actively using earns yield by default; pulled back automatically
+          when needed for a payment.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#lucidly">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>OracleAggregator</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          Oracle-mediated escrow release — <code>releaseByAttestation</code>
+          lets a designated oracle aggregate sign off on delivery, settling
+          the escrow without on-chain dispute.
+        </div>
+        <div class="card-foot">
+          <a href="./docs.html#oracle_aggregator">docs</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/52">PR #52</a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== MULTI-CHAIN ============== -->
+  <section class="s" id="multichain">
+    <div class="head">
+      <h2>multi-chain · LUX-settled</h2>
+      <span class="meta">#59 resolved · design v0.1</span>
+    </div>
+    <p class="intro">
+      Switchboard is <em>chain-agnostic</em> and <em>token-agnostic</em>: agents transact on
+      whichever chain fits the job (TRON for sub-cent micropayments, AVAX C-chain
+      for liquidity, Base for USDC, ETH for canonical native-ETH escrow), with
+      whichever asset both sides agree on. <em>LUX is the preferred settlement layer</em> —
+      PQ-signed receipts anchor on LUX regardless of where the underlying transfer
+      happened.
+    </p>
+
+    <div class="chain-map">
+      <div class="col">
+        <h4>execution chains</h4>
+        <div class="rail">TRON           <span class="rail-meta">TRC-20 · sub-cent fee</span></div>
+        <div class="rail">Avalanche C    <span class="rail-meta">EVM · USDC.e</span></div>
+        <div class="rail">Base           <span class="rail-meta">EVM · USDC native</span></div>
+        <div class="rail">Ethereum L1    <span class="rail-meta">native-ETH escrow</span></div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="col">
+        <h4>settlement</h4>
+        <div class="rail lux">LUX C-chain   <span class="rail-meta">PQ receipt anchor</span></div>
+        <div class="rail">SettlementRegistry  <span class="rail-meta">hash + envelope</span></div>
+        <div class="rail">ZAP wire format     <span class="rail-meta">canonical receipt</span></div>
+        <div class="rail">Dispute evidence    <span class="rail-meta">on-chain on LUX</span></div>
       </div>
     </div>
 
-    <div>
-      <div class="viz">
-        <svg class="flow" id="flow" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 Z" fill="currentColor"/>
-            </marker>
-          </defs>
-        </svg>
+    <p class="intro" style="margin-top: var(--s-5)">
+      <strong>Design v0.1 landed</strong> (<a href="https://github.com/kcolbchain/switchboard/pull/71">PR #71</a>,
+      closing <a href="https://github.com/kcolbchain/switchboard/issues/59">#59</a>).
+      The chosen path is a <em>notary attestation</em> model for v1, upgradable in-place to
+      <em>ZK-relay</em> as Groth16 verification matures on LUX. TRON finality at 19 blocks,
+      Avalanche C-Chain at 5, LUX at 2. Full spec, finality tables, and per-chain
+      considerations in
+      <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md">
+      <code>docs/multi-chain-settlement.md</code></a>.
+    </p>
+  </section>
+
+  <!-- ============== RAILS COMPATIBILITY ============== -->
+  <section class="s" id="rails">
+    <div class="head">
+      <h2>rails compatibility</h2>
+      <span class="meta">x402 · MPP · AP2 · Circle · escrow</span>
+    </div>
+    <p class="intro">
+      The four open agent-payment rails of 2026, plus on-chain escrow. Switchboard
+      speaks all of them — the same module surface, the same wire envelope, the
+      same agent identity. The matrix shows where each rail draws the line.
+    </p>
+
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>capability</th>
+            <th>x402</th>
+            <th>MPP</th>
+            <th>AP2</th>
+            <th>Circle Nano</th>
+            <th>AgentEscrow</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="label">HTTP 402 paywall</td>
+            <td class="y">✓ native</td>
+            <td class="p">via session</td>
+            <td class="p">via card</td>
+            <td class="n">—</td>
+            <td class="n">—</td></tr>
+          <tr><td class="label">streaming micropayments</td>
+            <td class="p">per-call</td>
+            <td class="y">✓ native</td>
+            <td class="p">card auth</td>
+            <td class="y">✓ native</td>
+            <td class="n">—</td></tr>
+          <tr><td class="label">trustless escrow</td>
+            <td class="n">—</td>
+            <td class="n">—</td>
+            <td class="n">—</td>
+            <td class="n">—</td>
+            <td class="y">✓ native</td></tr>
+          <tr><td class="label">refund / dispute</td>
+            <td class="p">off-chain</td>
+            <td class="p">off-chain</td>
+            <td class="y">✓ chargeback</td>
+            <td class="p">off-chain</td>
+            <td class="y">✓ on-chain</td></tr>
+          <tr><td class="label">chain-agnostic</td>
+            <td class="y">✓</td>
+            <td class="y">✓</td>
+            <td class="na">n/a (card)</td>
+            <td class="p">USDC only</td>
+            <td class="y">✓ (with #59)</td></tr>
+          <tr><td class="label">PQ-signed</td>
+            <td class="y">✓ via switchboard</td>
+            <td class="y">✓ via switchboard</td>
+            <td class="n">—</td>
+            <td class="n">—</td>
+            <td class="y">✓ via switchboard</td></tr>
+          <tr><td class="label">binary wire (ZAP)</td>
+            <td class="y">✓</td>
+            <td class="y">✓</td>
+            <td class="na">n/a</td>
+            <td class="na">n/a</td>
+            <td class="y">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============== NOVEL CONCEPTS ============== -->
+  <section class="s" id="novel">
+    <div class="head">
+      <h2>what's novel</h2>
+      <span class="meta">we think nobody else is doing these</span>
+    </div>
+    <p class="intro">
+      Open questions and proposals switchboard is pushing into the world of agent
+      payments. Each is filed as a research issue in the public tracker. PRs
+      and counter-proposals welcome.
+    </p>
+
+    <div class="grid auto">
+
+      <div class="card">
+        <div class="card-top">
+          <h3>native-ETH A2A escrow</h3>
+          <span class="chip mark">EIP draft</span>
+        </div>
+        <div class="card-body">
+          Trustless agent-to-agent escrow in native ETH (no token wrapper).
+          Formalized as a Standards-Track ERC. Are we the only ones?
+        </div>
+        <div class="card-foot">
+          <a href="https://github.com/kcolbchain/switchboard/issues/50">#50</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/49">survey #49</a>
+        </div>
       </div>
-      <div class="panel" style="margin-top: 12px">
-        <h3>Reference code — current step</h3>
-        <pre id="codeBox">Click a step on the left to see the wire-level snippet.</pre>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>composable refund policies</h3>
+          <span class="chip">innovation</span>
+        </div>
+        <div class="card-body">
+          Refund logic as on-chain plugins. Compose pro-rata, gated, time-decay,
+          slashing — every contract gets the policy it needs without forking the
+          escrow.
+        </div>
+        <div class="card-foot">
+          <a href="https://github.com/kcolbchain/switchboard/issues/46">#46</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>adversarial conformance harness</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          A test corpus every other-language implementation of the wire format
+          <em>must reject</em>. The negative space defines the protocol as much
+          as the positive space. Vectors in
+          <code>tests/conformance/adversarial_vectors.json</code>.
+        </div>
+        <div class="card-foot">
+          <a href="https://github.com/kcolbchain/switchboard/issues/45">#45</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/62">PR #62</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>private x402</h3>
+          <span class="chip">innovation</span>
+        </div>
+        <div class="card-body">
+          Pay an agent <em>without revealing the amount</em>. Range proofs on the
+          payment envelope; the server learns "yes, paid above threshold," nothing
+          more.
+        </div>
+        <div class="card-foot">
+          <a href="https://github.com/kcolbchain/switchboard/issues/44">#44</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>receipt aggregation</h3>
+          <span class="chip">innovation</span>
+        </div>
+        <div class="card-body">
+          N off-chain micropayments collapse into 1 on-chain settlement. Save
+          gas on the boring stretch; settle on-chain when the relationship ends
+          or stakes cross a threshold.
+        </div>
+        <div class="card-foot">
+          <a href="https://github.com/kcolbchain/switchboard/issues/43">#43</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>.well-known/agent-payment.json</h3>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="card-body">
+          Discoverable agent identity hub at a well-known URL. Pay-to address,
+          accepted assets, PQ key, ZAP endpoint, rate-limit policy — one
+          fetch, one source of truth. Schema in
+          <code>docs/well-known-agent-payment.md</code>.
+        </div>
+        <div class="card-foot">
+          <a href="https://github.com/kcolbchain/switchboard/issues/42">#42</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/61">PR #61</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/well-known-agent-payment.md">schema</a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== PQ STORY ============== -->
+  <section class="s" id="pq">
+    <div class="head">
+      <h2>post-quantum, by default</h2>
+      <span class="meta">PQ-0 → PQ-5 · in flight</span>
+    </div>
+    <p class="intro">
+      Every <code>PaymentOffer</code> and <code>PaymentProof</code> carries an
+      explicit <code>signature_alg</code> and a signature in that algorithm.
+      Dilithium is the default; Falcon and SPHINCS+ are first-class. The wire
+      format is forward-compatible — when NIST adds a Round-4 winner, the
+      registry adds an entry; the protocol doesn't change.
+    </p>
+
+<pre class="code"><span class="com"># two-line PQ signing on a payment offer</span>
+<span class="kw">from</span> switchboard <span class="kw">import</span> PaymentOffer
+<span class="kw">from</span> switchboard.pq <span class="kw">import</span> sign, ALG_DILITHIUM3
+
+offer = <span class="fn">PaymentOffer</span>(
+    pay_to=<span class="str">"0xYourTreasury..."</span>,
+    asset=<span class="str">"0x036Cb...e7e"</span>,
+    network=<span class="str">"base-sepolia"</span>,
+    amount=<span class="str">"1000"</span>,           <span class="com"># 0.001 USDC</span>
+    signature_alg=ALG_DILITHIUM3,
+)
+offer.signature = <span class="fn">sign</span>(offer.canonical(), pq_key)</pre>
+
+    <p class="intro" style="margin-top: var(--s-5)">
+      On the verifier side, dispatch on <code>signature_alg</code> happens at
+      the adapter layer. On LUX, the spec assumes native PQ precompiles and
+      ZK precompiles for Groth16 verification (per
+      <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md">
+      <code>docs/multi-chain-settlement.md</code></a>) — confirming this
+      against current <code>luxfi/*</code> code is the next open question.
+    </p>
+  </section>
+
+  <!-- ============== LAB / SCENES ============== -->
+  <section class="s" id="lab">
+    <div class="head">
+      <h2>the lab · 16 scenes</h2>
+      <span class="meta">single-file canvas, no build</span>
+    </div>
+    <p class="intro">
+      Animated scenes that play out every protocol switchboard documents. Each
+      scene is ~150 lines and follows the <a href="https://github.com/kcolbchain/switchboard/blob/main/web/SCENES.md">SCENES.md</a>
+      contract. Touch the scene for a tooltip, scrub the simulator slider, or
+      step through with <code>space</code> / <code>n</code> / <code>r</code>.
+    </p>
+
+    <div class="scene-grid">
+      <a class="scene" href="./agents-demo.html#scene-1"><div class="num">01</div><div class="name">x402 paywall</div></a>
+      <a class="scene" href="./agents-demo.html#scene-2"><div class="num">02</div><div class="name">escrow + refund</div></a>
+      <a class="scene" href="./agents-demo.html#scene-3"><div class="num">03</div><div class="name">streaming MPP</div></a>
+      <a class="scene" href="./agents-demo.html#scene-4"><div class="num">04</div><div class="name">AI compute auction</div></a>
+      <a class="scene" href="./agents-demo.html#scene-5"><div class="num">05</div><div class="name">human-in-the-loop</div></a>
+      <a class="scene" href="./agents-demo.html#scene-6"><div class="num">06</div><div class="name">treasury rebalance</div></a>
+      <a class="scene" href="./agents-demo.html#scene-7"><div class="num">07</div><div class="name">signed oracle pulls</div></a>
+      <a class="scene" href="./agents-demo.html#scene-8"><div class="num">08</div><div class="name">PQ envelope</div></a>
+      <a class="scene" href="./agents-demo.html#scene-9"><div class="num">09</div><div class="name">taxi handover</div></a>
+      <a class="scene" href="./agents-demo.html#scene-10"><div class="num">10</div><div class="name">café walk-by</div></a>
+      <a class="scene" href="./agents-demo.html#scene-11"><div class="num">11</div><div class="name">food delivery</div></a>
+      <a class="scene" href="./agents-demo.html#scene-12"><div class="num">12</div><div class="name">split bill</div></a>
+      <a class="scene" href="./agents-demo.html#scene-13"><div class="num">13</div><div class="name">native-ETH escrow</div></a>
+      <a class="scene" href="./agents-demo.html#scene-14"><div class="num">14</div><div class="name">subscription</div></a>
+      <a class="scene" href="./agents-demo.html#scene-15"><div class="num">15</div><div class="name">multi-city trip</div></a>
+      <a class="scene" href="./agents-demo.html#scene-16"><div class="num">16</div><div class="name">+ add yours</div></a>
+    </div>
+
+    <p class="intro" style="margin-top: var(--s-5)">
+      <a href="./agents-demo.html">Open the full lab →</a>
+    </p>
+  </section>
+
+  <!-- ============== QUICKSTART ============== -->
+  <section class="s" id="quickstart">
+    <div class="head">
+      <h2>30-second quickstart</h2>
+      <span class="meta">one route, one middleware</span>
+    </div>
+    <p class="intro">
+      Gate any HTTP route behind on-chain payment. The middleware does the rest —
+      verifies the <code>X-PAYMENT</code> envelope, emits the <code>accepts[]</code> response,
+      lets the caller settle in any supported asset on any supported chain.
+    </p>
+
+<pre class="code"><span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+<span class="kw">from</span> switchboard.x402_middleware <span class="kw">import</span> X402Middleware
+
+app = <span class="fn">FastAPI</span>()
+app.<span class="fn">add_middleware</span>(
+    X402Middleware,
+    pay_to=<span class="str">"0xYourTreasury..."</span>,
+    asset=<span class="str">"0x036CbD53842c5426634e7929541eC2318f3dCF7e"</span>,  <span class="com"># USDC on Base Sepolia</span>
+    network=<span class="str">"base-sepolia"</span>,
+    price=<span class="str">"1000"</span>,           <span class="com"># 0.001 USDC per call</span>
+    paths=[<span class="str">"/agent-only"</span>],
+)
+
+<span class="kw">@</span>app.<span class="fn">get</span>(<span class="str">"/agent-only"</span>)
+<span class="kw">def</span> <span class="fn">agent_only</span>():
+    <span class="kw">return</span> {<span class="str">"ok"</span>: <span class="kw">True</span>, <span class="str">"payload"</span>: <span class="str">"this cost the caller 0.001 USDC"</span>}</pre>
+
+    <p class="intro" style="margin-top: var(--s-5)">
+      Full backend reference at <a href="./docs.html">docs</a> · install via
+      <code>pip install switchboard[pq]</code>.
+    </p>
+  </section>
+
+</div>
+
+<footer class="bottom">
+  <div class="container">
+    <div class="row">
+      <a class="wm" href="./" style="font-family: var(--font); color: var(--fg); border: none;">
+        <em style="color: var(--mark); font-style: normal; font-weight: 700;">kcolb</em>chain
+        <span style="color: var(--fg-faint); margin: 0 var(--s-2);">/</span>
+        <span style="color: var(--fg-muted);">switchboard</span>
+      </a>
+      <div class="links">
+        <a href="./docs.html">docs</a>
+        <a href="./agents-demo.html">lab</a>
+        <a href="./simulator.html">simulator</a>
+        <a href="https://github.com/kcolbchain/switchboard">source</a>
+        <a href="https://github.com/kcolbchain/switchboard/issues">issues</a>
+        <a href="https://kcolbchain.github.io/brand/">brand</a>
+        <a href="https://kcolbchain.com">kcolbchain</a>
       </div>
     </div>
+    <p class="legal">
+      Aligned with <a href="https://github.com/luxfi/zap">luxfi/zap</a>,
+      <a href="https://www.x402.org">x402.org</a>, and the
+      <a href="https://github.com/hanzoai/mcp">hanzoai/mcp</a> <code>fetch</code> tool.
+      MIT · open source · no analytics on this page.
+    </p>
   </div>
-
-  <h2>Compatibility matrix</h2>
-  <div class="panel" style="overflow-x: auto">
-    <table class="matrix">
-      <thead>
-        <tr>
-          <th class="label"></th>
-          <th class="cell">x402</th>
-          <th class="cell">MPP</th>
-          <th class="cell">AP2</th>
-          <th class="cell">Circle Nano</th>
-          <th class="cell">switchboard escrow</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td class="label">Transport</td>
-          <td>HTTP header on 402</td><td>HTTP + Tempo txs</td><td>A2A over gRPC/JSON-RPC</td><td>HTTP/SDK, off-chain+onchain</td><td>HTTP + chain txs (escrow)</td>
-        </tr>
-        <tr><td class="label">Settlement asset</td>
-          <td>USDC (multichain)</td><td>USDC on Tempo, fiat via SPT</td><td>protocol-agnostic</td><td>USDC nanopayments</td><td>native ETH/token + USDC</td>
-        </tr>
-        <tr><td class="label">Agent ↔ Agent</td>
-          <td class="p">indirect (server intermediary)</td><td class="y">native</td><td class="y">native</td><td class="p">via Circle Wallets</td><td class="y">native</td>
-        </tr>
-        <tr><td class="label">Agent ↔ API / MCP server</td>
-          <td class="y">primary use case</td><td class="y">supported</td><td class="p">via payments facilitator</td><td class="y">native</td><td class="p">via wrapper</td>
-        </tr>
-        <tr><td class="label">Streaming / sessions</td>
-          <td class="p">per-request (v2 adds multi-step)</td><td class="y">streamed micro-txs per session</td><td class="p">yes (verifiable intent mandate)</td><td class="y">nanopayments &lt; $0.000001</td><td class="p">timeout + challenge-period escrow</td>
-        </tr>
-        <tr><td class="label">Dispute / refund</td>
-          <td class="n">none (idempotent retry)</td><td>SPT + card dispute rails</td><td>AP2 verifiable intent → issuer</td><td>Circle policy + rules</td><td class="y">on-chain timeout + refund</td>
-        </tr>
-        <tr><td class="label">Fiat rails</td>
-          <td class="n">crypto only</td><td class="y">via Stripe SPT</td><td class="y">card networks (Visa, MC)</td><td class="p">via Circle on/off ramp</td><td class="n">crypto only</td>
-        </tr>
-        <tr><td class="label">License</td>
-          <td>Apache-2.0</td><td>Apache-2.0</td><td>Apache-2.0</td><td>proprietary SDK + open skills</td><td class="y">MIT</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <h2>How switchboard fits</h2>
-  <div class="panel">
-    <p style="margin:0 0 10px 0">The open rails above <strong>settle</strong> agent payments; they don't manage the agent side — keys, nonces, gas budgets, counterparty escrow. <code>switchboard</code> fills that gap:</p>
-    <ul style="margin:0 0 0 18px;padding:0;color:var(--muted);font-size:13px">
-      <li><strong>Agent wallets</strong> — MPC key management for autonomous actors (tracked in <a href="https://github.com/kcolbchain/switchboard/issues/1">#1</a>).</li>
-      <li><strong>Client-side nonce manager with reorg protection</strong> — so a bursty agent doesn't brick its own queue.</li>
-      <li><strong>Gas budget tracker</strong> — rolling hour/day limits, auto-pause on exhaustion (<a href="https://github.com/kcolbchain/switchboard/pull/14">#14</a>, merged).</li>
-      <li><strong>Agent-to-agent escrow</strong> — <code>AgentEscrow.sol</code> with timeout + challenge-period refund (<a href="https://github.com/kcolbchain/switchboard/issues/2">#2</a>, merged).</li>
-      <li><strong>x402 / MPP / AP2 server middleware</strong> — so switchboard-managed agents can respond to <code>402 Payment Required</code> and initiate MPP sessions out of the box (tokenomics / integration issues incoming).</li>
-    </ul>
-  </div>
-
-</main>
-
-<footer>
-  Protocol summaries reflect the Apr 2026 agent-payment landscape. x402 joined the Linux Foundation on 2026-04-02 with
-  Google / AWS / Microsoft / Stripe / Visa / Mastercard as founding members. Tempo launched its mainnet on 2026-03-18
-  with MPP as its co-authored protocol with Stripe. Circle Nanopayments testnet went live on 2026-03-03. AP2 was
-  announced by Google Cloud the same week. Switchboard itself is MIT-licensed and kcolbchain-maintained.
 </footer>
 
-<script>
-// ================================================================= data
-
-const PROTOCOLS = {
-  x402: {
-    title: "x402 — HTTP 402 Payment Required, for AI agents",
-    blurb: "Open standard (Linux Foundation, Apr 2026) from Coinbase + friends. A resource server replies 402 with PaymentRequirements; the agent retries with a PAYMENT-SIGNATURE header over USDC. 35M+ transactions on Solana since its summer 2025 debut.",
-    tags: ["Linux Foundation", "USDC", "Coinbase", "HTTP-native"],
-    actors: [
-      { id: "agent",   role: "payer",  label: "Agent", y: 60 },
-      { id: "server",  role: "payee",  label: "API / MCP server", y: 300 },
-    ],
-    steps: [
-      { from: "agent",  to: "server", msg: "GET /resource",
-        desc: "Agent requests a protected resource without any payment metadata.",
-        code: `<span class="kw">GET</span> /v1/premium-data <span class="str">HTTP/1.1</span>\nHost: api.example.com` },
-      { from: "server", to: "agent",  msg: "402 + PaymentRequirements",
-        desc: "Server responds with 402 and the list of schemes / networks / amounts it accepts.",
-        code: `<span class="kw">HTTP/1.1 402 Payment Required</span>\nAccept-Payment: <span class="prop">x402/v1</span>\n\n{\n  <span class="prop">"scheme"</span>: <span class="str">"exact"</span>,\n  <span class="prop">"network"</span>: <span class="str">"base"</span>,\n  <span class="prop">"asset"</span>: <span class="str">"USDC"</span>,\n  <span class="prop">"amount"</span>: <span class="str">"0.001"</span>,\n  <span class="prop">"recipient"</span>: <span class="str">"0x…"</span>\n}` },
-      { from: "agent",  to: "server", msg: "GET + PAYMENT-SIGNATURE",
-        desc: "Agent retries with a signed PaymentPayload in the header.",
-        code: `<span class="kw">GET</span> /v1/premium-data\nPAYMENT-SIGNATURE: <span class="prop">x402/v1;payload=</span><span class="str">eyJz…</span>` },
-      { from: "server", to: "agent",  msg: "200 + resource",
-        desc: "Server verifies the payload (on-chain or via a facilitator) and serves the resource.",
-        code: `<span class="kw">HTTP/1.1 200 OK</span>\nContent-Type: application/json\n\n{ <span class="prop">"data"</span>: <span class="str">"…"</span> }` },
-    ],
-  },
-
-  mpp: {
-    title: "MPP — Machine Payments Protocol (Stripe × Tempo)",
-    blurb: "Co-authored by Stripe + Tempo, live on Tempo L1 mainnet since Mar 2026. Introduces a 'session' primitive: the agent authorises a spending limit upfront, then streams micro-payments without a tx per interaction. Stripe maps Shared Payment Tokens (SPT) back to fiat cards.",
-    tags: ["Stripe", "Paradigm", "Tempo L1", "SPT / fiat"],
-    actors: [
-      { id: "agent",    role: "payer",  label: "Agent",           y: 40 },
-      { id: "session",  role: "escrow", label: "Session (Tempo)", y: 180 },
-      { id: "merchant", role: "payee",  label: "Merchant / peer", y: 320 },
-    ],
-    steps: [
-      { from: "agent", to: "session", msg: "OpenSession(limit=$5)",
-        desc: "Agent opens a session with a spending cap and TTL. Stripe SPT optionally bridges a fiat credential.",
-        code: `<span class="kw">POST</span> /mpp/sessions\n{\n  <span class="prop">"limit"</span>: <span class="str">"5.00 USDC"</span>,\n  <span class="prop">"ttl_seconds"</span>: <span class="str">"3600"</span>,\n  <span class="prop">"spt"</span>: <span class="str">"pm_1Q…"</span>\n}` },
-      { from: "session", to: "agent", msg: "SessionToken",
-        desc: "Session contract returns a bearer token scoped to the session; agent carries it on downstream requests.",
-        code: `<span class="prop">session_id</span>: <span class="str">"sess_…"</span>\n<span class="prop">token</span>: <span class="str">"mpp_…"</span>` },
-      { from: "agent", to: "merchant", msg: "Streamed micro-pay",
-        desc: "Per request, the agent signs a small debit under the session cap. No on-chain tx until session close.",
-        code: `<span class="kw">POST</span> /mpp/charge\n{\n  <span class="prop">"session"</span>: <span class="str">"sess_…"</span>,\n  <span class="prop">"amount"</span>: <span class="str">"0.003"</span>,\n  <span class="prop">"ref"</span>: <span class="str">"req_42"</span>\n}` },
-      { from: "session", to: "merchant", msg: "Settle on close",
-        desc: "When session closes, the net amount settles on Tempo L1; merchant sees one net tx instead of thousands.",
-        code: `// on-chain:\n<span class="fn">settle</span>(<span class="prop">session</span>, <span class="prop">totals</span>, <span class="prop">sigs</span>)` },
-    ],
-  },
-
-  ap2: {
-    title: "AP2 — Agent Payments Protocol (Google)",
-    blurb: "Google's agents-to-payments protocol, built on A2A. Uses Verifiable Intent mandates (Mastercard-aligned) so a payer card network can verify an agent was authorised to pay on a user's behalf. Transport-agnostic.",
-    tags: ["Google Cloud", "A2A", "Verifiable Intent", "Mandates"],
-    actors: [
-      { id: "user",       role: "escrow", label: "User",                  y: 40 },
-      { id: "agent",      role: "payer",  label: "Agent",                 y: 180 },
-      { id: "facilitator",role: "payee",  label: "Payments facilitator",  y: 320 },
-    ],
-    steps: [
-      { from: "user", to: "agent", msg: "Intent mandate",
-        desc: "User authorises the agent for a specific merchant / category / cap. Signed by the user's wallet or card issuer.",
-        code: `{\n  <span class="prop">"kind"</span>: <span class="str">"verifiable_intent"</span>,\n  <span class="prop">"merchant"</span>: <span class="str">"acme.example"</span>,\n  <span class="prop">"cap"</span>: <span class="str">"20.00 USD"</span>,\n  <span class="prop">"sig"</span>: <span class="str">"0x…"</span>\n}` },
-      { from: "agent", to: "facilitator", msg: "Charge request + mandate",
-        desc: "Agent forwards the mandate + transaction details to the facilitator (card network or crypto rail).",
-        code: `<span class="kw">POST</span> /ap2/charge\n{\n  <span class="prop">"mandate"</span>: {…},\n  <span class="prop">"amount"</span>: <span class="str">"12.30 USD"</span>,\n  <span class="prop">"merchant"</span>: <span class="str">"acme.example"</span>\n}` },
-      { from: "facilitator", to: "agent", msg: "Auth + capture",
-        desc: "Facilitator verifies the mandate, debits the user's funding source (card or crypto), and returns an auth receipt.",
-        code: `{\n  <span class="prop">"status"</span>: <span class="str">"captured"</span>,\n  <span class="prop">"tx"</span>: <span class="str">"ch_…"</span>,\n  <span class="prop">"network"</span>: <span class="str">"visa"</span>\n}` },
-      { from: "agent", to: "user", msg: "Notify",
-        desc: "Agent reports back to the user with the receipt and mandate usage.",
-        code: `// A2A notification\n{ <span class="prop">"type"</span>: <span class="str">"agent.paid"</span>, <span class="prop">"tx"</span>: <span class="str">"ch_…"</span> }` },
-    ],
-  },
-
-  nano: {
-    title: "Circle Nanopayments — sub-cent USDC for agents",
-    blurb: "Circle's gas-free USDC transfers as small as $0.000001, testnet since Mar 2026. Uses Circle Wallets + developer-provisioned policies. Open-sources Circle Skills for use inside agents / IDE assistants.",
-    tags: ["Circle", "USDC", "Nanopayments", "Arc"],
-    actors: [
-      { id: "agent",  role: "payer",  label: "Agent (Circle Wallet)", y: 60 },
-      { id: "rail",   role: "escrow", label: "Circle rail",           y: 200 },
-      { id: "peer",   role: "payee",  label: "Data / API service",    y: 320 },
-    ],
-    steps: [
-      { from: "agent", to: "rail", msg: "Skill: send 0.0001 USDC",
-        desc: "Agent triggers a nano-send via Circle Skills (installed with `npx skills add circlefin/skills`).",
-        code: `<span class="kw">await</span> circle.<span class="fn">send</span>({\n  <span class="prop">from</span>: <span class="str">"agent-wallet-id"</span>,\n  <span class="prop">to</span>: peerAddr,\n  <span class="prop">amount</span>: <span class="str">"0.0001 USDC"</span>,\n});` },
-      { from: "rail", to: "peer", msg: "Credit nano-balance",
-        desc: "Circle's nanopayment rail applies the debit/credit off-chain; periodically roll-ups settle on-chain.",
-        code: `// internal to Circle rail\nbalance[peer] += <span class="str">"0.0001 USDC"</span>;` },
-      { from: "peer", to: "agent", msg: "Deliver service",
-        desc: "Peer serves data / inference / API keyed by the nano-payment receipt.",
-        code: `// HTTP 200 with the answer` },
-      { from: "rail", to: "peer", msg: "Periodic roll-up on-chain",
-        desc: "Aggregated nanopayments settle to the peer on-chain at a configurable cadence — one tx instead of 10⁶.",
-        code: `// on Arc / Base\nUSDC.<span class="fn">transfer</span>(peer, rollupAmount);` },
-    ],
-  },
-
-  switchboard: {
-    title: "switchboard escrow — chain-native agent-to-agent payment",
-    blurb: "This repo's AgentEscrow.sol. Trustless escrow with explicit timeout + challenge-period refund. Use it when both sides are on-chain agents and you want dispute-resolution without depending on a card network.",
-    tags: ["kcolbchain", "on-chain", "escrow", "MIT"],
-    actors: [
-      { id: "payer",  role: "payer",  label: "Payer agent",    y: 60 },
-      { id: "esc",    role: "escrow", label: "AgentEscrow.sol", y: 200 },
-      { id: "payee",  role: "payee",  label: "Payee agent",    y: 320 },
-    ],
-    steps: [
-      { from: "payer", to: "esc", msg: "createPayment(payee, amt, timeout)",
-        desc: "Payer locks funds in escrow with a timeout block and challenge-period window.",
-        code: `escrow.<span class="fn">createPayment</span>{<span class="prop">value</span>: <span class="str">1e18</span>}(\n  payee,\n  <span class="prop">timeout_blocks</span>:          <span class="str">100</span>,\n  <span class="prop">challenge_period_blocks</span>:  <span class="str">10</span>\n);` },
-      { from: "payee", to: "payer", msg: "deliver work (off-chain)",
-        desc: "Payee performs the work; this step is off-chain but referenced by the escrow ID.",
-        code: `// off-chain: deliver the result\n// reference: request_id` },
-      { from: "payer", to: "esc", msg: "confirmPayment(id)",
-        desc: "Payer confirms — funds release to the payee. Alternatively, requestRefund() after timeout + challenge.",
-        code: `escrow.<span class="fn">confirmPayment</span>(request_id);` },
-      { from: "esc",   to: "payee", msg: "transfer funds",
-        desc: "Escrow forwards the locked amount to the payee address.",
-        code: `// internal\npayee.<span class="fn">transfer</span>(amount);` },
-    ],
-  },
-};
-
-// ================================================================= render
-
-const flow = document.getElementById("flow");
-let currentProto = "x402";
-let currentStep = 0;
-
-function tabClick(p) {
-  currentProto = p;
-  currentStep = 0;
-  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.p === p));
-  renderAll();
-}
-document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => tabClick(t.dataset.p)));
-
-function renderAll() {
-  const proto = PROTOCOLS[currentProto];
-  document.getElementById("infoTitle").textContent = proto.title;
-  document.getElementById("infoBlurb").textContent = proto.blurb;
-  document.getElementById("infoTags").innerHTML = proto.tags.map(t => `<span class="tag">${t}</span>`).join("");
-
-  // steps
-  document.getElementById("stepsList").innerHTML = proto.steps.map((s, i) => `
-    <li class="${i === currentStep ? 'active' : ''}" data-i="${i}">
-      <span class="num">${i+1}</span>
-      <div>
-        <div><strong>${s.msg}</strong></div>
-        <div class="body">${s.desc}</div>
-      </div>
-    </li>
-  `).join("");
-  document.querySelectorAll(".steps li").forEach(li => li.addEventListener("click", () => {
-    currentStep = parseInt(li.dataset.i, 10);
-    renderAll();
-  }));
-
-  // svg
-  drawFlow(proto);
-
-  // code
-  document.getElementById("codeBox").innerHTML = proto.steps[currentStep].code;
-}
-
-function drawFlow(proto) {
-  const W = 720;
-  const actorW = 170, actorH = 44;
-  const nActors = proto.actors.length;
-  const stepsH = Math.max(nActors * 60, 340);
-  const xMap = {};
-  proto.actors.forEach((a, i) => { xMap[a.id] = 80 + i * ((W - 160) / Math.max(1, nActors - 1)); });
-
-  // clear
-  flow.innerHTML = `
-    <defs>
-      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M0,0 L10,5 L0,10 Z" fill="var(--accent)"/>
-      </marker>
-      <marker id="arrowActive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-        <path d="M0,0 L10,5 L0,10 Z" fill="var(--warn)"/>
-      </marker>
-    </defs>
-  `;
-
-  // vertical swim-lanes per actor
-  proto.actors.forEach(a => {
-    const x = xMap[a.id];
-    flow.innerHTML += `
-      <line class="lane" x1="${x}" y1="40" x2="${x}" y2="340" />
-      <rect class="actor ${a.role}" x="${x - actorW/2}" y="14" width="${actorW}" height="${actorH}" rx="8" />
-      <text class="actor-label" x="${x}" y="42" text-anchor="middle">${a.label}</text>
-    `;
-  });
-
-  // steps arranged vertically
-  proto.steps.forEach((s, i) => {
-    const y = 80 + i * 55;
-    const x1 = xMap[s.from];
-    const x2 = xMap[s.to];
-    const active = i === currentStep;
-    const mid = (x1 + x2) / 2;
-    const marker = active ? "arrowActive" : "arrow";
-    flow.innerHTML += `
-      <line class="msg ${active ? 'active' : ''}" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" marker-end="url(#${marker})" style="color: ${active ? 'var(--warn)' : 'var(--accent)'}"/>
-      <text class="msg-label ${active ? 'active' : ''}" x="${mid}" y="${y - 6}" text-anchor="middle">${i+1}. ${s.msg}</text>
-    `;
-  });
-}
-
-renderAll();
-</script>
 </body>
 </html>
