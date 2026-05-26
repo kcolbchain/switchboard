@@ -96,6 +96,7 @@ def _build_offer_schema():
         .uint64("expires_at")  # 0 sentinel = "no expiry"
         .address("recipient")
         .bytes("amount")  # 32-byte big-endian uint256
+        .text("signature_alg")
         .text("currency")
         .text("description")
         .text("endpoint")
@@ -114,6 +115,8 @@ def _build_proof_schema():
         .address("payer")
         .hash("tx_hash")
         .bytes("amount")  # 32-byte big-endian uint256
+        .text("signature_alg")
+        .text("signature")
         .text("nonce")
         .build()
     )
@@ -170,6 +173,7 @@ def encode_offer(offer: PaymentOffer) -> bytes:
     ob.set_bytes(f["amount"], _amount_to_bytes(offer.amount_wei))
     ob.set_text(f["currency"], offer.currency)
     ob.set_text(f["description"], offer.description)
+    ob.set_text(f["signature_alg"], offer.signature_alg)
     ob.set_text(f["endpoint"], offer.endpoint)
     ob.set_text(f["nonce"], offer.nonce)
     ob.finish_as_root()
@@ -187,11 +191,14 @@ def decode_offer(wire: bytes) -> PaymentOffer:
     expires = root.uint64(f["expires_at"])
     return PaymentOffer(
         amount_wei=_amount_from_bytes(root.bytes(f["amount"])),
+        signature_alg=root.text(f["signature_alg"]),
+        signature=root.text(f["signature"]),
         currency=root.text(f["currency"]),
         recipient=_addr_to_hex(root.address(f["recipient"])),
         chain_id=root.uint64(f["chain_id"]),
         scheme=_WIRE_TO_SCHEME[root.uint8(f["scheme"])],
         description=root.text(f["description"]),
+        signature_alg=root.text(f["signature_alg"]),
         endpoint=root.text(f["endpoint"]),
         nonce=root.text(f["nonce"]),
         expires_at=int(expires) if expires else None,
@@ -222,6 +229,8 @@ def encode_proof(proof: PaymentProof) -> bytes:
     ob.set_address(f["payer"], _addr_to_bytes(proof.payer))
     ob.set_hash(f["tx_hash"], _hash_from_hex(proof.tx_hash))
     ob.set_bytes(f["amount"], _amount_to_bytes(proof.amount_wei))
+    ob.set_text(f["signature_alg"], proof.signature_alg)
+    ob.set_text(f["signature"], proof.signature)
     ob.set_text(f["nonce"], proof.nonce)
     ob.finish_as_root()
     return b.finish()
