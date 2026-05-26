@@ -1,0 +1,35 @@
+{
+  "description": "Adversarial test vectors for Switchboard payment protocol",
+  "vectors": [
+    {
+      "id": "malformed-payload",
+      "input": "not-json",
+      "expected_error": "parse_error"
+    },
+    {
+      "id": "missing-signature",
+      "input": "{\"payment\":{\"amount\":100}}",
+      "expected_error": "missing_signature"
+    },
+    {
+      "id": "wrong-algorithm",
+      "input": "{\"sig_alg\":\"none\",\"sig\":\"\"}",
+      "expected_error": "alg_not_allowed"
+    },
+    {
+      "id": "overflow-amount",
+      "input": "{\"amount\":-1}",
+      "expected_error": "negative_amount"
+    },
+    {
+      "id": "empty-receiver",
+      "input": "{\"receiver\":\"\"}",
+      "expected_error": "empty_receiver"
+    },
+    {
+      "id": "extra-fields",
+      "input": "{\"payment\":{\"amount\":10},\"extra\":\"x\"}",
+      "expected_error": "extra_fields"
+    }
+  ]
+}
