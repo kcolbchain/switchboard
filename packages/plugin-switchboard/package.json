@@ -1,0 +1,39 @@
+{
+  "name": "@kcolbchain/eliza-switchboard",
+  "version": "0.1.0",
+  "description": "ElizaOS plugin for switchboard — MPC wallets, gas budgets, x402 payments, MPP sessions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "elizaos",
+    "eliza",
+    "switchboard",
+    "agent-payments",
+    "x402",
+    "mpc-wallet",
+    "ai-agents"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.0"
+  },
+  "peerDependencies": {
+    "@elizaos/core": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "@types/jest": "^29.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
