@@ -31,22 +31,12 @@ References
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from dataclasses import replace
 
 from .x402_middleware import PaymentOffer, PaymentProof, PaymentScheme
 
 try:
-    from zap_py import (
-        ADDRESS_SIZE,
-        Address,
-        Builder,
-        HASH_SIZE,
-        Hash,
-        StructBuilder,
-        Type,
-        address_from_hex,
-        parse,
-    )
+    from zap_py import Builder, HASH_SIZE, StructBuilder, address_from_hex, parse
 
     HAS_ZAP_PY = True
 except ImportError:  # pragma: no cover — exercised by environment, not tests
@@ -62,6 +52,7 @@ __all__ = [
     "decode_offer",
     "encode_proof",
     "decode_proof",
+    "signing_transcript",
 ]
 
 
@@ -71,7 +62,7 @@ class ZapNotAvailable(RuntimeError):
 
 # ─── Wire constants ──────────────────────────────────────────────────────────
 #
-# Both schemas use uint256 amount-as-bytes (32 LE bytes) so we don't truncate
+# Both schemas use uint256 amount-as-bytes (32 big-endian bytes) so we don't truncate
 # realistic on-chain values into a uint64 — the JSON path already accepts
 # arbitrarily large `int`s and we want byte-for-byte interop with that.
 _AMOUNT_BYTES = 32
@@ -85,12 +76,38 @@ _SCHEME_TO_WIRE = {
 }
 _WIRE_TO_SCHEME = {v: k for k, v in _SCHEME_TO_WIRE.items()}
 
+_PQ_ALG_TO_TAG = {
+    "none": 0x00,
+    "ecdsa-secp256k1": 0x01,
+    "ml-dsa-44": 0x10,
+    "ml-dsa-65": 0x11,
+    "ml-dsa-87": 0x12,
+    "slh-dsa-128s": 0x20,
+    "slh-dsa-128f": 0x21,
+    "hybrid-ecdsa-ml-dsa-65": 0x80,
+}
+_TAG_TO_PQ_ALG = {v: k for k, v in _PQ_ALG_TO_TAG.items()}
+
 
 def _build_offer_schema():
     if not HAS_ZAP_PY:
         return None
     return (
         StructBuilder("SwitchboardPaymentOffer")
+        # Fixed/header offsets (pinned by tests against StructBuilder output):
+        # | field         | type    | offset |
+        # |---------------|---------|--------|
+        # | scheme        | uint8   | 0      |
+        # | chain_id      | uint64  | 8      |
+        # | expires_at    | uint64  | 16     |
+        # | recipient     | address | 24     |
+        # | amount        | bytes   | 48     |
+        # | currency      | text    | 56     |
+        # | description   | text    | 64     |
+        # | endpoint      | text    | 72     |
+        # | nonce         | text    | 80     |
+        # | signature_alg | uint8   | 88     |
+        # | signature     | bytes   | 96     |
         .uint8("scheme")
         .uint64("chain_id")
         .uint64("expires_at")  # 0 sentinel = "no expiry"
@@ -100,6 +117,8 @@ def _build_offer_schema():
         .text("description")
         .text("endpoint")
         .text("nonce")
+        .uint8("signature_alg")
+        .bytes("signature")
         .build()
     )
 
@@ -109,12 +128,25 @@ def _build_proof_schema():
         return None
     return (
         StructBuilder("SwitchboardPaymentProof")
+        # Fixed/header offsets (pinned by tests against StructBuilder output):
+        # | field         | type    | offset |
+        # |---------------|---------|--------|
+        # | chain_id      | uint64  | 0      |
+        # | timestamp     | uint64  | 8      |
+        # | payer         | address | 16     |
+        # | tx_hash       | hash    | 40     |
+        # | amount        | bytes   | 72     |
+        # | nonce         | text    | 80     |
+        # | signature_alg | uint8   | 88     |
+        # | signature     | bytes   | 96     |
         .uint64("chain_id")
         .uint64("timestamp")
         .address("payer")
         .hash("tx_hash")
         .bytes("amount")  # 32-byte big-endian uint256
         .text("nonce")
+        .uint8("signature_alg")
+        .bytes("signature")
         .build()
     )
 
@@ -153,6 +185,53 @@ def _addr_to_hex(addr) -> str:
     return addr.hex()
 
 
+def _sig_to_bytes(signature_alg: str, signature: str) -> bytes:
+    if signature_alg == "none":
+        return b""
+    if not signature:
+        raise ValueError("signature must be present when signature_alg != 'none'")
+    if signature.startswith(("0x", "0X")):
+        return bytes.fromhex(signature[2:])
+    return signature.encode()
+
+
+def _sig_from_bytes(data: bytes) -> str:
+    return "0x" + data.hex() if data else ""
+
+
+def _get_offset(schema, name: str) -> int:
+    for field in schema.fields:
+        if field.name == name:
+            return field.offset
+    raise KeyError(name)
+
+
+def _read_optional_uint8(root, schema, name: str, default: int) -> int:
+    try:
+        return root.uint8(_get_offset(schema, name))
+    except Exception:
+        return default
+
+
+def _read_optional_bytes(root, schema, name: str, default: bytes = b"") -> bytes:
+    try:
+        return root.bytes(_get_offset(schema, name))
+    except Exception:
+        return default
+
+
+def signing_transcript(payload: PaymentOffer | PaymentProof) -> bytes:
+    """Return the canonical ZAP transcript bytes with signature fields zeroed.
+
+    Spec §11 requires the wire `signature_alg` and `signature` fields to be
+    zeroed before hashing. We produce the canonical wire bytes here and let the
+    caller choose the hash function.
+    """
+    if isinstance(payload, PaymentOffer):
+        return encode_offer(replace(payload, signature_alg="none", signature=""))
+    return encode_proof(replace(payload, signature_alg="none", signature=""))
+
+
 # ─── PaymentOffer ────────────────────────────────────────────────────────────
 
 
@@ -172,6 +251,8 @@ def encode_offer(offer: PaymentOffer) -> bytes:
     ob.set_text(f["description"], offer.description)
     ob.set_text(f["endpoint"], offer.endpoint)
     ob.set_text(f["nonce"], offer.nonce)
+    ob.set_uint8(f["signature_alg"], _PQ_ALG_TO_TAG[offer.signature_alg])
+    ob.set_bytes(f["signature"], _sig_to_bytes(offer.signature_alg, offer.signature))
     ob.finish_as_root()
     return b.finish()
 
@@ -185,12 +266,17 @@ def decode_offer(wire: bytes) -> PaymentOffer:
     root = msg.root()
 
     expires = root.uint64(f["expires_at"])
+    signature_alg_tag = _read_optional_uint8(root, OFFER_SCHEMA, "signature_alg", 0x00)
+    signature_bytes = _read_optional_bytes(root, OFFER_SCHEMA, "signature", b"")
+    signature_alg = _TAG_TO_PQ_ALG[signature_alg_tag]
     return PaymentOffer(
         amount_wei=_amount_from_bytes(root.bytes(f["amount"])),
         currency=root.text(f["currency"]),
         recipient=_addr_to_hex(root.address(f["recipient"])),
         chain_id=root.uint64(f["chain_id"]),
         scheme=_WIRE_TO_SCHEME[root.uint8(f["scheme"])],
+        signature_alg=signature_alg,
+        signature=_sig_from_bytes(signature_bytes),
         description=root.text(f["description"]),
         endpoint=root.text(f["endpoint"]),
         nonce=root.text(f["nonce"]),
@@ -223,6 +309,8 @@ def encode_proof(proof: PaymentProof) -> bytes:
     ob.set_hash(f["tx_hash"], _hash_from_hex(proof.tx_hash))
     ob.set_bytes(f["amount"], _amount_to_bytes(proof.amount_wei))
     ob.set_text(f["nonce"], proof.nonce)
+    ob.set_uint8(f["signature_alg"], _PQ_ALG_TO_TAG[proof.signature_alg])
+    ob.set_bytes(f["signature"], _sig_to_bytes(proof.signature_alg, proof.signature))
     ob.finish_as_root()
     return b.finish()
 
@@ -235,11 +323,15 @@ def decode_proof(wire: bytes) -> PaymentProof:
     msg = parse(wire)
     root = msg.root()
 
+    signature_alg_tag = _read_optional_uint8(root, PROOF_SCHEMA, "signature_alg", 0x00)
+    signature_bytes = _read_optional_bytes(root, PROOF_SCHEMA, "signature", b"")
     return PaymentProof(
         tx_hash=root.hash(f["tx_hash"]).hex(),
         chain_id=root.uint64(f["chain_id"]),
         payer=_addr_to_hex(root.address(f["payer"])),
         amount_wei=_amount_from_bytes(root.bytes(f["amount"])),
         nonce=root.text(f["nonce"]),
+        signature_alg=_TAG_TO_PQ_ALG[signature_alg_tag],
+        signature=_sig_from_bytes(signature_bytes),
         timestamp=float(root.uint64(f["timestamp"])),
     )

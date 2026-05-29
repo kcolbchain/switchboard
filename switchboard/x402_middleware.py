@@ -60,6 +60,7 @@ class PaymentOffer:
     chain_id: int
     scheme: PaymentScheme = PaymentScheme.EXACT
     signature_alg: str = "none"
+    signature: str = ""
     description: str = ""
     endpoint: str = ""
     nonce: str = ""
@@ -75,6 +76,8 @@ class PaymentOffer:
             recipient=data["recipient"],
             chain_id=int(data.get("chainId", 1)),
             scheme=PaymentScheme(data.get("scheme", "exact")),
+            signature_alg=data.get("signatureAlg", "none"),
+            signature=data.get("signature", ""),
             description=data.get("description", ""),
             endpoint=endpoint,
             nonce=data.get("nonce", ""),
