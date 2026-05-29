@@ -1,6 +1,6 @@
 # Agent-to-Agent Payment Protocol — switchboard
 
-**Status:** Draft v1.0
+**Status:** Draft v1.1
 **Reference impl:** [`src/payment_protocol.py`](../src/payment_protocol.py)
 **On-chain side:** [`contracts/AgentEscrow.sol`](../contracts/AgentEscrow.sol)
 **Tracks issue:** [#2 — Add agent-to-agent payment protocol](https://github.com/kcolbchain/switchboard/issues/2)
@@ -23,7 +23,7 @@ Canonical structure (all fields lowercase snake_case):
 
 | field                       | type    | required | notes                                                      |
 | --------------------------- | ------- | -------- | ---------------------------------------------------------- |
-| `version`                   | string  | yes      | Protocol version. Current = `"1.0"`.                       |
+| `version`                   | string  | yes      | Protocol version. Current = `"1.1"`.                       |
 | `request_id`                | string  | yes      | UUIDv4 chosen by payer. Used as on-chain key.              |
 | `payer`                     | string  | yes      | Checksummed EVM address.                                   |
 | `payee`                     | string  | yes      | Checksummed EVM address.                                   |
@@ -37,6 +37,8 @@ Canonical structure (all fields lowercase snake_case):
 | `metadata`                  | object  | no       | Arbitrary JSON object — protocol-opaque.                   |
 | `created_at`                | float   | yes      | Unix epoch seconds, set by payer at request time.          |
 | `status`                    | string  | yes      | Local mirror of on-chain state. See §4.                    |
+| `signature_alg`             | string  | no       | Signature registry name. Default = `"none"`.              |
+| `signature`                 | string  | no       | Signature bytes. Base64 in JSON; omitted/empty when unsigned. |
 
 ### 2.1 Wire encoding
 
@@ -52,7 +54,7 @@ json.dumps(d, sort_keys=True, separators=(',', ':'))
 content_hash = "0x" + sha256(canonical_json).hexdigest()
 ```
 
-`content_hash` is computed over **all fields except `created_at` and `status`**. Rationale: those two are instance-time / mutable. Two `PaymentRequest` objects representing the same payment intent (same `request_id`, payer, payee, amount, terms, metadata) MUST produce the same `content_hash` regardless of when they were instantiated or what their current local status is.
+`content_hash` is computed over **all fields except `created_at`, `status`, `signature_alg`, and `signature`**. Rationale: `created_at` and `status` are instance-time / mutable; `signature_alg` and `signature` are derived envelope fields and must not self-cover. Two `PaymentRequest` objects representing the same payment intent (same `request_id`, payer, payee, amount, terms, metadata) MUST produce the same `content_hash` regardless of when they were instantiated, what their current local status is, or whether they have already been signed.
 
 For replay protection, agents SHOULD use `request_id` (UUID), not `content_hash`.
 
@@ -191,7 +193,76 @@ Any change that affects the canonicalization (e.g. adding a new optional field, 
 
 ## 10. Future work
 
-
 - **CAIP-2 chain identifiers** for non-EVM networks (issue: TBD).
 - **MPP session adapter** for high-frequency micro-payments under a budget cap (tracked in [#17](https://github.com/kcolbchain/switchboard/issues/17)).
 - **A2A discovery** — how does Agent A know Agent B's address and accepted currencies? Out of scope for v1.0; consider `.well-known/agent-payment.json`.
+
+## 11. PQ signatures — transcript, algorithm registry, wire format
+
+### 11.1 Algorithm registry
+
+Signed payloads use a single `uint8` tag on ZAP wire payloads and a string name on JSON payloads.
+
+| tag  | name                       | sig size | pk size | notes |
+| ---- | -------------------------- | -------- | ------- | ----- |
+| `0x00` | `none`                   | 0        | 0       | unsigned sentinel |
+| `0x01` | `ecdsa-secp256k1`        | 65       | 33      | classical compatibility mode |
+| `0x10` | `ml-dsa-44`              | 2420     | 1312    | FIPS 204 |
+| `0x11` | `ml-dsa-65`              | 3309     | 1952    | FIPS 204; default PQ mode |
+| `0x12` | `ml-dsa-87`              | 4627     | 2592    | FIPS 204 |
+| `0x20` | `slh-dsa-128s`           | 7856     | 32      | FIPS 205 |
+| `0x21` | `slh-dsa-128f`           | 17088    | 32      | FIPS 205 |
+| `0x80` | `hybrid-ecdsa-ml-dsa-65` | 3374     | 1985    | concatenated ECDSA + ML-DSA-65; both halves must verify |
+
+Default `PaymentRequest.version="1.1"` behavior remains non-breaking: omit the signature fields or set `signature_alg="none"` to preserve unsigned v1.0 semantics.
+
+### 11.2 Domain-separated transcript
+
+The signed bytes are derived from a domain-separated transcript:
+
+```text
+transcript = "switchboard/pq/v1\0" || <payload-type-tag> || <canonical-bytes>
+digest     = SHAKE-256(transcript, 64)
+signature  = Sign(sk, digest)
+```
+
+Payload type tags are pinned as:
+
+- `0x01` — `PaymentOffer`
+- `0x02` — `PaymentProof`
+- `0x03` — `PaymentRequest`
+
+This domain separation is mandatory: a valid signature on one payload class MUST NOT verify for another payload class with the same body bytes.
+
+### 11.3 Canonical bytes
+
+For JSON payloads, `<canonical-bytes>` is the same canonical encoding described in §2.1, using the same content-hash input from §2.2, with `created_at`, `status`, `signature_alg`, and `signature` excluded.
+
+For ZAP wire payloads, `<canonical-bytes>` is the schema-encoded struct bytes with the `signature_alg` field zeroed to `0x00` and the `signature` bytes field zero-length/zeroed before hashing. This keeps offsets stable and preserves append-only backward compatibility for older readers.
+
+### 11.4 Verification and reject conditions
+
+A verifier MUST reject a signed payload when any of the following holds:
+
+1. `signature_alg` is unknown or unsupported by local policy.
+2. The advertised key identity does not match the expected public key (`key_id = sha256(pk)[:16].hex()`).
+3. The recomputed transcript bytes differ from the transcript bytes implied by the payload.
+4. Signature verification fails for the selected algorithm.
+5. In hybrid mode (`hybrid-ecdsa-ml-dsa-65`), either half of the concatenated signature fails.
+
+Receivers MAY enforce a stricter local policy (for example `require_signed=true` or an allowlist of accepted algorithms), but they MUST treat `signature_alg="none"` as valid unsigned fallback for v1.1 interoperability unless policy explicitly rejects unsigned requests.
+
+### 11.5 Open questions carried forward
+
+The following remain intentionally unresolved here so PQ implementation work can proceed without blocking:
+
+- Whether `ml-dsa-65` or `ml-dsa-87` should be the long-term default.
+- The publication/discovery path for `key_id` and public keys.
+- Whether a pure-Python fallback should be supported in addition to `liboqs-python`.
+- Lux-native on-chain PQ escrow verification, which is out of scope for this document.
+
+## 12. Version notes
+
+- v1.1 is a non-breaking extension of v1.0.
+- Unsigned payloads remain valid by default.
+- Any future change to transcript construction, canonicalization, or the algorithm registry MUST bump the protocol version.
