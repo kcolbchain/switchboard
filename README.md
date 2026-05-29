@@ -41,7 +41,7 @@ Built and maintained by [kcolbchain](https://kcolbchain.com). Aligned with [Lux 
 | `switchboard/zap_transport.py` | 🔄 in PR [#21](https://github.com/kcolbchain/switchboard/pull/21) | **Binary wire** for `PaymentOffer`/`PaymentProof` over [luxfi/zap](https://github.com/luxfi/zap). Zero-allocation, ~10× smaller than JSON. First production consumer of `zap_py`. |
 | `switchboard/gas_tracker.py` + `gas_budget.py` | ✅ shipped (PR [#14](https://github.com/kcolbchain/switchboard/pull/14)) | **Hard gas budgets** (per-hour, per-day) so an agent can't get rugged by its own runaway loop. Closes the #1 footgun of autonomous on-chain agents. |
 | `switchboard/nonce_manager.py` | ✅ shipped (PR [#11](https://github.com/kcolbchain/switchboard/pull/11)) | Client-side **nonce manager** with reorg protection. The thing every shipping agent eventually has to write. |
-| `contracts/AgentEscrow.sol` + `src/payment_protocol.py` | ✅ shipped (PR [#8](https://github.com/kcolbchain/switchboard/pull/8)) | **Trustless escrow** with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI. |
+| `contracts/AgentEscrow.sol` + `src/payment_protocol.py` + [`docs/agent-payment-protocol.md`](docs/agent-payment-protocol.md) | ✅ shipped (PR [#8](https://github.com/kcolbchain/switchboard/pull/8); PQ spec update in progress) | **Trustless escrow** with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI, plus protocol spec v1.1 with PQ signature envelope section. |
 | `web/` | ✅ shipped (PR [#15](https://github.com/kcolbchain/switchboard/pull/15)) | Side-by-side **explorer** for x402 / MPP / AP2 / Circle / on-chain escrow. The clearest public comparison of agent-payment rails today. |
 | `web/agents-demo.html` + [`SCENES.md`](web/SCENES.md) | ✅ shipped (PR [#39](https://github.com/kcolbchain/switchboard/pull/39), polish [#40](https://github.com/kcolbchain/switchboard/pull/40)) | Interactive **agent-payments lab** — 16 animated scenes covering x402 paywalls, escrow + refund, streaming MPP, AI compute auctions, HITL, treasury rebalance, signed oracle pulls, the PQ envelope proposal, taxi handover, café walk-by, food delivery, split bill, native ETH escrow, subscription, multi-city trip. Single static HTML, no build. |
 
@@ -229,6 +229,7 @@ roundtrip = decode_offer(wire)           # exact equality
 ## Status & roadmap
 
 - ✅ **Shipped:** AgentEscrow contract, payment client + CLI, nonce manager, gas budget, x402 middleware, web explorer.
+- 🔄 **In flight:** [#34](https://github.com/kcolbchain/switchboard/issues/34) — protocol spec v1.1 / PQ signature envelope (§11 in `docs/agent-payment-protocol.md`).
 - 🔄 **In flight:** [PR #21](https://github.com/kcolbchain/switchboard/pull/21) — ZAP binary wire encoding for `PaymentOffer` / `PaymentProof`. Validates `zap_py` end-to-end.
 - 🛣️ **Next:** [#17](https://github.com/kcolbchain/switchboard/issues/17) MPP (multi-party micropayments) sessions, settlement-receipt format, Go interop fixtures with `luxfi/zap`.
 
