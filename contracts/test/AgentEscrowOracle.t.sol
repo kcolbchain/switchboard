@@ -38,6 +38,63 @@ contract AgentEscrowOracleTest {
         vm.deal(payer, 10 ether);
     }
 
+    // ─── Agent Registration Access Control ───────────────────────────────
+
+    function test_ownerCanRegisterAgent() public {
+        address newAgent = address(0xBEEF);
+        escrow.registerAgent(newAgent);
+        require(escrow.registeredAgents(newAgent), "agent should be registered");
+    }
+
+    function test_nonOwnerCannotRegisterAgent() public {
+        vm.startPrank(anyone);
+        vm.expectRevert(bytes("AgentEscrow: caller is not the owner"));
+        escrow.registerAgent(address(0xBEEF));
+        vm.stopPrank();
+    }
+
+    function test_ownerCanDeregisterAgent() public {
+        address agent = address(0xFEED);
+        escrow.registerAgent(agent);
+        require(escrow.registeredAgents(agent), "agent should be registered");
+        escrow.deregisterAgent(agent);
+        require(!escrow.registeredAgents(agent), "agent should be deregistered");
+    }
+
+    function test_deregisterUnregisteredReverts() public {
+        vm.expectRevert(bytes("AgentEscrow: agent not registered"));
+        escrow.deregisterAgent(address(0xDEAD));
+    }
+
+    function test_nonOwnerCannotDeregister() public {
+        // First register as owner
+        address agent = address(0xC0FFEE);
+        escrow.registerAgent(agent);
+        // Then try to deregister as non-owner
+        vm.startPrank(anyone);
+        vm.expectRevert(bytes("AgentEscrow: caller is not the owner"));
+        escrow.deregisterAgent(agent);
+        vm.stopPrank();
+    }
+
+    function test_ownerCanTransferOwnership() public {
+        address newOwner = address(0xF00D);
+        escrow.transferOwnership(newOwner);
+        require(escrow.owner() == newOwner, "ownership not transferred");
+    }
+
+    function test_nonOwnerCannotTransferOwnership() public {
+        vm.startPrank(anyone);
+        vm.expectRevert(bytes("AgentEscrow: caller is not the owner"));
+        escrow.transferOwnership(address(0xF00D));
+        vm.stopPrank();
+    }
+
+    function test_transferOwnershipToZeroReverts() public {
+        vm.expectRevert(bytes("AgentEscrow: new owner is zero address"));
+        escrow.transferOwnership(address(0));
+    }
+
     // ─── Backward-compat: old 4-arg createPayment still works ─────────────
 
     function test_legacy_createPayment_storesZeroPolicyHash() public {

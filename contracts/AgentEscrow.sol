@@ -21,6 +21,15 @@ import {IOracleAggregator} from "./IOracleAggregator.sol";
  *     `cancelPayment`, `getPayment`, `isState`, `isExpired`) are unchanged.
  */
 contract AgentEscrow {
+    /// @notice Contract owner — manages agent registration
+    address public owner;
+
+    /// @notice Restricts function access to the contract owner
+    modifier onlyOwner() {
+        require(msg.sender == owner, "AgentEscrow: caller is not the owner");
+        _;
+    }
+
     enum State { Created, Locked, Confirmed, Released, Refunded, Cancelled }
 
     struct Payment {
@@ -64,6 +73,7 @@ contract AgentEscrow {
     ///                       in that case any non-zero `policyHash` in
     ///                       `createPaymentWithPolicy` will revert.
     constructor(uint256 _chainId, IOracleAggregator _aggregator) {
+        owner = msg.sender;
         chainId = _chainId;
         oracleAggregator = _aggregator;
     }
@@ -74,11 +84,35 @@ contract AgentEscrow {
     }
 
     /**
-     * @notice Register an agent address (permissioned)
+     * @notice Register an agent address (owner-only).
+     * @dev Gated to prevent arbitrary address registration — only the
+     *      contract owner can add agents to the registry.
      */
-    function registerAgent(address agent) external {
+    function registerAgent(address agent) external onlyOwner {
         registeredAgents[agent] = true;
         emit AgentRegistered(agent);
+    }
+
+    /**
+     * @notice Deregister an agent address (owner-only).
+     * @dev Removes the agent from the registry and emits the previously
+     *      unused AgentDeregistered event. Reverts if the agent was not
+     *      previously registered.
+     */
+    function deregisterAgent(address agent) external onlyOwner {
+        require(registeredAgents[agent], "AgentEscrow: agent not registered");
+        registeredAgents[agent] = false;
+        emit AgentDeregistered(agent);
+    }
+
+    /**
+     * @notice Transfer contract ownership to a new address.
+     * @dev Only the current owner may call. Use with caution — ownership
+     *      grants agent-registry management.
+     */
+    function transferOwnership(address newOwner) external onlyOwner {
+        require(newOwner != address(0), "AgentEscrow: new owner is zero address");
+        owner = newOwner;
     }
 
     /**
