@@ -15,6 +15,15 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+# Canonical x402 wire headers. The x402 spec (coinbase/x402) and the Hanzo MCP
+# HTTP path (hanzoai/mcp#9) name the inbound proof header ``X-Payment`` and
+# advertise the scheme via ``WWW-Authenticate: x402`` on the 402 response.
+# Switchboard historically used ``X-Payment-Proof``; we accept both so callers
+# don't have to special-case which gateway they're talking to.
+PAYMENT_HEADER = "X-Payment"
+PAYMENT_PROOF_HEADER = "X-Payment-Proof"
+WWW_AUTHENTICATE_X402 = "x402"
+
 
 @dataclass
 class PaymentRequirements:
@@ -45,18 +54,72 @@ class PaymentRequirements:
         return json.dumps(data)
 
     @classmethod
-    def from_header(cls, header: str) -> "PaymentRequirements":
-        data = json.loads(header)
+    def from_header(cls, header: str) -> PaymentRequirements:
+        return cls.from_dict(json.loads(header))
+
+    @classmethod
+    def from_dict(cls, data: dict) -> PaymentRequirements:
         return cls(
             scheme=data.get("scheme", "exact"),
             network=data.get("network", "base"),
             asset=data.get("asset", "USDC"),
             amount=str(data.get("amount", "0")),
-            pay_to=data.get("payTo", ""),
+            pay_to=data.get("payTo", data.get("pay_to", "")),
             description=data.get("description", ""),
             nonce=data.get("nonce", ""),
-            expires_at=data.get("expiresAt"),
+            expires_at=data.get("expiresAt", data.get("expires_at")),
         )
+
+
+def inject_payment(params: dict, payment_header: str) -> dict:
+    """Merge an inbound ``X-Payment`` header into agent/tool handler params.
+
+    Mirror of the ``injectPayment`` step in hanzoai/mcp#9: the raw header value
+    is parsed (JSON object when possible, otherwise kept as the raw string) and
+    placed under ``params["payment"]`` so the handler sees the payment alongside
+    its normal arguments.
+
+    A caller-supplied *structured* payment payload (``params["payment"]`` already
+    a ``dict``) is never overwritten — an explicit argument always wins over the
+    transport header. Mutates and returns ``params`` for convenience.
+    """
+    if not payment_header:
+        return params
+    if isinstance(params.get("payment"), dict):
+        return params
+    try:
+        parsed: Any = json.loads(payment_header)
+    except (json.JSONDecodeError, TypeError):
+        parsed = payment_header
+    params["payment"] = parsed
+    return params
+
+
+def map_payment_envelope(result: Any) -> tuple[int, dict, str] | None:
+    """Map a ``{"status": 402, "payment_required": {...}}`` handler result to a
+    402 wire response, or return ``None`` if ``result`` is not such an envelope.
+
+    Mirror of the response side of hanzoai/mcp#9: a tool/agent result that asks
+    for payment is turned into a real HTTP ``402`` carrying both the legacy
+    ``X-Payment-Required`` requirements header and the spec ``WWW-Authenticate:
+    x402`` challenge, so on-the-wire behaviour matches the Hanzo MCP path.
+
+    A bare ``{"status": 402}`` *without* a ``payment_required`` object is not an
+    x402 envelope (it may be an ordinary upstream 402) and yields ``None``.
+    """
+    if not isinstance(result, dict) or result.get("status") != 402:
+        return None
+    required = result.get("payment_required")
+    if not isinstance(required, dict):
+        return None
+    reqs = PaymentRequirements.from_dict(required)
+    headers = {
+        "X-Payment-Required": reqs.to_header(),
+        "WWW-Authenticate": WWW_AUTHENTICATE_X402,
+        "Content-Type": "application/json",
+    }
+    body = json.dumps({"error": "payment_required", "payment_requirements": required})
+    return 402, headers, body
 
 
 class PaymentVerifier:
@@ -140,6 +203,7 @@ class X402Server:
         )
         headers = {
             "X-Payment-Required": reqs.to_header(),
+            "WWW-Authenticate": WWW_AUTHENTICATE_X402,
             "Content-Type": "application/json",
         }
         body = json.dumps({
@@ -156,14 +220,23 @@ class X402Server:
             return True, ""
         return False, "Invalid or missing payment proof"
 
+    @staticmethod
+    def read_payment_header(headers) -> str:
+        """Read the inbound payment proof, preferring the canonical x402
+        ``X-Payment`` header and falling back to legacy ``X-Payment-Proof``."""
+        return headers.get(PAYMENT_HEADER, "") or headers.get(PAYMENT_PROOF_HEADER, "")
+
     def flask_app(self):
-        from flask import Flask, request, Response
-        app = Flask(__name__)
+        from flask import Flask, Response, request
+        # Name the app explicitly: ``Flask(__name__)`` resolves to the full
+        # dotted package path ("switchboard.x402.server") depending on import
+        # context, which made the app name unstable across environments.
+        app = Flask("x402.server")
         server = self
 
         @app.route("/x402/protected", methods=["GET", "POST"])
         def protected():
-            payment_header = request.headers.get("X-Payment-Proof", "")
+            payment_header = server.read_payment_header(request.headers)
             requirements_header = request.headers.get("X-Payment-Required", "")
             if not payment_header:
                 status, headers, body = server.build_402_response()
@@ -186,7 +259,7 @@ def flask_middleware(
     @app.before_request
     def check_payment():
         if request.path.startswith("/x402/"):
-            payment_header = request.headers.get("X-Payment-Proof", "")
+            payment_header = x402.read_payment_header(request.headers)
             if not payment_header:
                 status, headers, body = x402.build_402_response()
                 return Response(body, status=status, headers=headers)
