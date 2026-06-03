@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>switchboard — backend reference</title>
+  <meta name="description" content="Backend developer reference for switchboard — module-by-module API, examples, and status. Token-agnostic, chain-agnostic, post-quantum agent payments." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://kcolbchain.github.io/brand/tokens.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      font-size: var(--t-3);
+      line-height: 1.65;
+      background: var(--bg);
+      color: var(--fg-muted);
+      -webkit-font-smoothing: antialiased;
+    }
+    a {
+      color: var(--fg);
+      text-decoration: none;
+      border-bottom: 1px solid var(--line);
+      transition: border-color .15s ease, color .15s ease;
+    }
+    a:hover { color: var(--mark); border-bottom-color: var(--mark); }
+    code {
+      font-family: var(--font);
+      color: var(--fg);
+      background: var(--bg-elev);
+      padding: 1px 5px;
+      border-radius: 2px;
+      font-size: 0.92em;
+    }
+
+    /* ---------- header ---------- */
+    header.top {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--s-3) var(--s-5);
+      background: rgba(11, 11, 13, 0.86);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+      gap: var(--s-4); flex-wrap: wrap;
+    }
+    header.top .wm {
+      font-family: var(--font);
+      font-size: var(--t-3);
+      font-weight: 500;
+      color: var(--fg);
+      letter-spacing: -0.01em;
+      border-bottom: none;
+      white-space: nowrap;
+    }
+    header.top .wm em { color: var(--mark); font-style: normal; font-weight: 700; }
+    header.top .wm .sep { color: var(--fg-faint); margin: 0 var(--s-2); }
+    header.top .wm .desc { color: var(--fg-muted); }
+    header.top nav { display: flex; gap: var(--s-4); flex-wrap: wrap; font-size: var(--t-2); }
+    header.top nav a { color: var(--fg-faint); border-bottom: none; }
+    header.top nav a:hover { color: var(--mark); }
+    header.top nav a.here { color: var(--fg); }
+
+    /* ---------- layout: two-col with sticky TOC ---------- */
+    .container {
+      max-width: var(--col-wide);
+      margin: 0 auto;
+      padding: 0 var(--s-5);
+    }
+    .layout {
+      display: grid;
+      gap: var(--s-5);
+      grid-template-columns: 1fr;
+      padding: var(--s-5) 0 var(--s-7);
+    }
+    @media (min-width: 960px) {
+      .layout { grid-template-columns: 240px 1fr; gap: var(--s-6); }
+    }
+
+    /* ---------- TOC ---------- */
+    aside.toc {
+      font-size: var(--t-2);
+    }
+    @media (min-width: 960px) {
+      aside.toc {
+        position: sticky;
+        top: 64px;
+        align-self: start;
+        max-height: calc(100vh - 96px);
+        overflow-y: auto;
+      }
+    }
+    aside.toc h4 {
+      font-family: var(--font);
+      font-size: var(--t-1);
+      font-weight: 500;
+      color: var(--fg-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: var(--s-3);
+      padding-left: var(--s-3);
+    }
+    aside.toc .group { margin-bottom: var(--s-4); }
+    aside.toc a {
+      display: block;
+      padding: var(--s-1) var(--s-3);
+      color: var(--fg-faint);
+      border-bottom: none;
+      border-left: 1px solid var(--line);
+    }
+    aside.toc a:hover {
+      color: var(--mark);
+      border-left-color: var(--mark);
+    }
+
+    /* ---------- main ---------- */
+    main.docs { min-width: 0; }
+
+    .doc-head {
+      padding: var(--s-5) 0 var(--s-6);
+    }
+    .doc-head h1 {
+      font-family: var(--font);
+      font-size: clamp(28px, 5vw, 44px);
+      font-weight: 500;
+      color: var(--fg);
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin-bottom: var(--s-3);
+    }
+    .doc-head .lead {
+      font-size: var(--t-4);
+      color: var(--fg-muted);
+      max-width: 60ch;
+      line-height: 1.5;
+    }
+
+    /* ---------- module section ---------- */
+    section.module {
+      padding: var(--s-6) 0 var(--s-5);
+      border-top: 1px solid var(--line);
+      scroll-margin-top: 72px;
+    }
+    section.module:first-of-type { border-top: none; }
+    section.module .module-head {
+      display: flex; align-items: center; gap: var(--s-3);
+      flex-wrap: wrap;
+      margin-bottom: var(--s-3);
+    }
+    section.module h2 {
+      font-family: var(--font);
+      font-size: var(--t-5);
+      font-weight: 500;
+      color: var(--fg);
+      letter-spacing: -0.01em;
+    }
+    section.module h2 a {
+      color: var(--fg);
+      border-bottom: none;
+    }
+    section.module .module-path {
+      font-family: var(--font);
+      font-size: var(--t-2);
+      color: var(--fg-faint);
+      margin-bottom: var(--s-4);
+    }
+    section.module .module-body p { margin-bottom: var(--s-3); }
+    section.module .module-body p:last-child { margin-bottom: 0; }
+
+    section.module h3 {
+      font-family: var(--font);
+      font-size: var(--t-1);
+      font-weight: 500;
+      color: var(--fg-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: var(--s-5);
+      margin-bottom: var(--s-3);
+    }
+
+    section.module .module-links {
+      display: flex; gap: var(--s-3); flex-wrap: wrap;
+      margin-top: var(--s-5);
+      padding-top: var(--s-4);
+      border-top: 1px solid var(--line);
+      font-size: var(--t-2);
+    }
+    section.module .module-links a {
+      color: var(--fg-faint);
+      border-bottom: none;
+    }
+    section.module .module-links a:hover { color: var(--mark); }
+    section.module .module-links .sep { color: var(--fg-faint); }
+
+    /* ---------- chip ---------- */
+    .chip {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--bg);
+      color: var(--fg-muted);
+      font-family: var(--font);
+      font-size: var(--t-1);
+      border: 1px solid var(--line);
+    }
+    .chip.ok   { background: var(--ok-soft);   color: var(--ok);   border-color: transparent; }
+    .chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+    .chip.hot  { background: var(--hot-soft);  color: var(--hot);  border-color: transparent; }
+    .chip.mark { background: var(--mark-soft); color: var(--mark); border-color: transparent; }
+
+    /* ---------- code blocks ---------- */
+    pre.code {
+      background: var(--bg-elev);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--s-4) var(--s-5);
+      font-family: var(--font);
+      font-size: var(--t-2);
+      color: var(--fg);
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    pre.code .kw  { color: #c4b5fd; }
+    pre.code .str { color: #86efac; }
+    pre.code .com { color: var(--fg-faint); font-style: italic; }
+    pre.code .fn  { color: var(--mark); }
+    pre.code .typ { color: #7dd3fc; }
+
+    /* ---------- table ---------- */
+    table.params {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--t-2);
+      margin-top: var(--s-3);
+    }
+    table.params th, table.params td {
+      padding: var(--s-2) var(--s-3);
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    table.params thead th {
+      font-family: var(--font);
+      color: var(--fg-faint);
+      font-weight: 500;
+      font-size: var(--t-1);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    table.params td.name { color: var(--fg); font-weight: 500; width: 24%; }
+    table.params td.type { color: var(--fg-muted); font-size: var(--t-1); width: 18%; }
+    table.params tr:last-child td { border-bottom: none; }
+
+    /* ---------- footer ---------- */
+    footer.bottom {
+      padding: var(--s-6) 0 var(--s-7);
+      border-top: 1px solid var(--line);
+      margin-top: var(--s-6);
+    }
+    footer.bottom .row {
+      display: flex; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap;
+      font-size: var(--t-2);
+    }
+    footer.bottom .row .links {
+      display: flex; gap: var(--s-4); flex-wrap: wrap;
+    }
+    footer.bottom .row .links a {
+      color: var(--fg-faint);
+      border-bottom: none;
+    }
+    footer.bottom .row .links a:hover { color: var(--mark); }
+
+    @media (max-width: 480px) {
+      body { font-size: var(--t-2); }
+      section.module { padding: var(--s-5) 0 var(--s-4); }
+      section.module h2 { font-size: var(--t-4); }
+    }
+  </style>
+</head>
+<body>
+
+<header class="top">
+  <a class="wm" href="./">
+    <em>kcolb</em>chain<span class="sep">/</span><span class="desc">switchboard</span>
+  </a>
+  <nav>
+    <a href="./">overview</a>
+    <a href="./docs.html" class="here">docs</a>
+    <a href="./agents-demo.html">lab ↗</a>
+    <a href="./simulator.html">simulator ↗</a>
+    <a href="https://github.com/kcolbchain/switchboard">source ↗</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <div class="doc-head">
+    <h1>backend reference.</h1>
+    <p class="lead">
+      Module-by-module API, examples, and current status. Switchboard is a
+      Python library; install via <code>pip install switchboard[pq]</code>.
+      Token-agnostic, chain-agnostic, post-quantum by default.
+    </p>
+  </div>
+
+  <div class="layout">
+
+    <!-- ============== TOC ============== -->
+    <aside class="toc">
+      <div class="group">
+        <h4>http</h4>
+        <a href="#x402_middleware">x402_middleware</a>
+        <a href="#x402_server">x402.server</a>
+      </div>
+      <div class="group">
+        <h4>wire</h4>
+        <a href="#zap_transport">zap_transport</a>
+        <a href="#payment_protocol">payment_protocol</a>
+        <a href="#mpp_session">mpp.session</a>
+      </div>
+      <div class="group">
+        <h4>chain</h4>
+        <a href="#agent_escrow">AgentEscrow.sol</a>
+        <a href="#oracle_aggregator">OracleAggregator</a>
+        <a href="#gas_budget">gas_budget · gas_tracker</a>
+        <a href="#nonce_manager">nonce_manager</a>
+      </div>
+      <div class="group">
+        <h4>crypto</h4>
+        <a href="#pq">pq · post-quantum</a>
+        <a href="#mpc_wallet">mpc_wallet</a>
+      </div>
+      <div class="group">
+        <h4>adapters</h4>
+        <a href="#a2a_x402">a2a_x402</a>
+        <a href="#lucidly">lucidly · syUSD</a>
+      </div>
+      <div class="group">
+        <h4>settlement</h4>
+        <a href="#multi_chain">multi-chain settlement</a>
+      </div>
+    </aside>
+
+    <main class="docs">
+
+      <!-- ============== x402_middleware ============== -->
+      <section class="module" id="x402_middleware">
+        <div class="module-head">
+          <h2><a href="#x402_middleware">x402_middleware</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>switchboard/x402_middleware.py</code></div>
+
+        <div class="module-body">
+          <p>
+            Server-side <code>HTTP 402</code> gate. Drop into FastAPI or Flask,
+            point it at a treasury address and an accepted asset/network, and any
+            route you list is paywalled. The middleware verifies the caller's
+            <code>X-PAYMENT</code> envelope, emits the standard <code>accepts[]</code>
+            response on first hit, and passes verified requests through.
+          </p>
+          <p>
+            The wire format is the open <a href="https://www.x402.org">x402</a>
+            spec; the on-chain settlement is whichever rail the route accepts.
+            Switchboard makes no assumption about which token or chain — the
+            middleware's constructor is the place that decides.
+          </p>
+        </div>
+
+        <h3>parameters</h3>
+        <table class="params">
+          <thead><tr><th>name</th><th>type</th><th>note</th></tr></thead>
+          <tbody>
+            <tr><td class="name">pay_to</td><td class="type">str</td><td>treasury address that receives payment</td></tr>
+            <tr><td class="name">asset</td><td class="type">str</td><td>token contract address (USDC, USDT, custom — token-agnostic)</td></tr>
+            <tr><td class="name">network</td><td class="type">str</td><td><code>base-sepolia</code>, <code>base-mainnet</code>, <code>ethereum</code>, <code>avalanche-c</code>, <code>tron</code>, <code>lux-c</code>…</td></tr>
+            <tr><td class="name">price</td><td class="type">str</td><td>amount in token's smallest unit per request</td></tr>
+            <tr><td class="name">paths</td><td class="type">list[str]</td><td>routes to gate. Globs supported.</td></tr>
+            <tr><td class="name">accepted_algs</td><td class="type">list[str]</td><td>signature algs to accept. Defaults: <code>ecdsa-secp256k1</code> + <code>dilithium3</code>.</td></tr>
+          </tbody>
+        </table>
+
+        <h3>example</h3>
+<pre class="code"><span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+<span class="kw">from</span> switchboard.x402_middleware <span class="kw">import</span> X402Middleware
+
+app = <span class="fn">FastAPI</span>()
+app.<span class="fn">add_middleware</span>(
+    X402Middleware,
+    pay_to=<span class="str">"0xYourTreasury..."</span>,
+    asset=<span class="str">"0x036CbD53842c5426634e7929541eC2318f3dCF7e"</span>,  <span class="com"># USDC on Base Sepolia</span>
+    network=<span class="str">"base-sepolia"</span>,
+    price=<span class="str">"1000"</span>,                  <span class="com"># 0.001 USDC per call</span>
+    paths=[<span class="str">"/agent-only"</span>],
+)
+
+<span class="kw">@</span>app.<span class="fn">get</span>(<span class="str">"/agent-only"</span>)
+<span class="kw">def</span> <span class="fn">agent_only</span>():
+    <span class="kw">return</span> {<span class="str">"ok"</span>: <span class="kw">True</span>}</pre>
+
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/blob/main/switchboard/x402_middleware.py">source</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/19">PR #19</a>
+          <span class="sep">·</span>
+          <a href="https://www.x402.org">x402 spec</a>
+        </div>
+      </section>
+
+      <!-- ============== zap_transport ============== -->
+      <section class="module" id="zap_transport">
+        <div class="module-head">
+          <h2><a href="#zap_transport">zap_transport</a></h2>
+          <span class="chip warn">in PR</span>
+        </div>
+        <div class="module-path"><code>switchboard/zap_transport.py</code></div>
+
+        <div class="module-body">
+          <p>
+            Binary wire format for <code>PaymentOffer</code> and
+            <code>PaymentProof</code> over <a href="https://github.com/luxfi/zap">luxfi/zap</a>.
+            Zero-allocation; roughly an order of magnitude smaller than JSON. The
+            right choice when two agents exchange thousands of payment messages a
+            second — for one-off settlement, the JSON envelope is fine.
+          </p>
+          <p>
+            Switchboard is the first production consumer of <code>zap_py</code>,
+            the Python binding for ZAP. The wire schema is shared with
+            <a href="#payment_protocol">payment_protocol</a>; ZAP is just an
+            alternative encoding.
+          </p>
+        </div>
+
+        <h3>example</h3>
+<pre class="code"><span class="kw">from</span> switchboard.zap_transport <span class="kw">import</span> ZapTransport
+<span class="kw">from</span> switchboard <span class="kw">import</span> PaymentOffer
+
+t = <span class="fn">ZapTransport</span>(endpoint=<span class="str">"zap://peer.example:9601"</span>)
+
+offer = <span class="fn">PaymentOffer</span>(
+    pay_to=<span class="str">"0x..."</span>, asset=<span class="str">"USDC"</span>,
+    amount=<span class="str">"1000"</span>, network=<span class="str">"base-sepolia"</span>,
+)
+
+<span class="com"># Send: serializes to ZAP binary, single syscall, no GC pressure</span>
+proof = <span class="kw">await</span> t.<span class="fn">request</span>(offer)</pre>
+
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/pull/21">PR #21</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/luxfi/zap">luxfi/zap</a>
+        </div>
+      </section>
+
+      <!-- ============== payment_protocol ============== -->
+      <section class="module" id="payment_protocol">
+        <div class="module-head">
+          <h2><a href="#payment_protocol">payment_protocol</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>src/payment_protocol.py</code></div>
+
+        <div class="module-body">
+          <p>
+            The shared schema for <code>PaymentOffer</code> and
+            <code>PaymentProof</code>. Every rail (x402 over HTTP, ZAP over
+            sockets, on-chain via AgentEscrow) speaks variants of these two
+            messages. The protocol module owns the canonical form and the
+            transcript hash used by signing.
+          </p>
+          <p>
+            Token-agnostic: <code>asset</code> is whatever the two parties agree
+            on. Chain-agnostic: <code>network</code> selects an adapter at the
+            consumer layer. PQ-ready: <code>signature_alg</code> + <code>signature</code>
+            are first-class fields, not optional add-ons.
+          </p>
+        </div>
+
+        <h3>PaymentOffer</h3>
+<pre class="code"><span class="kw">@</span>dataclass
+<span class="kw">class</span> <span class="typ">PaymentOffer</span>:
+    pay_to:        <span class="typ">str</span>
+    asset:         <span class="typ">str</span>            <span class="com"># token contract or chain-native symbol</span>
+    network:       <span class="typ">str</span>            <span class="com"># base-sepolia, tron, avalanche-c, lux-c, ...</span>
+    amount:        <span class="typ">str</span>            <span class="com"># in token's smallest unit</span>
+    nonce:         <span class="typ">bytes</span>          <span class="com"># 16 random bytes</span>
+    deadline:      <span class="typ">int</span>            <span class="com"># unix seconds</span>
+    signature_alg: <span class="typ">str</span> = <span class="str">"dilithium3"</span>
+    signature:     <span class="typ">bytes</span> = <span class="kw">b""</span></pre>
+
+        <h3>PaymentProof</h3>
+<pre class="code"><span class="kw">@</span>dataclass
+<span class="kw">class</span> <span class="typ">PaymentProof</span>:
+    offer_hash:    <span class="typ">bytes</span>          <span class="com"># transcript hash of the accepted offer</span>
+    tx_hash:       <span class="typ">str</span>            <span class="com"># on-chain tx (empty for off-chain rails)</span>
+    block:         <span class="typ">int</span> | <span class="kw">None</span>
+    signature_alg: <span class="typ">str</span> = <span class="str">"dilithium3"</span>
+    signature:     <span class="typ">bytes</span> = <span class="kw">b""</span></pre>
+
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/blob/main/src/payment_protocol.py">source</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/34">spec §11 (PQ)</a>
+        </div>
+      </section>
+
+      <!-- ============== AgentEscrow ============== -->
+      <section class="module" id="agent_escrow">
+        <div class="module-head">
+          <h2><a href="#agent_escrow">AgentEscrow.sol</a></h2>
+          <span class="chip ok">shipped</span>
+          <span class="chip mark">EIP draft</span>
+        </div>
+        <div class="module-path"><code>contracts/AgentEscrow.sol</code></div>
+
+        <div class="module-body">
+          <p>
+            Trustless escrow for agent-to-agent payments. Caller locks funds with
+            a deadline and a challenge period; provider claims on delivery; either
+            side can dispute inside the challenge window. Native-ETH variant has
+            no token wrapper at all — pay, claim, refund all happen in native ETH.
+          </p>
+          <p>
+            The Python client (<code>src/payment_protocol.py</code>) wraps the
+            contract in a clean async interface; the CLI ships the same flows for
+            shell use. The native-ETH variant is formalized as a Standards-Track
+            ERC (<a href="https://github.com/kcolbchain/switchboard/issues/50">#50</a>).
+          </p>
+        </div>
+
+        <h3>solidity surface</h3>
+<pre class="code"><span class="kw">function</span> <span class="fn">deposit</span>(<span class="typ">address</span> provider, <span class="typ">uint256</span> deadline, <span class="typ">uint256</span> challenge)
+    <span class="kw">external</span> <span class="kw">payable</span> <span class="kw">returns</span> (<span class="typ">uint256</span> escrowId);
+
+<span class="kw">function</span> <span class="fn">claim</span>(<span class="typ">uint256</span> escrowId, <span class="typ">bytes</span> <span class="kw">calldata</span> receipt) <span class="kw">external</span>;
+<span class="kw">function</span> <span class="fn">dispute</span>(<span class="typ">uint256</span> escrowId, <span class="typ">bytes</span> <span class="kw">calldata</span> evidence) <span class="kw">external</span>;
+<span class="kw">function</span> <span class="fn">refund</span>(<span class="typ">uint256</span> escrowId) <span class="kw">external</span>; <span class="com">// after deadline + challenge</span>
+<span class="kw">function</span> <span class="fn">cancelMutual</span>(<span class="typ">uint256</span> escrowId, <span class="typ">bytes</span> <span class="kw">calldata</span> peerSig) <span class="kw">external</span>;</pre>
+
+        <h3>python flow</h3>
+<pre class="code"><span class="kw">from</span> switchboard.escrow <span class="kw">import</span> AgentEscrow
+
+esc = <span class="fn">AgentEscrow</span>(network=<span class="str">"base-sepolia"</span>, contract=<span class="str">"0x..."</span>)
+
+<span class="com"># caller: lock 0.01 ETH for the provider, 1 hour deadline + 1 hour challenge</span>
+escrow_id = <span class="kw">await</span> esc.<span class="fn">deposit</span>(
+    provider=<span class="str">"0xPeer..."</span>,
+    value=<span class="fn">eth</span>(<span class="str">"0.01"</span>),
+    deadline=<span class="fn">hours</span>(<span class="str">"1"</span>),
+    challenge=<span class="fn">hours</span>(<span class="str">"1"</span>),
+)
+
+<span class="com"># provider: claim with receipt</span>
+<span class="kw">await</span> esc.<span class="fn">claim</span>(escrow_id, receipt=signed_receipt)</pre>
+
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/blob/main/contracts/AgentEscrow.sol">source</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/8">PR #8</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/blob/main/eips/draft-native-eth-a2a-escrow.md">EIP draft</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/50">#50</a>
+        </div>
+      </section>
+
+      <!-- ============== gas ============== -->
+      <section class="module" id="gas_budget">
+        <div class="module-head">
+          <h2><a href="#gas_budget">gas_budget · gas_tracker</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>switchboard/gas_budget.py</code> · <code>switchboard/gas_tracker.py</code></div>
+
+        <div class="module-body">
+          <p>
+            Hard budgets — per-hour, per-day, per-network — that an agent cannot
+            exceed even if its policy goes haywire. <code>gas_tracker</code>
+            records what's been spent; <code>gas_budget</code> rejects the next
+            tx if it would breach the budget. Closes the #1 footgun of autonomous
+            on-chain agents: runaway loops burning their own treasury.
+          </p>
+          <p>
+            Tracker is in-memory by default but takes a backing store (SQLite,
+            Redis) for multi-process agents.
+          </p>
+        </div>
+
+        <h3>example</h3>
+<pre class="code"><span class="kw">from</span> switchboard.gas_budget <span class="kw">import</span> GasBudget
+<span class="kw">from</span> switchboard.gas_tracker <span class="kw">import</span> GasTracker
+
+tracker = <span class="fn">GasTracker</span>()                              <span class="com"># in-memory</span>
+budget  = <span class="fn">GasBudget</span>(
+    tracker=tracker,
+    per_hour=<span class="fn">gwei</span>(<span class="str">"500_000"</span>),
+    per_day =<span class="fn">gwei</span>(<span class="str">"5_000_000"</span>),
+)
+
+<span class="kw">if</span> <span class="kw">not</span> budget.<span class="fn">would_allow</span>(network=<span class="str">"base-sepolia"</span>, est_gas=tx_gas):
+    <span class="kw">raise</span> <span class="fn">BudgetExceeded</span>()
+
+tracker.<span class="fn">record</span>(network=<span class="str">"base-sepolia"</span>, used=tx_gas)</pre>
+
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/pull/14">PR #14</a>
+        </div>
+      </section>
+
+      <!-- ============== nonce_manager ============== -->
+      <section class="module" id="nonce_manager">
+        <div class="module-head">
+          <h2><a href="#nonce_manager">nonce_manager</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>switchboard/nonce_manager.py</code></div>
+
+        <div class="module-body">
+          <p>
+            Client-side nonce manager with reorg protection. Keeps a local view
+            of the next nonce per (address, network); on reorg, rolls back. The
+            piece every shipping autonomous agent eventually has to write —
+            written once, here, with the edge cases (replacement tx, stuck
+            mempool, multi-network parallelism) handled.
+          </p>
+        </div>
+
+        <h3>example</h3>
+<pre class="code"><span class="kw">from</span> switchboard.nonce_manager <span class="kw">import</span> NonceManager
+
+nm = <span class="fn">NonceManager</span>(rpc=rpc_client)
+
+<span class="kw">async with</span> nm.<span class="fn">reserve</span>(address, network=<span class="str">"base-sepolia"</span>) <span class="kw">as</span> n:
+    tx = <span class="fn">build_tx</span>(nonce=n, ...)
+    <span class="kw">await</span> rpc.<span class="fn">send</span>(tx)
+    <span class="com"># NonceManager auto-commits on success, rolls back on reorg or send error</span></pre>
+
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/pull/11">PR #11</a>
+        </div>
+      </section>
+
+      <!-- ============== pq ============== -->
+      <section class="module" id="pq">
+        <div class="module-head">
+          <h2><a href="#pq">pq · post-quantum</a></h2>
+          <span class="chip mark">north star</span>
+          <span class="chip ok">PQ-2 shipped</span>
+        </div>
+        <div class="module-path"><code>switchboard/pq.py</code> · <code>switchboard/pq_keys.py</code></div>
+
+        <div class="module-body">
+          <p>
+            Wrapper over <a href="https://github.com/open-quantum-safe/liboqs">liboqs</a>
+            providing Dilithium / Falcon / SPHINCS+ signatures with a single
+            API. Default algorithm is Dilithium3 (NIST level 3, balanced
+            speed/size). Algorithm is carried explicitly in every
+            <code>PaymentOffer</code> and <code>PaymentProof</code>; switchboard
+            never has to guess what to verify with.
+          </p>
+          <p>
+            Install with <code>pip install switchboard[pq]</code> — the <code>[pq]</code>
+            extra pulls <code>liboqs-python</code>. The wire schema for
+            <code>signature_alg</code> + <code>signature</code> is fixed in
+            <a href="https://github.com/kcolbchain/switchboard/issues/38">PQ-5</a>.
+          </p>
+        </div>
+
+        <h3>example</h3>
+<pre class="code"><span class="kw">from</span> switchboard.pq        <span class="kw">import</span> sign, verify, ALG_DILITHIUM3
+<span class="kw">from</span> switchboard.pq_keys   <span class="kw">import</span> generate, load
+
+<span class="com"># once, off-thread: generate and save a PQ keypair</span>
+kp = <span class="fn">generate</span>(alg=ALG_DILITHIUM3)
+kp.<span class="fn">save</span>(<span class="str">"./agent.pq.json"</span>)
+
+<span class="com"># at runtime: sign an offer's canonical transcript</span>
+kp = <span class="fn">load</span>(<span class="str">"./agent.pq.json"</span>)
+sig = <span class="fn">sign</span>(offer.<span class="fn">canonical</span>(), kp)
+
+<span class="com"># peer side: verify</span>
+<span class="kw">assert</span> <span class="fn">verify</span>(offer.<span class="fn">canonical</span>(), sig, kp.public, alg=offer.signature_alg)</pre>
+
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/issues/33">PQ-0 meta</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/34">PQ-1 spec</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/36">PQ-3 keys</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/37">PQ-4 wire</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/38">PQ-5 ZAP</a>
+        </div>
+      </section>
+
+      <!-- ============== a2a_x402 ============== -->
+      <section class="module" id="a2a_x402">
+        <div class="module-head">
+          <h2><a href="#a2a_x402">a2a_x402 adapter</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>switchboard/adapters/a2a_x402.py</code></div>
+
+        <div class="module-body">
+          <p>
+            Adapter between Google's A2A (Agent-to-Agent) framework and the
+            open x402 protocol. Lets an A2A agent get paid in x402; lets an
+            x402 caller invoke an A2A agent. Translates message envelopes,
+            preserves the PQ signature, and respects the gas budget on both
+            sides.
+          </p>
+        </div>
+
+        <h3>example</h3>
+<pre class="code"><span class="kw">from</span> switchboard.adapters.a2a_x402 <span class="kw">import</span> A2AOverX402
+
+bridge = <span class="fn">A2AOverX402</span>(
+    a2a_endpoint=<span class="str">"https://my-agent.example/a2a"</span>,
+    x402_pay_to=<span class="str">"0x..."</span>,
+    asset=<span class="str">"USDC"</span>, network=<span class="str">"base-sepolia"</span>,
+)
+
+result = <span class="kw">await</span> bridge.<span class="fn">invoke</span>(task=task, max_payment=<span class="fn">usdc</span>(<span class="str">"0.05"</span>))</pre>
+
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/pull/29">PR #29</a>
+        </div>
+      </section>
+
+      <!-- ============== x402_server ============== -->
+      <section class="module" id="x402_server">
+        <div class="module-head">
+          <h2><a href="#x402_server">x402.server</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>switchboard/x402/server.py</code></div>
+        <div class="module-body">
+          <p>
+            Standalone HTTP 402 server. The middleware variant
+            (<a href="#x402_middleware">x402_middleware</a>) wraps an existing
+            FastAPI/Flask app; this module ships a complete server you can run
+            as its own process — useful when the paid endpoint isn't part of a
+            larger application.
+          </p>
+        </div>
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
+        </div>
+      </section>
+
+      <!-- ============== mpp_session ============== -->
+      <section class="module" id="mpp_session">
+        <div class="module-head">
+          <h2><a href="#mpp_session">mpp.session</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>switchboard/mpp/session.py</code></div>
+        <div class="module-body">
+          <p>
+            Multi-party payment sessions. Open a streaming channel between two
+            agents under a budget cap; stream micro-pays as work is performed;
+            settle on close. The Tempo / Stripe-style rail for long-running
+            agent collaborations.
+          </p>
+        </div>
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
+        </div>
+      </section>
+
+      <!-- ============== mpc_wallet ============== -->
+      <section class="module" id="mpc_wallet">
+        <div class="module-head">
+          <h2><a href="#mpc_wallet">mpc_wallet</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>switchboard/mpc_wallet.py</code></div>
+        <div class="module-body">
+          <p>
+            Multi-party-computation wallet — threshold signatures across an
+            agent fleet, so no single machine holds the spending key. Useful
+            for high-value treasuries that have to survive any one node being
+            compromised.
+          </p>
+        </div>
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
+        </div>
+      </section>
+
+      <!-- ============== oracle_aggregator ============== -->
+      <section class="module" id="oracle_aggregator">
+        <div class="module-head">
+          <h2><a href="#oracle_aggregator">OracleAggregator</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>contracts/IOracleAggregator.sol</code> · <code>AgentEscrow.releaseByAttestation()</code></div>
+        <div class="module-body">
+          <p>
+            Oracle-mediated escrow release. A designated oracle aggregator
+            attests that delivery occurred; the contract releases funds without
+            requiring on-chain dispute resolution. The fast path for the common
+            case (provider delivers, no contest).
+          </p>
+        </div>
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/pull/52">PR #52</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/blob/main/contracts/IOracleAggregator.sol">interface</a>
+        </div>
+      </section>
+
+      <!-- ============== lucidly adapter ============== -->
+      <section class="module" id="lucidly">
+        <div class="module-head">
+          <h2><a href="#lucidly">adapters/lucidly</a></h2>
+          <span class="chip ok">shipped</span>
+        </div>
+        <div class="module-path"><code>switchboard/adapters/lucidly.py</code></div>
+        <div class="module-body">
+          <p>
+            syUSD auto-park for idle agent balances. Any USDC the agent isn't
+            actively using gets parked into Lucidly's yield-bearing syUSD
+            position by default, then pulled back automatically when the agent
+            needs to make a payment. Idle treasury earns yield without manual
+            management.
+          </p>
+        </div>
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
+        </div>
+      </section>
+
+      <!-- ============== multi-chain settlement ============== -->
+      <section class="module" id="multi_chain">
+        <div class="module-head">
+          <h2><a href="#multi_chain">multi-chain settlement</a></h2>
+          <span class="chip ok">design v0.1</span>
+        </div>
+        <div class="module-path"><code>docs/multi-chain-settlement.md</code> · <em>contracts forthcoming</em></div>
+
+        <div class="module-body">
+          <p>
+            The chain-agnostic settlement surface. Agents transact on whichever
+            chain fits the job (TRON for sub-cent fees, AVAX for liquidity,
+            Base for USDC, ETH for native escrow); switchboard adapters present
+            a uniform interface so payment code never branches per-chain.
+          </p>
+          <p>
+            <strong>Chosen path:</strong> notary attestation for v1 (low-cost,
+            production-ready today), upgradable in-place to ZK-relay for v2
+            (Groth16 proofs on LUX, trustless cross-chain verification). TRON
+            finality at 19 blocks, Avalanche C-Chain at 5, LUX at 2.
+          </p>
+          <p>
+            Full spec — envelope schema, per-chain verification paths, finality
+            tables, and considerations — in
+            <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md">
+            <code>docs/multi-chain-settlement.md</code></a>. Resolves
+            <a href="https://github.com/kcolbchain/switchboard/issues/59">#59</a>.
+          </p>
+        </div>
+
+        <h3>envelope schema</h3>
+<pre class="code"><span class="kw">envelope</span> {
+  source_chain:      <span class="typ">string</span>    <span class="com">// CAIP-2 (e.g. "eip155:1", "tron:mainnet")</span>
+  destination_chain: <span class="typ">string</span>
+  request_id:        <span class="typ">string</span>    <span class="com">// UUIDv4</span>
+  payload:           <span class="typ">bytes</span>     <span class="com">// serialized PaymentRequest / PaymentProof</span>
+  source_block:      <span class="typ">uint64</span>
+  source_tx:         <span class="typ">bytes32</span>
+  attestation:       <span class="typ">bytes</span>     <span class="com">// notary signature or ZK proof</span>
+  attestation_type:  <span class="typ">uint8</span>     <span class="com">// 0x01 = notary (ECDSA), 0x02 = ZK (Groth16)</span>
+}</pre>
+
+        <div class="module-links">
+          <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md">spec</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/pull/71">PR #71</a>
+          <span class="sep">·</span>
+          <a href="https://github.com/kcolbchain/switchboard/issues/59">issue #59</a>
+          <span class="sep">·</span>
+          <a href="./#multichain">overview map</a>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<footer class="bottom">
+  <div class="container">
+    <div class="row">
+      <a class="wm" href="./" style="font-family: var(--font); color: var(--fg); border: none;">
+        <em style="color: var(--mark); font-style: normal; font-weight: 700;">kcolb</em>chain
+        <span style="color: var(--fg-faint); margin: 0 var(--s-2);">/</span>
+        <span style="color: var(--fg-muted);">switchboard</span>
+      </a>
+      <div class="links">
+        <a href="./">overview</a>
+        <a href="./agents-demo.html">lab</a>
+        <a href="./simulator.html">simulator</a>
+        <a href="https://github.com/kcolbchain/switchboard">source</a>
+        <a href="https://github.com/kcolbchain/switchboard/issues">issues</a>
+        <a href="https://kcolbchain.github.io/brand/">brand</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
