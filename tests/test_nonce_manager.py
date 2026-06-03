@@ -199,6 +199,37 @@ class TestNonceManager(unittest.TestCase):
         self.nonce_manager.release_nonce(self.wallet_address_1, 5)
         self.assertEqual(self.nonce_manager.get_pending_nonces(self.wallet_address_1), SortedSet())
 
+    def test_release_lower_nonce_is_reused(self):
+        """
+        Releasing a lower nonce while a higher one is still pending must make the
+        freed nonce available again on the next acquire — not leave a permanent
+        gap. Ethereum requires gapless nonces, so a skipped nonce would stall
+        every higher-nonce pending transaction until the gap is filled.
+
+        Regression test: previously `acquire_nonce` returned `max(pending) + 1`,
+        which skipped the released nonce.
+        """
+        tx_w1_0 = MockTransaction(0, "w1_0")
+        tx_w1_1 = MockTransaction(1, "w1_1")
+        self.nonce_manager.acquire_nonce(self.wallet_address_1, tx_w1_0)  # nonce 0
+        self.nonce_manager.acquire_nonce(self.wallet_address_1, tx_w1_1)  # nonce 1
+        self.assertEqual(self.nonce_manager.get_pending_nonces(self.wallet_address_1), SortedSet([0, 1]))
+
+        # tx for nonce 0 fails locally before broadcast; free nonce 0 while 1 is still pending.
+        self.nonce_manager.release_nonce(self.wallet_address_1, 0)
+        self.assertEqual(self.nonce_manager.get_pending_nonces(self.wallet_address_1), SortedSet([1]))
+
+        # The next acquire must reuse the freed nonce 0, not jump to 2.
+        tx_w1_retry = MockTransaction(0, "w1_retry")
+        reused = self.nonce_manager.acquire_nonce(self.wallet_address_1, tx_w1_retry)
+        self.assertEqual(reused, 0)
+        self.assertEqual(self.nonce_manager.get_pending_nonces(self.wallet_address_1), SortedSet([0, 1]))
+
+        # A further acquire extends the sequence normally (no gaps remain).
+        tx_w1_2 = MockTransaction(2, "w1_2")
+        self.assertEqual(self.nonce_manager.acquire_nonce(self.wallet_address_1, tx_w1_2), 2)
+        self.assertEqual(self.nonce_manager.get_pending_nonces(self.wallet_address_1), SortedSet([0, 1, 2]))
+
     def test_sync_with_onchain_nonce_external_confirmation(self):
         """
         Tests synchronization with the on-chain nonce when external transactions
