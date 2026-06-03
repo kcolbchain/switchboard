@@ -21,7 +21,9 @@ jobs:
       - name: Install OZ + forge-std
         run: |
           forge install foundry-rs/forge-std --shallow
-          forge install OpenZeppelin/openzeppelin-contracts@dbb6104ce834628e473d2173bbc9d47f81a9eec3 --shallow
+          # OZ v5.0.2 is not reachable via foundry's tag-API window (OZ is at v5.6.x).
+          # Pin by SHA; --shallow excluded because shallow clones can't checkout arbitrary commits.
+          forge install OpenZeppelin/openzeppelin-contracts@dbb6104ce834628e473d2173bbc9d47f81a9eec3
 
       - run: forge build --sizes
       - run: forge test -vv
