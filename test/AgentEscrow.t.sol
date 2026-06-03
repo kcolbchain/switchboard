@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {AgentEscrow} from "../contracts/AgentEscrow.sol";
+import {IOracleAggregator} from "../contracts/IOracleAggregator.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -49,7 +50,7 @@ contract AgentEscrowTest is Test {
 
     function setUp() public {
         vm.prank(owner);
-        escrow = new AgentEscrow(31337);
+        escrow = new AgentEscrow(31337, IOracleAggregator(address(0)));
 
         vm.deal(payer, 10 ether);
         vm.deal(stranger, 1 ether);

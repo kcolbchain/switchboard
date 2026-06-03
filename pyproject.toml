@@ -28,6 +28,7 @@ dependencies = [
     "httpx",
     "eth-account",
     "sortedcontainers",
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]

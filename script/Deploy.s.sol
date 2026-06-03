@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {AgentEscrow} from "../contracts/AgentEscrow.sol";
+import {IOracleAggregator} from "../contracts/IOracleAggregator.sol";
 
 /// @title Deploy
 /// @notice Deploys AgentEscrow with the active chain's ID baked in via constructor.
@@ -13,7 +14,7 @@ contract Deploy is Script {
         uint256 chainId = block.chainid;
 
         vm.startBroadcast(deployerKey);
-        escrow = new AgentEscrow(chainId);
+        escrow = new AgentEscrow(chainId, IOracleAggregator(address(0)));
         vm.stopBroadcast();
 
         console2.log("AgentEscrow deployed:");

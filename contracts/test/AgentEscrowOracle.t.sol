@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {AgentEscrow} from "../AgentEscrow.sol";
 import {IOracleAggregator} from "../IOracleAggregator.sol";
 import {MockOracleAggregator} from "../mocks/MockOracleAggregator.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @dev Inline Forge cheatcode interface. Avoids a `lib/forge-std` submodule
 ///      by declaring only the subset of `Vm` we use.
@@ -48,7 +49,7 @@ contract AgentEscrowOracleTest {
 
     function test_nonOwnerCannotRegisterAgent() public {
         vm.startPrank(anyone);
-        vm.expectRevert(bytes("AgentEscrow: caller is not the owner"));
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, anyone));
         escrow.registerAgent(address(0xBEEF));
         vm.stopPrank();
     }
@@ -61,18 +62,16 @@ contract AgentEscrowOracleTest {
         require(!escrow.registeredAgents(agent), "agent should be deregistered");
     }
 
-    function test_deregisterUnregisteredReverts() public {
-        vm.expectRevert(bytes("AgentEscrow: agent not registered"));
+    function test_deregisterUnregisteredIsIdempotent() public {
         escrow.deregisterAgent(address(0xDEAD));
+        require(!escrow.registeredAgents(address(0xDEAD)), "should remain unregistered");
     }
 
     function test_nonOwnerCannotDeregister() public {
-        // First register as owner
         address agent = address(0xC0FFEE);
         escrow.registerAgent(agent);
-        // Then try to deregister as non-owner
         vm.startPrank(anyone);
-        vm.expectRevert(bytes("AgentEscrow: caller is not the owner"));
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, anyone));
         escrow.deregisterAgent(agent);
         vm.stopPrank();
     }
@@ -85,13 +84,13 @@ contract AgentEscrowOracleTest {
 
     function test_nonOwnerCannotTransferOwnership() public {
         vm.startPrank(anyone);
-        vm.expectRevert(bytes("AgentEscrow: caller is not the owner"));
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, anyone));
         escrow.transferOwnership(address(0xF00D));
         vm.stopPrank();
     }
 
     function test_transferOwnershipToZeroReverts() public {
-        vm.expectRevert(bytes("AgentEscrow: new owner is zero address"));
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableInvalidOwner.selector, address(0)));
         escrow.transferOwnership(address(0));
     }
 
