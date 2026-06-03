@@ -1,31 +1,41 @@
-# Python build artifacts
-dist/
-build/
-*.egg-info/
-*.egg
+# Foundry
+out/
+cache/
+broadcast/
+lib/
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
 
-# Virtual envs
 .venv/
 venv/
 env/
 
-# Tooling caches
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-htmlcov/
+# Env / secrets
+.env
+.env.*
+!.env.example
 
-# OS / editor
+# Editors / OS
+.vscode/
+.idea/
 .DS_Store
 *.swp
-.idea/
-.vscode/
-
-# Foundry
-cache/
-out/
-broadcast/

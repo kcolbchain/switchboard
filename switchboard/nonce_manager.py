@@ -22,14 +22,18 @@ class WalletState:
     def __init__(self, confirmed_nonce: int):
         # The highest sequentially confirmed nonce known to the manager.
         self.confirmed_nonce: int = confirmed_nonce
-        
+
         # Stores nonces that have been acquired by the manager but not yet confirmed on-chain.
         # SortedSet ensures nonces are kept in order for easy processing and unique storage.
         self.pending_nonces: SortedSet[int] = SortedSet()
-        
+
         # Maps a pending nonce to its associated transaction object.
         # This allows re-queuing of transactions if a reorg invalidates their nonces.
         self.pending_transactions: Dict[int, Any] = {}
+
+        # Nonces confirmed out-of-order (ahead of confirmed_nonce). They roll into
+        # confirmed_nonce when the gap fills.
+        self.out_of_order_confirmations: set = set()
 
 class NonceManager:
     """
@@ -77,17 +81,20 @@ class NonceManager:
 
         if onchain_nonce > state.confirmed_nonce:
             # The on-chain nonce is higher than our locally confirmed nonce.
-            # This implies transactions have been confirmed that we might not have tracked locally,
-            # or previous pending nonces have been included in a block.
-
-            # Identify and remove any local pending nonces that are now below the current
-            # on-chain nonce, as they are effectively confirmed.
-            nonces_to_remove = SortedSet(n for n in state.pending_nonces if n < onchain_nonce)
+            # Pending nonces strictly less than onchain_nonce are confirmed; pending nonces
+            # equal to onchain_nonce are stale (the chain advanced past them without including
+            # our tx) and should be re-issued on the next acquire.
+            nonces_to_remove = SortedSet(n for n in state.pending_nonces if n <= onchain_nonce)
             for n in nonces_to_remove:
                 state.pending_nonces.remove(n)
                 if n in state.pending_transactions:
                     del state.pending_transactions[n]
-            
+
+            # Out-of-order confirmations the chain has now subsumed are no longer interesting.
+            state.out_of_order_confirmations = {
+                n for n in state.out_of_order_confirmations if n > onchain_nonce
+            }
+
             # Update our locally tracked confirmed_nonce to reflect the latest on-chain state.
             state.confirmed_nonce = onchain_nonce
 
@@ -149,6 +156,9 @@ class NonceManager:
         Marks a nonce as successfully confirmed on the blockchain (i.e., the transaction
         using it has been mined into a block).
 
+        Confirmations may arrive out of order. Out-of-order confirmations are stashed
+        and rolled into `confirmed_nonce` once the preceding nonces confirm.
+
         Args:
             address: The wallet address.
             nonce: The nonce to confirm.
@@ -156,30 +166,26 @@ class NonceManager:
         with self._lock:
             state = self._get_wallet_state(address)
 
-            # If the nonce is currently pending, remove it.
+            # If the nonce is currently pending, drop it from pending tracking.
             if nonce in state.pending_nonces:
                 state.pending_nonces.remove(nonce)
                 if nonce in state.pending_transactions:
                     del state.pending_transactions[nonce]
-            elif nonce < state.confirmed_nonce:
-                # If the nonce is already less than the current confirmed_nonce,
-                # it means it was previously processed (e.g., via _sync_with_onchain_nonce).
+
+            if nonce < state.confirmed_nonce:
+                # Already counted (e.g., via prior sync).
                 return
 
-            # If the confirmed nonce is sequential to our current `confirmed_nonce`,
-            # we can advance our `confirmed_nonce`. We also check for and confirm
-            # any subsequent nonces that are now also sequential.
             if nonce == state.confirmed_nonce:
+                # Advance by one, then roll forward through any stashed out-of-order
+                # confirmations that are now contiguous.
                 state.confirmed_nonce += 1
-                while state.confirmed_nonce in state.pending_nonces:
-                    state.pending_nonces.remove(state.confirmed_nonce)
-                    if state.confirmed_nonce in state.pending_transactions:
-                        del state.pending_transactions[state.confirmed_nonce]
+                while state.confirmed_nonce in state.out_of_order_confirmations:
+                    state.out_of_order_confirmations.discard(state.confirmed_nonce)
                     state.confirmed_nonce += 1
-            # If `nonce > state.confirmed_nonce` and it was not previously pending,
-            # it implies a gap in confirmations. We do not directly advance `state.confirmed_nonce`
-            # past such a gap. The `_sync_with_onchain_nonce` method will eventually correct
-            # `state.confirmed_nonce` if the missing nonces are confirmed on-chain.
+            else:
+                # nonce > confirmed_nonce: out-of-order. Stash for later roll-forward.
+                state.out_of_order_confirmations.add(nonce)
 
     def on_reorg(self, address: str, reverted_to_nonce: int):
         """
@@ -205,6 +211,11 @@ class NonceManager:
             # revert it to the `reverted_to_nonce` supplied by the reorg detector.
             if state.confirmed_nonce > reverted_to_nonce:
                 state.confirmed_nonce = reverted_to_nonce
+
+            # Drop any stashed out-of-order confirmations the reorg has invalidated.
+            state.out_of_order_confirmations = {
+                n for n in state.out_of_order_confirmations if n < reverted_to_nonce
+            }
 
             reverted_txns = []
             nonces_to_remove = SortedSet()
