@@ -33,6 +33,7 @@ classifiers = [
 ]
 dependencies = [
     "sortedcontainers>=2.4.0",
+    "cryptography>=42.0.0",
 ]
 
 [project.optional-dependencies]
