@@ -21,7 +21,7 @@ jobs:
       - name: Install OZ + forge-std
         run: |
           forge install foundry-rs/forge-std --shallow
-          forge install OpenZeppelin/openzeppelin-contracts --tag v5.0.2 --shallow
+          forge install OpenZeppelin/openzeppelin-contracts@dbb6104ce834628e473d2173bbc9d47f81a9eec3 --shallow
 
       - run: forge build --sizes
       - run: forge test -vv
