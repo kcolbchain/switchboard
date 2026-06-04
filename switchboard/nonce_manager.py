@@ -118,13 +118,19 @@ class NonceManager:
             # First, ensure our local state is synchronized with the latest on-chain nonce.
             self._sync_with_onchain_nonce(state, address)
 
-            # Determine the next available nonce.
-            # If there are any pending nonces, the next one is the highest pending + 1.
-            # Otherwise, it's the current `confirmed_nonce` (which should be the next expected nonce).
+            # Determine the next available nonce: the lowest nonce at or above
+            # `confirmed_nonce` that is not already pending. Walking up from
+            # `confirmed_nonce` (rather than taking ``max(pending) + 1``) means a
+            # nonce freed by `release_nonce` — or a gap left by an out-of-order
+            # confirmation — is reused before the sequence is extended. Ethereum
+            # requires gapless nonces, so leaving a hole would stall every
+            # higher-nonce pending tx until the gap is filled.
             next_nonce = state.confirmed_nonce
-            if state.pending_nonces:
-                next_nonce = max(state.pending_nonces) + 1
-            
+            for pending in state.pending_nonces.irange(minimum=next_nonce):
+                if pending != next_nonce:
+                    break
+                next_nonce += 1
+
             # Add the chosen nonce to the set of pending nonces.
             state.pending_nonces.add(next_nonce)
             if transaction is not None:
