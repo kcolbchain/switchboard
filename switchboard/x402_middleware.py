@@ -85,7 +85,12 @@ class PaymentOffer:
         )
 
     def is_expired(self) -> bool:
-        if self.expires_at is None:
+        # ``0`` is the "no expiry" sentinel on the ZAP wire format (see
+        # ``zap_transport.py``: ``expires_at`` is encoded as ``offer.expires_at or 0``
+        # and decoded back with ``int(expires) if expires else None``). Treat a falsy
+        # ``expires_at`` (``None`` or ``0``) as "never expires" so the JSON/header path
+        # agrees with the binary path instead of rejecting a no-expiry offer as expired.
+        if not self.expires_at:
             return False
         return time.time() > self.expires_at
 

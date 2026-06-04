@@ -60,6 +60,28 @@ class TestPaymentOffer:
         )
         assert not offer.is_expired()
 
+    def test_zero_expiry_is_no_expiry_sentinel(self):
+        # ``0`` is the documented "no expiry" sentinel on the ZAP wire format
+        # (zap_transport.py). The JSON/header path must agree: an offer with
+        # expiresAt == 0 must NOT be treated as expired (regression for the
+        # cross-transport inconsistency where ``time.time() > 0`` is always True).
+        offer = PaymentOffer.from_header(
+            json.dumps({"amount": "1000", "recipient": "0x1", "chainId": 1, "expiresAt": 0})
+        )
+        assert offer.expires_at == 0
+        assert not offer.is_expired()
+
+    def test_zero_expiry_offer_not_rejected_by_validation(self):
+        # End-to-end: a no-expiry (sentinel 0) offer must pass _validate_offer,
+        # not raise "Payment offer expired".
+        client = MagicMock()
+        client.wallet_address = "0xPAYER"
+        mw = X402Middleware(payment_client=client, max_payment_wei=10**18)
+        offer = PaymentOffer(
+            amount_wei=100, currency="ETH", recipient="0x1", chain_id=1, expires_at=0
+        )
+        mw._validate_offer(offer)  # must not raise
+
 
 # ─── PaymentProof Tests ──────────────────────────────────────────────────────
 
