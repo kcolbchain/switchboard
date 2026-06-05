@@ -127,6 +127,8 @@ roundtrip = decode_offer(wire)           # exact equality
 
 ## Comparison
 
+Full competitive survey: [docs/competitive-survey.md](docs/competitive-survey.md)
+
 |  | switchboard | raw x402 server | Stripe meter | Custom RPC paywall |
 |---|---|---|---|---|
 | HTTP/402 native | ✅ | ✅ | ❌ | ❌ |
