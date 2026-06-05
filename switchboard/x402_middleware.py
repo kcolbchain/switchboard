@@ -186,7 +186,8 @@ class X402Middleware:
             raise ValueError(f"Recipient {offer.recipient} not in allowlist")
 
         if self.gas_tracker:
-            if not self.gas_tracker.can_send_transaction(offer.amount_wei):
+            wallet = self.payment_client.wallet_address
+            if not self.gas_tracker.can_send_transaction(wallet, offer.amount_wei):
                 raise ValueError("Payment would exceed gas budget")
 
     def _pay_onchain(self, offer: PaymentOffer) -> PaymentProof:
@@ -264,7 +265,8 @@ class X402Middleware:
 
         # Record payment
         if self.gas_tracker:
-            self.gas_tracker.record_gas_usage(offer.amount_wei)
+            wallet = self.payment_client.wallet_address
+            self.gas_tracker.record_gas_usage(wallet, offer.amount_wei)
         self.total_spent_wei += offer.amount_wei
 
         # Retry with payment proof

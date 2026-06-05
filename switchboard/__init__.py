@@ -10,7 +10,10 @@ from typing import Any
 
 __version__ = "0.1.0"
 
-__all__ = ["__version__", "load_registry"]
+__all__ = ["__version__", "load_registry", "GasManager", "GasLimits", "BudgetStatus", "BudgetExhausted"]
+
+
+from switchboard.gas_manager import BudgetExhausted, GasLimits, GasManager, BudgetStatus
 
 
 def load_registry() -> dict[str, Any]:
