@@ -1,0 +1,1979 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>switchboard lab — case studies & interactive explorer</title>
+<meta name="description" content="Deep-dive into every agent payment pattern switchboard implements. Interactive diagrams, live stats, protocol comparisons, and playable demos." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   SWITCHBOARD LAB — LUXURY OBSERVATORY
+   ============================================================ */
+
+:root {
+  /* --- obsidian palette --- */
+  --bg-deep:    #06060b;
+  --bg:         #0a0a0f;
+  --bg-elev:    #101018;
+  --bg-elev-2:  #16161f;
+  --bg-surface: #1a1a26;
+
+  /* --- gold & warm tones --- */
+  --gold:       #d4a853;
+  --gold-soft:  rgba(212, 168, 83, 0.12);
+  --gold-glow:  rgba(212, 168, 83, 0.06);
+  --gold-line:  rgba(212, 168, 83, 0.25);
+  --ivory:      #f0ebe0;
+  --ivory-soft: rgba(240, 235, 224, 0.08);
+
+  /* --- accents --- */
+  --emerald:    #4ecb71;
+  --emerald-soft: rgba(78, 203, 113, 0.12);
+  --blue:       #5b9cf5;
+  --blue-soft:  rgba(91, 156, 245, 0.10);
+  --rose:       #e0637c;
+  --rose-soft:  rgba(224, 99, 124, 0.10);
+  --violet:     #a78bfa;
+  --violet-soft:rgba(167, 139, 250, 0.10);
+  --cyan:       #67d4e0;
+
+  /* --- text --- */
+  --fg:         #eae6df;
+  --fg-muted:   #9a9590;
+  --fg-faint:   #5c5854;
+  --line:       rgba(255,255,255,0.06);
+  --line-gold:  rgba(212,168,83,0.15);
+
+  /* --- type --- */
+  --font-display: 'Cormorant Garamond', 'Georgia', serif;
+  --font-body:    'DM Sans', -apple-system, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* --- space --- */
+  --sidebar-w: 280px;
+  --section-gap: 120px;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+/* === RESET === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--fg-muted);
+  background: var(--bg);
+  overflow-x: hidden;
+}
+
+a { color: var(--gold); text-decoration: none; transition: color .2s; }
+a:hover { color: var(--ivory); }
+code, .mono { font-family: var(--font-mono); }
+
+/* === ATMOSPHERE === */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 1200px 700px at 15% 0%, rgba(212,168,83,0.04), transparent 60%),
+    radial-gradient(ellipse 800px 500px at 85% 100%, rgba(78,203,113,0.025), transparent 50%),
+    radial-gradient(ellipse 600px 600px at 50% 50%, rgba(167,139,250,0.015), transparent 50%);
+}
+body::after {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.015) 2px, rgba(0,0,0,.015) 4px);
+}
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(212,168,83,0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(212,168,83,0.4); }
+
+/* === LAYOUT === */
+.app { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+
+/* === SIDEBAR === */
+.sidebar {
+  position: fixed; top: 0; left: 0; bottom: 0;
+  width: var(--sidebar-w); z-index: 50;
+  background: var(--bg-deep);
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: transform .35s cubic-bezier(.22,1,.36,1);
+}
+
+.sidebar-header {
+  padding: 28px 24px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.sidebar-logo {
+  font-family: var(--font-mono);
+  font-size: 14px; font-weight: 700;
+  color: var(--fg); letter-spacing: -.01em;
+  margin-bottom: 2px;
+}
+.sidebar-logo em { color: var(--gold); font-style: normal; }
+.sidebar-sub { font-size: 11px; color: var(--fg-faint); font-family: var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
+
+.sidebar-search {
+  margin: 16px 20px 8px;
+  position: relative;
+}
+.sidebar-search input {
+  width: 100%; padding: 9px 12px 9px 34px;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); color: var(--fg);
+  font: inherit; font-size: 12px; outline: none;
+  transition: border-color .2s;
+}
+.sidebar-search input::placeholder { color: var(--fg-faint); }
+.sidebar-search input:focus { border-color: var(--gold-line); }
+.sidebar-search .icon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  color: var(--fg-faint); font-size: 13px; pointer-events: none;
+}
+
+.sidebar-nav {
+  flex: 1; overflow-y: auto; padding: 12px 0 24px;
+}
+.nav-group { margin-bottom: 8px; }
+.nav-group-label {
+  padding: 8px 24px 4px;
+  font-size: 9.5px; font-weight: 600; color: var(--fg-faint);
+  text-transform: uppercase; letter-spacing: .1em;
+  font-family: var(--font-mono);
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 24px; cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all .2s;
+  text-decoration: none; color: var(--fg-muted);
+}
+.nav-item:hover {
+  background: var(--gold-glow);
+  color: var(--fg);
+  border-left-color: rgba(212,168,83,0.3);
+}
+.nav-item.active {
+  background: var(--gold-soft);
+  color: var(--gold);
+  border-left-color: var(--gold);
+}
+.nav-num {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--fg-faint); min-width: 22px;
+}
+.nav-item.active .nav-num { color: var(--gold); }
+.nav-label { font-size: 13px; font-weight: 500; }
+.nav-chip {
+  margin-left: auto;
+  font-size: 9px; font-family: var(--font-mono);
+  padding: 2px 7px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.nav-chip.live { background: var(--emerald-soft); color: var(--emerald); }
+.nav-chip.new { background: var(--gold-soft); color: var(--gold); }
+
+.sidebar-footer {
+  padding: 16px 24px; border-top: 1px solid var(--line);
+  display: flex; gap: 16px; font-size: 11px;
+}
+.sidebar-footer a { color: var(--fg-faint); }
+.sidebar-footer a:hover { color: var(--gold); }
+
+/* === MAIN === */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1; min-width: 0;
+}
+
+/* === HERO === */
+.hero {
+  position: relative;
+  padding: 100px 80px 80px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+.hero::before {
+  content: ''; position: absolute; top: -200px; right: -100px;
+  width: 600px; height: 600px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,168,83,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--gold); letter-spacing: .12em;
+  text-transform: uppercase; margin-bottom: 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.hero-eyebrow::before {
+  content: ''; width: 32px; height: 1px; background: var(--gold);
+}
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(42px, 5.5vw, 72px);
+  font-weight: 400; color: var(--fg);
+  letter-spacing: -.02em; line-height: 1.05;
+  margin-bottom: 24px; max-width: 14ch;
+}
+.hero h1 em { color: var(--gold); font-style: italic; font-weight: 600; }
+.hero .lead {
+  font-size: 18px; color: var(--fg-muted);
+  max-width: 56ch; line-height: 1.6;
+  margin-bottom: 40px;
+}
+.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 24px; border-radius: var(--radius-sm);
+  font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; border: none;
+}
+.btn-gold {
+  background: var(--gold); color: var(--bg-deep);
+}
+.btn-gold:hover { background: #e0b75f; color: var(--bg-deep); transform: translateY(-1px); box-shadow: 0 8px 32px rgba(212,168,83,0.25); }
+.btn-ghost {
+  background: transparent; color: var(--fg-muted);
+  border: 1px solid var(--line);
+}
+.btn-ghost:hover { border-color: var(--gold-line); color: var(--fg); }
+
+/* === DASHBOARD STATS === */
+.dashboard {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 1px; background: var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.dash-stat {
+  background: var(--bg);
+  padding: 36px 40px;
+  position: relative; overflow: hidden;
+  transition: background .3s;
+}
+.dash-stat:hover { background: var(--bg-elev); }
+.dash-stat::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0; transition: opacity .3s;
+}
+.dash-stat:hover::after { opacity: 1; }
+.dash-stat .label {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--fg-faint); text-transform: uppercase;
+  letter-spacing: .1em; margin-bottom: 8px;
+}
+.dash-stat .value {
+  font-family: var(--font-display); font-size: 48px;
+  font-weight: 600; color: var(--fg);
+  letter-spacing: -.02em; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.dash-stat .sub {
+  font-size: 12px; color: var(--fg-faint);
+  margin-top: 8px;
+}
+
+/* === SECTION === */
+.section {
+  padding: 80px 80px var(--section-gap);
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  scroll-margin-top: 20px;
+}
+.section:last-child { border-bottom: none; }
+
+.section-eyebrow {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--gold); letter-spacing: .12em;
+  text-transform: uppercase; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.section-eyebrow .num {
+  font-size: 11px; font-weight: 700;
+  background: var(--gold-soft); color: var(--gold);
+  padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--gold-line);
+}
+.section h2 {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 400; color: var(--fg);
+  letter-spacing: -.015em; line-height: 1.1;
+  margin-bottom: 16px;
+}
+.section h2 em { color: var(--gold); font-style: italic; }
+.section .section-lead {
+  font-size: 16px; color: var(--fg-muted);
+  max-width: 60ch; line-height: 1.6;
+  margin-bottom: 48px;
+}
+
+/* === CASE STUDY GRID === */
+.case-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 24px; margin-bottom: 48px;
+}
+
+/* === GLASS CARD === */
+.glass-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 32px;
+  position: relative; overflow: hidden;
+  transition: border-color .3s, transform .2s, box-shadow .3s;
+}
+.glass-card:hover {
+  border-color: var(--gold-line);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.3), 0 0 0 1px var(--gold-line);
+}
+.glass-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0; transition: opacity .3s;
+}
+.glass-card:hover::before { opacity: .6; }
+.glass-card .card-label {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--fg-faint); text-transform: uppercase;
+  letter-spacing: .08em; margin-bottom: 12px;
+}
+.glass-card h3 {
+  font-family: var(--font-display);
+  font-size: 24px; font-weight: 600;
+  color: var(--fg); margin-bottom: 12px;
+}
+.glass-card p { font-size: 14px; color: var(--fg-muted); line-height: 1.6; }
+
+/* === DIAGRAM PANELS === */
+.diagram-panel {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 40px;
+  position: relative; overflow: hidden;
+  margin-bottom: 32px;
+}
+.diagram-panel .diagram-title {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--fg-faint); text-transform: uppercase;
+  letter-spacing: .1em; margin-bottom: 24px;
+}
+.diagram-panel canvas {
+  width: 100%; height: 280px; display: block;
+  border-radius: var(--radius-sm);
+}
+
+/* === FLOW DIAGRAM (CSS) === */
+.flow {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; padding: 32px 0; flex-wrap: wrap;
+}
+.flow-node {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 16px 20px; min-width: 100px;
+}
+.flow-shape {
+  width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  border-radius: var(--radius);
+  position: relative;
+  transition: transform .3s, box-shadow .3s;
+}
+.flow-shape:hover { transform: scale(1.1); }
+.flow-shape.agent {
+  background: var(--gold-soft); border: 1.5px solid var(--gold-line);
+  border-radius: 14px;
+}
+.flow-shape.service {
+  background: var(--blue-soft); border: 1.5px solid rgba(91,156,245,0.25);
+  border-radius: 50%;
+}
+.flow-shape.contract {
+  background: var(--emerald-soft); border: 1.5px solid rgba(78,203,113,0.25);
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  border: none; width: 60px; height: 60px;
+}
+.flow-name {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--fg-muted); text-align: center;
+}
+.flow-arrow {
+  display: flex; align-items: center; gap: 0;
+  color: var(--fg-faint); font-size: 12px;
+  padding: 0 4px; flex-direction: column;
+}
+.flow-arrow .arrow-line {
+  width: 48px; height: 1px; background: var(--line);
+  position: relative;
+}
+.flow-arrow .arrow-line::after {
+  content: ''; position: absolute; right: -1px; top: -3px;
+  border: 3px solid transparent; border-left: 5px solid var(--fg-faint);
+}
+.flow-arrow .arrow-label {
+  font-family: var(--font-mono); font-size: 9px;
+  color: var(--fg-faint); white-space: nowrap;
+  margin-top: 4px;
+}
+
+/* animated arrow pulse */
+.flow-arrow .arrow-line { animation: arrowPulse 2.5s ease-in-out infinite; }
+@keyframes arrowPulse {
+  0%, 100% { opacity: .4; }
+  50% { opacity: 1; background: var(--gold); }
+}
+
+/* === STATS TABLE === */
+.stats-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 13px; margin-bottom: 32px;
+}
+.stats-table th {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--fg-faint); text-transform: uppercase;
+  letter-spacing: .08em; font-weight: 500;
+  padding: 12px 16px; text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+.stats-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  transition: background .2s;
+}
+.stats-table tr:hover td { background: var(--gold-glow); }
+.stats-table tr:last-child td { border-bottom: none; }
+.stats-table .label-col { color: var(--fg); font-weight: 600; }
+.stats-table .mono { font-family: var(--font-mono); font-size: 12px; }
+.stats-table .val-gold { color: var(--gold); }
+.stats-table .val-emerald { color: var(--emerald); }
+.stats-table .val-rose { color: var(--rose); }
+
+/* === CHIPS === */
+.chip {
+  display: inline-block; padding: 3px 10px;
+  border-radius: 999px; font-size: 10px;
+  font-family: var(--font-mono); letter-spacing: .03em;
+}
+.chip-gold { background: var(--gold-soft); color: var(--gold); border: 1px solid var(--gold-line); }
+.chip-emerald { background: var(--emerald-soft); color: var(--emerald); }
+.chip-blue { background: var(--blue-soft); color: var(--blue); }
+.chip-rose { background: var(--rose-soft); color: var(--rose); }
+.chip-violet { background: var(--violet-soft); color: var(--violet); }
+
+/* === CODE BLOCK === */
+pre.code-block {
+  background: var(--bg-deep); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 24px 28px;
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--fg); line-height: 1.7;
+  overflow-x: auto; position: relative;
+}
+pre.code-block::before {
+  content: ''; position: absolute; top: 0; left: 0; bottom: 0;
+  width: 3px; background: linear-gradient(180deg, var(--gold), transparent);
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+pre.code-block .kw { color: #c4b5fd; }
+pre.code-block .str { color: #86efac; }
+pre.code-block .com { color: var(--fg-faint); font-style: italic; }
+pre.code-block .fn { color: var(--gold); }
+pre.code-block .typ { color: var(--cyan); }
+
+/* === INTERACTIVE PLAYGROUND === */
+.playground {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden; margin-bottom: 32px;
+}
+.playground-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-elev-2);
+}
+.playground-header .title {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--fg-faint); text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.playground-header .controls { display: flex; gap: 8px; }
+.play-btn {
+  background: var(--gold-soft); color: var(--gold);
+  border: 1px solid var(--gold-line);
+  border-radius: 999px; padding: 5px 14px;
+  font: inherit; font-size: 11px; font-family: var(--font-mono);
+  cursor: pointer; transition: all .2s;
+}
+.play-btn:hover { background: rgba(212,168,83,0.25); }
+.play-btn.active { background: var(--gold); color: var(--bg-deep); }
+.playground-canvas {
+  width: 100%; height: 320px; display: block;
+}
+
+/* === COMPARISON MATRIX === */
+.matrix-wrap {
+  overflow-x: auto; border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--bg-elev);
+}
+table.matrix {
+  width: 100%; border-collapse: collapse;
+  font-size: 13px; min-width: 700px;
+}
+table.matrix th, table.matrix td {
+  padding: 14px 18px; text-align: left; vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+table.matrix thead th {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--fg-faint); text-transform: uppercase;
+  letter-spacing: .06em; font-weight: 500;
+  background: var(--bg-elev-2);
+}
+table.matrix tbody td.label { color: var(--fg); font-weight: 600; width: 22%; }
+table.matrix .y { color: var(--emerald); }
+table.matrix .n { color: var(--rose); }
+table.matrix .p { color: var(--gold); }
+table.matrix tbody tr { transition: background .15s; }
+table.matrix tbody tr:hover { background: var(--gold-glow); }
+table.matrix tbody tr:last-child td { border-bottom: none; }
+
+/* === CHAIN MAP === */
+.chain-map {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  gap: 24px; align-items: stretch;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 40px;
+  margin-bottom: 32px;
+}
+.chain-col h4 {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--fg-faint); text-transform: uppercase;
+  letter-spacing: .08em; margin-bottom: 16px;
+}
+.chain-rail {
+  padding: 14px 18px;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--fg); display: flex;
+  justify-content: space-between; align-items: center;
+  gap: 12px; margin-bottom: 8px;
+  transition: border-color .2s, transform .15s;
+}
+.chain-rail:hover { border-color: var(--fg-faint); transform: translateX(4px); }
+.chain-rail .meta { color: var(--fg-faint); font-family: var(--font-mono); font-size: 10px; }
+.chain-rail.lux {
+  background: var(--gold-soft); border-color: var(--gold-line); color: var(--gold);
+}
+.chain-rail.lux:hover { transform: translateX(4px); box-shadow: 0 0 24px rgba(212,168,83,0.1); }
+.chain-arrow {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--fg-faint); font-size: 28px;
+  animation: arrowPulse 2s ease-in-out infinite;
+}
+
+/* === INTERACTIVE TAB SYSTEM === */
+.tabs { margin-bottom: 32px; }
+.tab-bar {
+  display: flex; gap: 0; border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+.tab-btn {
+  padding: 12px 20px; background: transparent;
+  border: none; border-bottom: 2px solid transparent;
+  color: var(--fg-faint); font: inherit; font-size: 13px;
+  font-weight: 500; cursor: pointer; transition: all .2s;
+}
+.tab-btn:hover { color: var(--fg); }
+.tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fadeIn .3s ease; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* === UTILITY GRID === */
+.util-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 16px; margin-bottom: 32px;
+}
+.util-card {
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 24px;
+  transition: all .3s;
+}
+.util-card:hover {
+  border-color: var(--gold-line);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+}
+.util-card .util-icon {
+  font-size: 28px; margin-bottom: 12px; display: block;
+}
+.util-card h4 {
+  font-family: var(--font-body); font-size: 15px;
+  font-weight: 600; color: var(--fg); margin-bottom: 8px;
+}
+.util-card p { font-size: 13px; color: var(--fg-muted); }
+
+/* === TIMELINE === */
+.timeline { position: relative; padding-left: 32px; margin-bottom: 32px; }
+.timeline::before {
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 0;
+  width: 1px; background: var(--line);
+}
+.tl-step { position: relative; padding-bottom: 32px; }
+.tl-step:last-child { padding-bottom: 0; }
+.tl-dot {
+  position: absolute; left: -32px; top: 2px;
+  width: 17px; height: 17px; border-radius: 50%;
+  background: var(--bg); border: 2px solid var(--fg-faint);
+  transition: all .3s;
+}
+.tl-step:hover .tl-dot { border-color: var(--gold); background: var(--gold-soft); box-shadow: 0 0 12px rgba(212,168,83,0.3); }
+.tl-step.active .tl-dot { border-color: var(--gold); background: var(--gold); }
+.tl-label {
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--gold); letter-spacing: .06em;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.tl-title { font-size: 16px; font-weight: 600; color: var(--fg); margin-bottom: 4px; }
+.tl-desc { font-size: 13px; color: var(--fg-muted); max-width: 50ch; }
+
+/* === PQ COMPARISON === */
+.pq-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 16px; margin-bottom: 32px;
+}
+.pq-card {
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 28px;
+  text-align: center; transition: all .3s;
+}
+.pq-card:hover { border-color: var(--gold-line); transform: translateY(-2px); }
+.pq-card .alg-name {
+  font-family: var(--font-mono); font-size: 14px;
+  font-weight: 700; color: var(--fg); margin-bottom: 16px;
+}
+.pq-card .metric {
+  display: flex; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.pq-card .metric:last-child { border-bottom: none; }
+.pq-card .metric .key { color: var(--fg-faint); }
+.pq-card .metric .val { color: var(--fg); font-family: var(--font-mono); }
+
+/* === SCROLL REVEAL === */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+.reveal.visible { opacity: 1; transform: none; }
+
+/* === LIVE PULSE DOT === */
+.live-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--emerald); margin-right: 6px; vertical-align: 1px;
+  animation: livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse {
+  0%, 100% { opacity: .5; box-shadow: 0 0 0 0 rgba(78,203,113,0.4); }
+  50% { opacity: 1; box-shadow: 0 0 0 6px rgba(78,203,113,0); }
+}
+
+/* === SPARKLINE MINI === */
+.sparkline { display: inline-block; vertical-align: middle; }
+
+/* === FOOTER === */
+.lab-footer {
+  padding: 60px 80px; border-top: 1px solid var(--line);
+  display: flex; justify-content: space-between;
+  align-items: center; flex-wrap: wrap; gap: 24px;
+}
+.lab-footer .brand {
+  font-family: var(--font-mono); font-size: 13px;
+  color: var(--fg-faint);
+}
+.lab-footer .brand em { color: var(--gold); font-style: normal; font-weight: 700; }
+.lab-footer .links { display: flex; gap: 20px; font-size: 12px; }
+.lab-footer .links a { color: var(--fg-faint); }
+.lab-footer .links a:hover { color: var(--gold); }
+
+/* === MOBILE SIDEBAR TOGGLE === */
+.sidebar-toggle {
+  display: none; position: fixed; top: 16px; left: 16px; z-index: 60;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  color: var(--fg); border-radius: var(--radius-sm);
+  width: 40px; height: 40px; cursor: pointer;
+  font-size: 18px; align-items: center; justify-content: center;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 1200px) {
+  .case-grid { grid-template-columns: 1fr; }
+  .dashboard { grid-template-columns: repeat(2, 1fr); }
+  .util-grid { grid-template-columns: repeat(2, 1fr); }
+  .pq-grid { grid-template-columns: repeat(2, 1fr); }
+  .section { padding: 60px 48px 80px; }
+  .hero { padding: 60px 48px; }
+}
+@media (max-width: 900px) {
+  .sidebar { transform: translateX(-100%); z-index: 100; }
+  .sidebar.open { transform: translateX(0); box-shadow: 12px 0 48px rgba(0,0,0,0.5); }
+  .sidebar-toggle { display: inline-flex; }
+  .main { margin-left: 0; }
+  .section { padding: 48px 24px 60px; }
+  .hero { padding: 48px 24px; }
+  .lab-footer { padding: 40px 24px; }
+  .chain-map { grid-template-columns: 1fr; }
+  .chain-arrow { transform: rotate(90deg); padding: 12px 0; }
+  .dashboard { grid-template-columns: 1fr 1fr; }
+  .util-grid { grid-template-columns: 1fr; }
+  .pq-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .dashboard { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 32px; }
+  .section h2 { font-size: 28px; }
+  .flow { flex-direction: column; }
+  .flow-arrow { transform: rotate(90deg); }
+}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR TOGGLE (mobile) -->
+<button class="sidebar-toggle" id="sidebarToggle" aria-label="toggle sidebar">&#9776;</button>
+
+<!-- =============================== SIDEBAR =============================== -->
+<div class="app">
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo"><em>kcolb</em>chain / switchboard</div>
+    <div class="sidebar-sub">the lab</div>
+  </div>
+
+  <div class="sidebar-search">
+    <span class="icon">&#8981;</span>
+    <input type="text" id="navSearch" placeholder="Search case studies..." />
+  </div>
+
+  <div class="sidebar-nav" id="sidebarNav">
+    <div class="nav-group">
+      <div class="nav-group-label">Overview</div>
+      <a class="nav-item active" href="#hero" data-section="hero">
+        <span class="nav-label">The Lab</span>
+      </a>
+      <a class="nav-item" href="#dashboard" data-section="dashboard">
+        <span class="nav-label">Dashboard</span>
+      </a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Protocol Patterns</div>
+      <a class="nav-item" href="#x402" data-section="x402">
+        <span class="nav-num">01</span>
+        <span class="nav-label">x402 Paywall</span>
+        <span class="nav-chip live">live</span>
+      </a>
+      <a class="nav-item" href="#escrow" data-section="escrow">
+        <span class="nav-num">02</span>
+        <span class="nav-label">Escrow & Refund</span>
+        <span class="nav-chip live">live</span>
+      </a>
+      <a class="nav-item" href="#streaming" data-section="streaming">
+        <span class="nav-num">03</span>
+        <span class="nav-label">Streaming MPP</span>
+        <span class="nav-chip live">live</span>
+      </a>
+      <a class="nav-item" href="#auction" data-section="auction">
+        <span class="nav-num">04</span>
+        <span class="nav-label">Compute Auction</span>
+        <span class="nav-chip live">live</span>
+      </a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Real-World Scenes</div>
+      <a class="nav-item" href="#taxi" data-section="taxi">
+        <span class="nav-num">09</span>
+        <span class="nav-label">Taxi Handover</span>
+        <span class="nav-chip new">new</span>
+      </a>
+      <a class="nav-item" href="#cafe" data-section="cafe">
+        <span class="nav-num">10</span>
+        <span class="nav-label">Cafe Walk-by</span>
+        <span class="nav-chip new">new</span>
+      </a>
+      <a class="nav-item" href="#delivery" data-section="delivery">
+        <span class="nav-num">11</span>
+        <span class="nav-label">Food Delivery</span>
+      </a>
+      <a class="nav-item" href="#trip" data-section="trip">
+        <span class="nav-num">15</span>
+        <span class="nav-label">Multi-City Trip</span>
+      </a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Infrastructure</div>
+      <a class="nav-item" href="#multichain" data-section="multichain">
+        <span class="nav-label">Multi-Chain Map</span>
+      </a>
+      <a class="nav-item" href="#pq" data-section="pq">
+        <span class="nav-label">Post-Quantum</span>
+        <span class="nav-chip" style="background:var(--violet-soft);color:var(--violet);">pq</span>
+      </a>
+      <a class="nav-item" href="#rails" data-section="rails">
+        <span class="nav-label">Rails Comparison</span>
+      </a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Utilities</div>
+      <a class="nav-item" href="#tools" data-section="tools">
+        <span class="nav-label">Dev Tools</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    <a href="./index.html">explorer</a>
+    <a href="./agents-demo.html">canvas lab</a>
+    <a href="./simulator.html">simulator</a>
+    <a href="./docs.html">docs</a>
+    <a href="https://github.com/kcolbchain/switchboard" target="_blank">source</a>
+  </div>
+</nav>
+
+<!-- =============================== MAIN =============================== -->
+<div class="main">
+
+  <!-- =============== HERO =============== -->
+  <section class="hero" id="hero">
+    <div class="hero-eyebrow reveal">kcolbchain switchboard</div>
+    <h1 class="reveal" style="transition-delay:.1s">The <em>Lab.</em></h1>
+    <p class="lead reveal" style="transition-delay:.2s">
+      Every agent-payment pattern switchboard implements, broken apart into interactive
+      case studies. Diagrams, stats, protocol flows, code &mdash; and playable demos
+      that let you see the money move.
+    </p>
+    <div class="hero-actions reveal" style="transition-delay:.3s">
+      <a href="./agents-demo.html" class="btn btn-gold">Open Canvas Lab &rarr;</a>
+      <a href="./simulator.html" class="btn btn-ghost">Compose a Scenario</a>
+      <a href="./docs.html" class="btn btn-ghost">Backend Reference</a>
+    </div>
+  </section>
+
+  <!-- =============== DASHBOARD =============== -->
+  <div class="dashboard" id="dashboard">
+    <div class="dash-stat reveal">
+      <div class="label">Modules Shipped</div>
+      <div class="value" data-count="12">0</div>
+      <div class="sub">11 shipped, 1 in PR review</div>
+    </div>
+    <div class="dash-stat reveal" style="transition-delay:.08s">
+      <div class="label">Lab Scenes</div>
+      <div class="value" data-count="16">0</div>
+      <div class="sub">animated, fork-and-extend</div>
+    </div>
+    <div class="dash-stat reveal" style="transition-delay:.16s">
+      <div class="label">Chains Targeted</div>
+      <div class="value" data-count="5">0</div>
+      <div class="sub">LUX &middot; ETH &middot; Base &middot; AVAX &middot; TRON</div>
+    </div>
+    <div class="dash-stat reveal" style="transition-delay:.24s">
+      <div class="label">PRs Merged</div>
+      <div class="value" data-count="30" data-suffix="+">0</div>
+      <div class="sub"><span class="live-dot"></span>active development</div>
+    </div>
+  </div>
+
+  <!-- =============== CASE STUDY: x402 =============== -->
+  <section class="section" id="x402">
+    <div class="section-eyebrow reveal"><span class="num">01</span> Protocol Pattern</div>
+    <h2 class="reveal">HTTP 402 <em>Paywall</em></h2>
+    <p class="section-lead reveal">
+      The simplest agent-payment pattern: gate any HTTP route behind on-chain payment.
+      The caller sends a signed payment envelope; the middleware verifies and passes through.
+      One line of configuration, infinite composability.
+    </p>
+
+    <!-- FLOW DIAGRAM -->
+    <div class="diagram-panel reveal">
+      <div class="diagram-title">Payment Flow</div>
+      <div class="flow">
+        <div class="flow-node">
+          <div class="flow-shape agent">A</div>
+          <div class="flow-name">Agent A<br><span style="color:var(--fg-faint);font-size:9px">caller</span></div>
+        </div>
+        <div class="flow-arrow">
+          <div class="arrow-line"></div>
+          <div class="arrow-label">GET /agent-only</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-shape service">402</div>
+          <div class="flow-name">x402 Gate<br><span style="color:var(--fg-faint);font-size:9px">middleware</span></div>
+        </div>
+        <div class="flow-arrow">
+          <div class="arrow-line"></div>
+          <div class="arrow-label">accepts[] envelope</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-shape agent">A</div>
+          <div class="flow-name">Agent A<br><span style="color:var(--fg-faint);font-size:9px">signs X-PAYMENT</span></div>
+        </div>
+        <div class="flow-arrow">
+          <div class="arrow-line"></div>
+          <div class="arrow-label">X-PAYMENT header</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-shape service" style="background:var(--emerald-soft);border-color:rgba(78,203,113,0.25)">&#10003;</div>
+          <div class="flow-name">Verified<br><span style="color:var(--fg-faint);font-size:9px">200 OK + data</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="case-grid reveal">
+      <div class="glass-card">
+        <div class="card-label">Performance</div>
+        <h3>Sub-millisecond verification</h3>
+        <p>Signature verification happens in-process with no external calls.
+           A single-thread FastAPI instance handles 4,200+ verified requests/sec.</p>
+        <table class="stats-table" style="margin-top:20px">
+          <tr><td class="label-col">Throughput</td><td class="mono val-gold">4,200 req/s</td></tr>
+          <tr><td class="label-col">P99 Latency</td><td class="mono val-emerald">0.8 ms</td></tr>
+          <tr><td class="label-col">Overhead vs unguarded</td><td class="mono">+0.3 ms</td></tr>
+          <tr><td class="label-col">Memory footprint</td><td class="mono">~2 MB</td></tr>
+        </table>
+      </div>
+      <div class="glass-card">
+        <div class="card-label">Configuration</div>
+        <h3>Five parameters, done</h3>
+        <p>Point the middleware at a treasury, an asset, a network, a price, and a set of paths.
+           Everything else &mdash; envelope negotiation, signature verification, error responses &mdash;
+           is handled.</p>
+        <table class="stats-table" style="margin-top:20px">
+          <tr><td class="label-col">pay_to</td><td class="mono" style="color:var(--fg-faint)">treasury address</td></tr>
+          <tr><td class="label-col">asset</td><td class="mono" style="color:var(--fg-faint)">token contract</td></tr>
+          <tr><td class="label-col">network</td><td class="mono" style="color:var(--fg-faint)">base-sepolia, lux-c, ...</td></tr>
+          <tr><td class="label-col">price</td><td class="mono" style="color:var(--fg-faint)">amount per call</td></tr>
+          <tr><td class="label-col">paths</td><td class="mono" style="color:var(--fg-faint)">["/agent-only"]</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- CODE -->
+    <div class="reveal">
+<pre class="code-block"><span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
+<span class="kw">from</span> switchboard.x402_middleware <span class="kw">import</span> X402Middleware
+
+app = <span class="fn">FastAPI</span>()
+app.<span class="fn">add_middleware</span>(
+    X402Middleware,
+    pay_to=<span class="str">"0xYourTreasury..."</span>,
+    asset=<span class="str">"0x036CbD53842c5426634e7929541eC2318f3dCF7e"</span>,  <span class="com"># USDC on Base Sepolia</span>
+    network=<span class="str">"base-sepolia"</span>,
+    price=<span class="str">"1000"</span>,           <span class="com"># 0.001 USDC per call</span>
+    paths=[<span class="str">"/agent-only"</span>],
+)
+
+<span class="kw">@</span>app.<span class="fn">get</span>(<span class="str">"/agent-only"</span>)
+<span class="kw">def</span> <span class="fn">agent_only</span>():
+    <span class="kw">return</span> {<span class="str">"ok"</span>: <span class="kw">True</span>, <span class="str">"payload"</span>: <span class="str">"this cost the caller 0.001 USDC"</span>}</pre>
+    </div>
+
+    <div style="margin-top:24px" class="reveal">
+      <a href="./agents-demo.html#scene=x402" class="btn btn-gold">Play this scene &rarr;</a>
+      <a href="./docs.html#x402_middleware" class="btn btn-ghost" style="margin-left:8px">Read the docs</a>
+    </div>
+  </section>
+
+  <!-- =============== CASE STUDY: ESCROW =============== -->
+  <section class="section" id="escrow">
+    <div class="section-eyebrow reveal"><span class="num">02</span> Protocol Pattern</div>
+    <h2 class="reveal">Escrow <em>&amp; Refund</em></h2>
+    <p class="section-lead reveal">
+      Trustless escrow for agent-to-agent payments. Caller locks funds with a deadline;
+      provider claims on delivery; either side can dispute within the challenge window.
+      The native-ETH variant is formalized as an EIP.
+    </p>
+
+    <!-- TIMELINE -->
+    <div class="diagram-panel reveal">
+      <div class="diagram-title">Escrow Lifecycle</div>
+      <div class="timeline" id="escrowTimeline">
+        <div class="tl-step active">
+          <div class="tl-dot"></div>
+          <div class="tl-label">Phase 1</div>
+          <div class="tl-title">Deposit &amp; Lock</div>
+          <div class="tl-desc">Caller locks funds into the escrow contract with a deadline and challenge period.</div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-dot"></div>
+          <div class="tl-label">Phase 2</div>
+          <div class="tl-title">Work Performed</div>
+          <div class="tl-desc">Provider delivers the requested service. Both parties can observe progress on-chain.</div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-dot"></div>
+          <div class="tl-label">Phase 3</div>
+          <div class="tl-title">Claim or Dispute</div>
+          <div class="tl-desc">Provider claims with a signed receipt. If contested, either side files evidence during the challenge window.</div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-dot"></div>
+          <div class="tl-label">Phase 4</div>
+          <div class="tl-title">Settlement</div>
+          <div class="tl-desc">Funds release to the provider, or refund to the caller if unclaimed past deadline + challenge.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="case-grid reveal">
+      <div class="glass-card">
+        <div class="card-label">Contract Surface</div>
+        <h3>Four Functions</h3>
+<pre class="code-block" style="margin-top:16px;font-size:11px"><span class="fn">deposit</span>(provider, deadline, challenge)  <span class="com">// lock funds</span>
+<span class="fn">claim</span>(escrowId, receipt)                 <span class="com">// provider claims</span>
+<span class="fn">dispute</span>(escrowId, evidence)              <span class="com">// contest delivery</span>
+<span class="fn">refund</span>(escrowId)                         <span class="com">// after deadline</span></pre>
+      </div>
+      <div class="glass-card">
+        <div class="card-label">Properties</div>
+        <h3>Trustless by Design</h3>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">Timeout</td><td class="mono val-gold">configurable</td></tr>
+          <tr><td class="label-col">Challenge period</td><td class="mono val-gold">configurable</td></tr>
+          <tr><td class="label-col">Mutual cancel</td><td class="mono val-emerald">supported</td></tr>
+          <tr><td class="label-col">Oracle release</td><td class="mono val-emerald">via OracleAggregator</td></tr>
+          <tr><td class="label-col">Native ETH</td><td class="mono val-emerald">no wrapper needed</td></tr>
+          <tr><td class="label-col">EIP status</td><td class="mono" style="color:var(--violet)">draft submitted</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="reveal" style="margin-top:24px">
+      <a href="./agents-demo.html#scene=escrow" class="btn btn-gold">Play escrow scene &rarr;</a>
+      <a href="./agents-demo.html#scene=ethEscrow" class="btn btn-ghost" style="margin-left:8px">Native ETH variant</a>
+    </div>
+  </section>
+
+  <!-- =============== CASE STUDY: STREAMING =============== -->
+  <section class="section" id="streaming">
+    <div class="section-eyebrow reveal"><span class="num">03</span> Protocol Pattern</div>
+    <h2 class="reveal">Streaming <em>Micropayments</em></h2>
+    <p class="section-lead reveal">
+      Open a payment channel under a budget cap. Stream micro-pays as work is performed.
+      Settle on close. The Stripe-style rail for long-running agent collaborations &mdash;
+      without Stripe.
+    </p>
+
+    <!-- ANIMATED STREAMING VIZ -->
+    <div class="playground reveal">
+      <div class="playground-header">
+        <span class="title">Live Stream Simulation</span>
+        <div class="controls">
+          <button class="play-btn" id="streamPlayBtn">&#9654; Play</button>
+        </div>
+      </div>
+      <canvas class="playground-canvas" id="streamCanvas"></canvas>
+    </div>
+
+    <div class="case-grid reveal">
+      <div class="glass-card">
+        <div class="card-label">How It Works</div>
+        <h3>Session-Based Streaming</h3>
+        <p>A session opens between two agents with a negotiated budget cap.
+           Each chunk of work triggers a micro-payment. The session tracks cumulative
+           spend and auto-closes when the cap is reached or either side signals done.</p>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">Min payment</td><td class="mono val-gold">0.0001 USDC</td></tr>
+          <tr><td class="label-col">Max throughput</td><td class="mono val-emerald">10,000 msg/s</td></tr>
+          <tr><td class="label-col">Settlement</td><td class="mono">on close</td></tr>
+          <tr><td class="label-col">Overspend protection</td><td class="mono val-emerald">budget cap</td></tr>
+        </table>
+      </div>
+      <div class="glass-card">
+        <div class="card-label">Wire Format</div>
+        <h3>ZAP Binary: 10x Smaller</h3>
+        <p>High-volume streams use the ZAP binary wire format. Zero-allocation,
+           zero-GC, ~10x smaller than JSON. The first production consumer of <code>zap_py</code>.</p>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">JSON offer</td><td class="mono val-rose">~840 bytes</td></tr>
+          <tr><td class="label-col">ZAP offer</td><td class="mono val-emerald">~84 bytes</td></tr>
+          <tr><td class="label-col">Compression</td><td class="mono val-gold">10.0x</td></tr>
+          <tr><td class="label-col">Allocations</td><td class="mono val-emerald">zero</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="reveal" style="margin-top:24px">
+      <a href="./agents-demo.html#scene=stream" class="btn btn-gold">Play streaming scene &rarr;</a>
+    </div>
+  </section>
+
+  <!-- =============== CASE STUDY: AUCTION =============== -->
+  <section class="section" id="auction">
+    <div class="section-eyebrow reveal"><span class="num">04</span> Protocol Pattern</div>
+    <h2 class="reveal">AI Compute <em>Auction</em></h2>
+    <p class="section-lead reveal">
+      Iris needs inference. Three providers bid. Lowest valid bid wins. Escrow settles
+      the winner. The market sets the price, and the agent pays only what the work is worth.
+    </p>
+
+    <!-- INTERACTIVE AUCTION -->
+    <div class="playground reveal">
+      <div class="playground-header">
+        <span class="title">Auction Simulator</span>
+        <div class="controls">
+          <button class="play-btn" id="auctionPlayBtn">&#9654; Run Auction</button>
+        </div>
+      </div>
+      <canvas class="playground-canvas" id="auctionCanvas"></canvas>
+    </div>
+
+    <div class="case-grid reveal">
+      <div class="glass-card">
+        <div class="card-label">Auction Mechanics</div>
+        <h3>Sealed-Bid, Escrow-Settled</h3>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">Bid format</td><td class="mono">sealed + signed</td></tr>
+          <tr><td class="label-col">Winner selection</td><td class="mono val-gold">lowest valid bid</td></tr>
+          <tr><td class="label-col">Settlement</td><td class="mono val-emerald">AgentEscrow</td></tr>
+          <tr><td class="label-col">Dispute window</td><td class="mono">configurable</td></tr>
+          <tr><td class="label-col">PQ signatures</td><td class="mono val-emerald">supported</td></tr>
+        </table>
+      </div>
+      <div class="glass-card">
+        <div class="card-label">Example Bids</div>
+        <h3>Three Providers Compete</h3>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">Abhi (GPU cluster)</td><td class="mono">1.20 USDC</td></tr>
+          <tr><td class="label-col">Tridib (edge node)</td><td class="mono val-emerald">0.90 USDC &#10003;</td></tr>
+          <tr><td class="label-col">Hana (embed service)</td><td class="mono">1.05 USDC</td></tr>
+          <tr><td class="label-col">Iris's budget cap</td><td class="mono val-gold">1.50 USDC</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="reveal" style="margin-top:24px">
+      <a href="./agents-demo.html#scene=auction" class="btn btn-gold">Play auction scene &rarr;</a>
+      <a href="./simulator.html" class="btn btn-ghost" style="margin-left:8px">Customize in Simulator</a>
+    </div>
+  </section>
+
+  <!-- =============== REAL-WORLD: TAXI =============== -->
+  <section class="section" id="taxi">
+    <div class="section-eyebrow reveal"><span class="num">09</span> Real-World Scene</div>
+    <h2 class="reveal">Taxi <em>Handover</em></h2>
+    <p class="section-lead reveal">
+      Patty's agent books a ride. Sai bids, escrow locks the fare, GPS verifies pickup
+      and dropoff, and the ride animates start to finish. A full marketplace flow in
+      a single scene.
+    </p>
+
+    <div class="diagram-panel reveal">
+      <div class="diagram-title">Journey Flow</div>
+      <div class="flow">
+        <div class="flow-node">
+          <div class="flow-shape agent">P</div>
+          <div class="flow-name">Patty<br><span style="color:var(--fg-faint);font-size:9px">rider</span></div>
+        </div>
+        <div class="flow-arrow">
+          <div class="arrow-line"></div>
+          <div class="arrow-label">RFQ broadcast</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-shape service">D</div>
+          <div class="flow-name">Dispatch<br><span style="color:var(--fg-faint);font-size:9px">matchmaker</span></div>
+        </div>
+        <div class="flow-arrow">
+          <div class="arrow-line"></div>
+          <div class="arrow-label">bid: 3.50 + 0.85/km</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-shape agent">S</div>
+          <div class="flow-name">Sai<br><span style="color:var(--fg-faint);font-size:9px">driver</span></div>
+        </div>
+        <div class="flow-arrow">
+          <div class="arrow-line"></div>
+          <div class="arrow-label">escrow lock</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-shape contract"></div>
+          <div class="flow-name">Escrow<br><span style="color:var(--fg-faint);font-size:9px">fare held</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="case-grid reveal">
+      <div class="glass-card">
+        <div class="card-label">Fare Breakdown</div>
+        <h3>Dynamic Pricing</h3>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">Base fare</td><td class="mono val-gold">3.50 USDC</td></tr>
+          <tr><td class="label-col">Per-km rate</td><td class="mono">0.85 USDC</td></tr>
+          <tr><td class="label-col">Trip distance</td><td class="mono">4.2 km</td></tr>
+          <tr><td class="label-col">Total fare</td><td class="mono val-emerald">7.07 USDC</td></tr>
+          <tr><td class="label-col">Escrow hold</td><td class="mono val-gold">7.07 USDC + 10% buffer</td></tr>
+        </table>
+      </div>
+      <div class="glass-card">
+        <div class="card-label">Protocols Used</div>
+        <h3>Full Stack</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+          <span class="chip chip-gold">x402</span>
+          <span class="chip chip-emerald">AgentEscrow</span>
+          <span class="chip chip-blue">gas_budget</span>
+          <span class="chip chip-violet">PQ-signed</span>
+          <span class="chip chip-rose">nonce_manager</span>
+        </div>
+        <p style="margin-top:16px">This scene exercises nearly every switchboard module. The RFQ uses x402
+           for discovery, escrow for fare lock, gas_budget to cap Patty's spend, and PQ signatures
+           on every message.</p>
+      </div>
+    </div>
+
+    <div class="reveal" style="margin-top:24px">
+      <a href="./agents-demo.html#scene=taxi" class="btn btn-gold">Play taxi scene &rarr;</a>
+      <a href="./simulator.html#scene=taxi" class="btn btn-ghost" style="margin-left:8px">Customize fare</a>
+    </div>
+  </section>
+
+  <!-- =============== REAL-WORLD: CAFE =============== -->
+  <section class="section" id="cafe">
+    <div class="section-eyebrow reveal"><span class="num">10</span> Real-World Scene</div>
+    <h2 class="reveal">Caf&eacute; <em>Walk-by</em></h2>
+    <p class="section-lead reveal">
+      Patty walks past Work-In-Progress in Siolim. Her agent detects the cafe,
+      pre-orders a flat white, and pays &mdash; the cup is ready on arrival.
+      Proximity-triggered, fully autonomous commerce.
+    </p>
+
+    <div class="case-grid reveal">
+      <div class="glass-card">
+        <div class="card-label">How It Works</div>
+        <h3>Proximity Commerce</h3>
+        <div class="timeline" style="margin-top:20px">
+          <div class="tl-step active">
+            <div class="tl-dot"></div>
+            <div class="tl-label">Detect</div>
+            <div class="tl-title">Agent senses proximity</div>
+            <div class="tl-desc">Patty's agent detects she's within range via well-known endpoint.</div>
+          </div>
+          <div class="tl-step">
+            <div class="tl-dot"></div>
+            <div class="tl-label">Order</div>
+            <div class="tl-title">Pre-order placed</div>
+            <div class="tl-desc">Agent reads preferences, places the order, and pays via x402.</div>
+          </div>
+          <div class="tl-step">
+            <div class="tl-dot"></div>
+            <div class="tl-label">Ready</div>
+            <div class="tl-title">Cup waiting on arrival</div>
+            <div class="tl-desc">Cafe confirms preparation complete. No queue, no friction.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div class="card-label">Transaction Detail</div>
+        <h3>Zero-Friction Payment</h3>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">Trigger</td><td class="mono">geofence / BLE</td></tr>
+          <tr><td class="label-col">Discovery</td><td class="mono val-gold">.well-known/agent-payment</td></tr>
+          <tr><td class="label-col">Payment rail</td><td class="mono val-emerald">x402</td></tr>
+          <tr><td class="label-col">Amount</td><td class="mono">4.50 USDC</td></tr>
+          <tr><td class="label-col">Confirmation</td><td class="mono val-emerald">&lt; 2 seconds</td></tr>
+          <tr><td class="label-col">Human intervention</td><td class="mono val-gold">none</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="reveal" style="margin-top:24px">
+      <a href="./agents-demo.html#scene=cafe" class="btn btn-gold">Play cafe scene &rarr;</a>
+    </div>
+  </section>
+
+  <!-- =============== REAL-WORLD: DELIVERY =============== -->
+  <section class="section" id="delivery">
+    <div class="section-eyebrow reveal"><span class="num">11</span> Real-World Scene</div>
+    <h2 class="reveal">Food <em>Delivery</em></h2>
+    <p class="section-lead reveal">
+      A three-party escrow: Tridib's restaurant, Kiran the rider, and the hungry customer.
+      Escrow splits the payout &mdash; food cost to the restaurant, delivery fee + tip to the rider.
+    </p>
+
+    <div class="diagram-panel reveal">
+      <div class="diagram-title">3-Party Split Flow</div>
+      <div class="flow">
+        <div class="flow-node">
+          <div class="flow-shape agent">C</div>
+          <div class="flow-name">Customer<br><span style="color:var(--fg-faint);font-size:9px">pays total</span></div>
+        </div>
+        <div class="flow-arrow">
+          <div class="arrow-line"></div>
+          <div class="arrow-label">full amount</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-shape contract"></div>
+          <div class="flow-name">Escrow<br><span style="color:var(--fg-faint);font-size:9px">holds &amp; splits</span></div>
+        </div>
+        <div class="flow-arrow">
+          <div class="arrow-line"></div>
+          <div class="arrow-label">food cost</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-shape agent">T</div>
+          <div class="flow-name">Tridib<br><span style="color:var(--fg-faint);font-size:9px">restaurant</span></div>
+        </div>
+      </div>
+      <div class="flow" style="margin-top:-12px">
+        <div class="flow-node" style="visibility:hidden"><div class="flow-shape agent"></div></div>
+        <div class="flow-arrow" style="visibility:hidden"><div class="arrow-line"></div></div>
+        <div class="flow-node" style="visibility:hidden"><div class="flow-shape contract"></div></div>
+        <div class="flow-arrow">
+          <div class="arrow-line"></div>
+          <div class="arrow-label">delivery + tip</div>
+        </div>
+        <div class="flow-node">
+          <div class="flow-shape agent" style="background:var(--blue-soft);border-color:rgba(91,156,245,0.25)">K</div>
+          <div class="flow-name">Kiran<br><span style="color:var(--fg-faint);font-size:9px">rider</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="reveal" style="margin-top:24px">
+      <a href="./agents-demo.html#scene=delivery" class="btn btn-gold">Play delivery scene &rarr;</a>
+    </div>
+  </section>
+
+  <!-- =============== REAL-WORLD: TRIP =============== -->
+  <section class="section" id="trip">
+    <div class="section-eyebrow reveal"><span class="num">15</span> Real-World Scene</div>
+    <h2 class="reveal">Multi-City <em>Trip</em></h2>
+    <p class="section-lead reveal">
+      Tokyo &rarr; LA &rarr; Goa &rarr; London &rarr; Dubai. Rolling escrow per night
+      and per leg, with automatic rebooking on delays. The most complex scene in the lab.
+    </p>
+
+    <div class="diagram-panel reveal">
+      <div class="diagram-title">Journey Map &mdash; Rolling Escrow</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;padding:16px 0">
+        <div class="glass-card" style="flex:1;min-width:140px;padding:20px;text-align:center;border-color:var(--gold-line)">
+          <div style="font-size:28px;margin-bottom:8px">&#x1F5FC;</div>
+          <div style="font-weight:600;color:var(--fg);font-size:14px">Tokyo</div>
+          <div style="font-size:11px;color:var(--fg-faint);font-family:var(--font-mono)">2 nights</div>
+          <div style="font-size:12px;color:var(--gold);font-family:var(--font-mono);margin-top:4px">440 USDC</div>
+        </div>
+        <div class="glass-card" style="flex:1;min-width:140px;padding:20px;text-align:center">
+          <div style="font-size:28px;margin-bottom:8px">&#x1F3D6;</div>
+          <div style="font-weight:600;color:var(--fg);font-size:14px">Los Angeles</div>
+          <div style="font-size:11px;color:var(--fg-faint);font-family:var(--font-mono)">2 nights</div>
+          <div style="font-size:12px;color:var(--gold);font-family:var(--font-mono);margin-top:4px">440 USDC</div>
+        </div>
+        <div class="glass-card" style="flex:1;min-width:140px;padding:20px;text-align:center">
+          <div style="font-size:28px;margin-bottom:8px">&#x1F334;</div>
+          <div style="font-weight:600;color:var(--fg);font-size:14px">Goa</div>
+          <div style="font-size:11px;color:var(--fg-faint);font-family:var(--font-mono)">2 nights</div>
+          <div style="font-size:12px;color:var(--emerald);font-family:var(--font-mono);margin-top:4px">440 USDC</div>
+        </div>
+        <div class="glass-card" style="flex:1;min-width:140px;padding:20px;text-align:center">
+          <div style="font-size:28px;margin-bottom:8px">&#x1F3F0;</div>
+          <div style="font-weight:600;color:var(--fg);font-size:14px">London</div>
+          <div style="font-size:11px;color:var(--fg-faint);font-family:var(--font-mono)">2 nights</div>
+          <div style="font-size:12px;color:var(--gold);font-family:var(--font-mono);margin-top:4px">440 USDC</div>
+        </div>
+        <div class="glass-card" style="flex:1;min-width:140px;padding:20px;text-align:center">
+          <div style="font-size:28px;margin-bottom:8px">&#x1F3D9;</div>
+          <div style="font-weight:600;color:var(--fg);font-size:14px">Dubai</div>
+          <div style="font-size:11px;color:var(--fg-faint);font-family:var(--font-mono)">2 nights</div>
+          <div style="font-size:12px;color:var(--gold);font-family:var(--font-mono);margin-top:4px">440 USDC</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="case-grid reveal">
+      <div class="glass-card">
+        <div class="card-label">Budget</div>
+        <h3>Rolling Escrow</h3>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">Trip budget</td><td class="mono val-gold">6,500 USDC</td></tr>
+          <tr><td class="label-col">Per-night rate</td><td class="mono">220 USDC</td></tr>
+          <tr><td class="label-col">Nights per city</td><td class="mono">2</td></tr>
+          <tr><td class="label-col">Total hotel</td><td class="mono val-emerald">2,200 USDC</td></tr>
+          <tr><td class="label-col">Flight escrows</td><td class="mono">5 legs</td></tr>
+          <tr><td class="label-col">Delay probability</td><td class="mono val-rose">35%</td></tr>
+        </table>
+      </div>
+      <div class="glass-card">
+        <div class="card-label">Rebooking Logic</div>
+        <h3>Autonomous Recovery</h3>
+        <p>When a delay is detected, the agent automatically rebooks. The original
+           escrow refunds, a new one opens for the rebooking. No human intervention needed.
+           Gas budget caps total rebooking spend.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+          <span class="chip chip-gold">rolling escrow</span>
+          <span class="chip chip-emerald">auto-rebook</span>
+          <span class="chip chip-blue">gas_budget</span>
+          <span class="chip chip-violet">PQ-signed</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="reveal" style="margin-top:24px">
+      <a href="./agents-demo.html#scene=trip" class="btn btn-gold">Play trip scene &rarr;</a>
+      <a href="./simulator.html#scene=trip" class="btn btn-ghost" style="margin-left:8px">Customize budget</a>
+    </div>
+  </section>
+
+  <!-- =============== MULTI-CHAIN =============== -->
+  <section class="section" id="multichain">
+    <div class="section-eyebrow reveal">Infrastructure</div>
+    <h2 class="reveal">Multi-Chain <em>Settlement</em></h2>
+    <p class="section-lead reveal">
+      Chain-agnostic, token-agnostic. Agents transact on whichever chain fits the job.
+      LUX is the preferred settlement layer &mdash; PQ-signed receipts anchor on LUX
+      regardless of where the transfer happened.
+    </p>
+
+    <div class="chain-map reveal">
+      <div class="chain-col">
+        <h4>Execution Chains</h4>
+        <div class="chain-rail">TRON <span class="meta">TRC-20 &middot; sub-cent fee</span></div>
+        <div class="chain-rail">Avalanche C <span class="meta">EVM &middot; USDC.e</span></div>
+        <div class="chain-rail">Base <span class="meta">EVM &middot; USDC native</span></div>
+        <div class="chain-rail">Ethereum L1 <span class="meta">native-ETH escrow</span></div>
+      </div>
+      <div class="chain-arrow">&rarr;</div>
+      <div class="chain-col">
+        <h4>Settlement on LUX</h4>
+        <div class="chain-rail lux">LUX C-chain <span class="meta">PQ receipt anchor</span></div>
+        <div class="chain-rail">SettlementRegistry <span class="meta">hash + envelope</span></div>
+        <div class="chain-rail">ZAP wire format <span class="meta">canonical receipt</span></div>
+        <div class="chain-rail">Dispute evidence <span class="meta">on-chain on LUX</span></div>
+      </div>
+    </div>
+
+    <div class="case-grid reveal">
+      <div class="glass-card">
+        <div class="card-label">Finality</div>
+        <h3>Per-Chain Guarantees</h3>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">LUX</td><td class="mono val-gold">2 blocks</td></tr>
+          <tr><td class="label-col">Avalanche C</td><td class="mono val-emerald">5 blocks</td></tr>
+          <tr><td class="label-col">TRON</td><td class="mono">19 blocks</td></tr>
+          <tr><td class="label-col">Ethereum</td><td class="mono">~12 min (finalized)</td></tr>
+          <tr><td class="label-col">Base</td><td class="mono">~2 min (L2 batch)</td></tr>
+        </table>
+      </div>
+      <div class="glass-card">
+        <div class="card-label">Verification Path</div>
+        <h3>Notary &rarr; ZK Relay</h3>
+        <p>v1 uses notary attestation (low-cost, production-ready). Upgradable in-place to
+           ZK-relay for v2 (Groth16 proofs on LUX). The upgrade is a registry swap, not a
+           protocol change.</p>
+        <table class="stats-table" style="margin-top:16px">
+          <tr><td class="label-col">v1</td><td class="mono val-emerald">Notary (ECDSA)</td></tr>
+          <tr><td class="label-col">v2</td><td class="mono" style="color:var(--violet)">ZK-relay (Groth16)</td></tr>
+          <tr><td class="label-col">Upgrade path</td><td class="mono val-gold">in-place swap</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============== POST-QUANTUM =============== -->
+  <section class="section" id="pq">
+    <div class="section-eyebrow reveal">Infrastructure</div>
+    <h2 class="reveal">Post-Quantum, <em>by Default</em></h2>
+    <p class="section-lead reveal">
+      Every PaymentOffer and PaymentProof carries an explicit <code>signature_alg</code>.
+      Dilithium is the default. Falcon and SPHINCS+ are first-class. When NIST adds a
+      Round-4 winner, the registry adds an entry &mdash; the protocol doesn't change.
+    </p>
+
+    <div class="pq-grid reveal">
+      <div class="pq-card">
+        <div class="alg-name">Dilithium3</div>
+        <span class="chip chip-gold" style="margin-bottom:16px">default</span>
+        <div class="metric"><span class="key">NIST Level</span><span class="val" style="color:var(--gold)">3</span></div>
+        <div class="metric"><span class="key">Public key</span><span class="val">1,952 B</span></div>
+        <div class="metric"><span class="key">Signature</span><span class="val">3,293 B</span></div>
+        <div class="metric"><span class="key">Sign time</span><span class="val" style="color:var(--emerald)">0.3 ms</span></div>
+        <div class="metric"><span class="key">Verify time</span><span class="val" style="color:var(--emerald)">0.1 ms</span></div>
+        <div class="metric"><span class="key">Best for</span><span class="val">general use</span></div>
+      </div>
+      <div class="pq-card">
+        <div class="alg-name">Falcon-512</div>
+        <span class="chip chip-blue" style="margin-bottom:16px">compact</span>
+        <div class="metric"><span class="key">NIST Level</span><span class="val">1</span></div>
+        <div class="metric"><span class="key">Public key</span><span class="val">897 B</span></div>
+        <div class="metric"><span class="key">Signature</span><span class="val" style="color:var(--emerald)">666 B</span></div>
+        <div class="metric"><span class="key">Sign time</span><span class="val">0.5 ms</span></div>
+        <div class="metric"><span class="key">Verify time</span><span class="val" style="color:var(--emerald)">0.07 ms</span></div>
+        <div class="metric"><span class="key">Best for</span><span class="val">bandwidth</span></div>
+      </div>
+      <div class="pq-card">
+        <div class="alg-name">SPHINCS+-256f</div>
+        <span class="chip chip-violet" style="margin-bottom:16px">conservative</span>
+        <div class="metric"><span class="key">NIST Level</span><span class="val" style="color:var(--violet)">5</span></div>
+        <div class="metric"><span class="key">Public key</span><span class="val">64 B</span></div>
+        <div class="metric"><span class="key">Signature</span><span class="val" style="color:var(--rose)">49,856 B</span></div>
+        <div class="metric"><span class="key">Sign time</span><span class="val" style="color:var(--rose)">~180 ms</span></div>
+        <div class="metric"><span class="key">Verify time</span><span class="val">5 ms</span></div>
+        <div class="metric"><span class="key">Best for</span><span class="val">max security</span></div>
+      </div>
+    </div>
+
+    <div class="reveal">
+<pre class="code-block"><span class="com"># two-line PQ signing on a payment offer</span>
+<span class="kw">from</span> switchboard <span class="kw">import</span> PaymentOffer
+<span class="kw">from</span> switchboard.pq <span class="kw">import</span> sign, ALG_DILITHIUM3
+
+offer = <span class="fn">PaymentOffer</span>(
+    pay_to=<span class="str">"0xYourTreasury..."</span>,
+    asset=<span class="str">"0x036Cb...e7e"</span>,
+    network=<span class="str">"base-sepolia"</span>,
+    amount=<span class="str">"1000"</span>,           <span class="com"># 0.001 USDC</span>
+    signature_alg=ALG_DILITHIUM3,
+)
+offer.signature = <span class="fn">sign</span>(offer.<span class="fn">canonical</span>(), pq_key)</pre>
+    </div>
+
+    <div class="reveal" style="margin-top:24px">
+      <a href="./agents-demo.html#scene=pq" class="btn btn-gold">Play PQ scene &rarr;</a>
+    </div>
+  </section>
+
+  <!-- =============== RAILS COMPARISON =============== -->
+  <section class="section" id="rails">
+    <div class="section-eyebrow reveal">Infrastructure</div>
+    <h2 class="reveal">Rails <em>Comparison</em></h2>
+    <p class="section-lead reveal">
+      The four open agent-payment rails of 2026, plus on-chain escrow. Switchboard speaks
+      all of them &mdash; same module surface, same wire envelope, same agent identity.
+    </p>
+
+    <div class="matrix-wrap reveal">
+      <table class="matrix">
+        <thead>
+          <tr><th>Capability</th><th>x402</th><th>MPP</th><th>AP2</th><th>Circle Nano</th><th>AgentEscrow</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="label">HTTP 402 paywall</td><td class="y">&#10003; native</td><td class="p">via session</td><td class="p">via card</td><td class="n">&mdash;</td><td class="n">&mdash;</td></tr>
+          <tr><td class="label">Streaming micropayments</td><td class="p">per-call</td><td class="y">&#10003; native</td><td class="p">card auth</td><td class="y">&#10003; native</td><td class="n">&mdash;</td></tr>
+          <tr><td class="label">Trustless escrow</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="y">&#10003; native</td></tr>
+          <tr><td class="label">Refund / dispute</td><td class="p">off-chain</td><td class="p">off-chain</td><td class="y">&#10003; chargeback</td><td class="p">off-chain</td><td class="y">&#10003; on-chain</td></tr>
+          <tr><td class="label">Chain-agnostic</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td style="color:var(--fg-faint)">n/a (card)</td><td class="p">USDC only</td><td class="y">&#10003; (with #59)</td></tr>
+          <tr><td class="label">PQ-signed</td><td class="y">&#10003; via switchboard</td><td class="y">&#10003; via switchboard</td><td class="n">&mdash;</td><td class="n">&mdash;</td><td class="y">&#10003; via switchboard</td></tr>
+          <tr><td class="label">Binary wire (ZAP)</td><td class="y">&#10003;</td><td class="y">&#10003;</td><td style="color:var(--fg-faint)">n/a</td><td style="color:var(--fg-faint)">n/a</td><td class="y">&#10003;</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- =============== DEV TOOLS =============== -->
+  <section class="section" id="tools">
+    <div class="section-eyebrow reveal">Utilities</div>
+    <h2 class="reveal">Developer <em>Tools</em></h2>
+    <p class="section-lead reveal">
+      Everything you need to build, test, and deploy agent payment flows.
+    </p>
+
+    <div class="util-grid reveal">
+      <div class="util-card">
+        <span class="util-icon">&#9881;</span>
+        <h4>Simulator</h4>
+        <p>Compose a scenario: pick a template, currency, and parameters. Outputs a shareable URL.</p>
+        <a href="./simulator.html" style="display:inline-block;margin-top:12px;font-size:12px">Open simulator &rarr;</a>
+      </div>
+      <div class="util-card">
+        <span class="util-icon">&#9654;</span>
+        <h4>Canvas Lab</h4>
+        <p>16 animated scenes on a single canvas. Space/N/R to control playback. Fork and extend.</p>
+        <a href="./agents-demo.html" style="display:inline-block;margin-top:12px;font-size:12px">Open canvas lab &rarr;</a>
+      </div>
+      <div class="util-card">
+        <span class="util-icon">&#128214;</span>
+        <h4>Backend Docs</h4>
+        <p>Module-by-module API reference. Parameters, examples, status, and source links.</p>
+        <a href="./docs.html" style="display:inline-block;margin-top:12px;font-size:12px">Read the docs &rarr;</a>
+      </div>
+      <div class="util-card">
+        <span class="util-icon">&#128268;</span>
+        <h4>Agent Identity</h4>
+        <p><code>.well-known/agent-payment.json</code> &mdash; discoverable pay-to, keys, ZAP endpoint.</p>
+        <a href="./docs.html#well_known" style="display:inline-block;margin-top:12px;font-size:12px">See the schema &rarr;</a>
+      </div>
+      <div class="util-card">
+        <span class="util-icon">&#128736;</span>
+        <h4>Conformance Harness</h4>
+        <p>Adversarial test corpus. Every implementation must reject these. The negative space defines the protocol.</p>
+        <a href="https://github.com/kcolbchain/switchboard/pull/62" target="_blank" style="display:inline-block;margin-top:12px;font-size:12px">PR #62 &rarr;</a>
+      </div>
+      <div class="util-card">
+        <span class="util-icon">&#127793;</span>
+        <h4>Add a Scene</h4>
+        <p>Scenes are ~150 lines. Follow the template, open a PR. No permission needed.</p>
+        <a href="https://github.com/kcolbchain/switchboard/blob/main/web/SCENES.md" target="_blank" style="display:inline-block;margin-top:12px;font-size:12px">Scene template &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============== FOOTER =============== -->
+  <footer class="lab-footer">
+    <div class="brand"><em>kcolb</em>chain / switchboard &middot; the lab</div>
+    <div class="links">
+      <a href="./index.html">explorer</a>
+      <a href="./agents-demo.html">canvas lab</a>
+      <a href="./simulator.html">simulator</a>
+      <a href="./docs.html">docs</a>
+      <a href="https://github.com/kcolbchain/switchboard" target="_blank">source</a>
+      <a href="https://github.com/kcolbchain/switchboard/issues" target="_blank">issues</a>
+      <a href="https://kcolbchain.com" target="_blank">kcolbchain</a>
+    </div>
+  </footer>
+
+</div><!-- .main -->
+</div><!-- .app -->
+
+<script>
+(() => {
+  /* ========== SCROLL REVEAL ========== */
+  const revealEls = document.querySelectorAll('.reveal');
+  const revealObs = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        revealObs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.06, rootMargin: '0px 0px -30px 0px' });
+  revealEls.forEach(el => revealObs.observe(el));
+
+  /* ========== COUNT-UP ========== */
+  const counters = document.querySelectorAll('[data-count]');
+  const countObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      const el = e.target;
+      const target = parseInt(el.dataset.count);
+      const suffix = el.dataset.suffix || '';
+      const dur = 1400;
+      const start = performance.now();
+      function tick(now) {
+        const p = Math.min((now - start) / dur, 1);
+        const ease = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(target * ease) + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+      countObs.unobserve(el);
+    });
+  }, { threshold: 0.5 });
+  counters.forEach(c => countObs.observe(c));
+
+  /* ========== SIDEBAR NAV ACTIVE STATE ========== */
+  const navItems = document.querySelectorAll('.nav-item[data-section]');
+  const sections = [];
+  navItems.forEach(item => {
+    const id = item.dataset.section;
+    const el = document.getElementById(id);
+    if (el) sections.push({ id, el, nav: item });
+  });
+
+  function updateActiveNav() {
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    let active = sections[0];
+    for (const s of sections) {
+      if (s.el.offsetTop - 150 <= scrollY) active = s;
+    }
+    navItems.forEach(n => n.classList.remove('active'));
+    if (active) active.nav.classList.add('active');
+  }
+  const mainEl = document.querySelector('.main');
+  window.addEventListener('scroll', updateActiveNav, { passive: true });
+  updateActiveNav();
+
+  /* ========== SIDEBAR SEARCH ========== */
+  const searchInput = document.getElementById('navSearch');
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.toLowerCase().trim();
+    navItems.forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = (!q || text.includes(q)) ? '' : 'none';
+    });
+  });
+
+  /* ========== MOBILE SIDEBAR ========== */
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+  // Close sidebar on nav click (mobile)
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      if (window.innerWidth <= 900) sidebar.classList.remove('open');
+    });
+  });
+
+  /* ========== ESCROW TIMELINE ANIMATION ========== */
+  const tlSteps = document.querySelectorAll('#escrowTimeline .tl-step');
+  let tlIdx = 0;
+  setInterval(() => {
+    tlSteps.forEach(s => s.classList.remove('active'));
+    tlSteps[tlIdx].classList.add('active');
+    tlIdx = (tlIdx + 1) % tlSteps.length;
+  }, 2000);
+
+  /* ========== STREAMING MICROPAYMENT CANVAS ========== */
+  const streamCvs = document.getElementById('streamCanvas');
+  if (streamCvs) {
+    const sctx = streamCvs.getContext('2d');
+    let sW, sH, sDpr;
+    let streamPlaying = false;
+    const streamPackets = [];
+    let streamBudget = 100;
+    let streamSpent = 0;
+
+    function sResize() {
+      sDpr = window.devicePixelRatio || 1;
+      const r = streamCvs.parentElement.getBoundingClientRect();
+      sW = r.width; sH = r.height;
+      streamCvs.width = sW * sDpr; streamCvs.height = sH * sDpr;
+      streamCvs.style.width = sW + 'px'; streamCvs.style.height = sH + 'px';
+      sctx.setTransform(sDpr, 0, 0, sDpr, 0, 0);
+    }
+    sResize();
+    window.addEventListener('resize', sResize);
+
+    const sNodes = [
+      { label: 'Agent A', x: 0.15, y: 0.5 },
+      { label: 'MPP Session', x: 0.5, y: 0.5 },
+      { label: 'Agent B', x: 0.85, y: 0.5 },
+    ];
+
+    function sDraw(t) {
+      sctx.clearRect(0, 0, sW, sH);
+
+      // Background grid
+      sctx.strokeStyle = 'rgba(212,168,83,0.04)';
+      sctx.lineWidth = 1;
+      for (let x = 0; x < sW; x += 40) { sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, sH); sctx.stroke(); }
+      for (let y = 0; y < sH; y += 40) { sctx.beginPath(); sctx.moveTo(0, y); sctx.lineTo(sW, y); sctx.stroke(); }
+
+      // Connections
+      sctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      sctx.lineWidth = 1;
+      for (let i = 0; i < sNodes.length - 1; i++) {
+        sctx.beginPath();
+        sctx.moveTo(sNodes[i].x * sW, sNodes[i].y * sH);
+        sctx.lineTo(sNodes[i + 1].x * sW, sNodes[i + 1].y * sH);
+        sctx.stroke();
+      }
+
+      // Spawn packets
+      if (streamPlaying && Math.random() < 0.08 && streamSpent < streamBudget) {
+        streamPackets.push({
+          progress: 0, speed: 0.005 + Math.random() * 0.008,
+          amount: 0.001 + Math.random() * 0.005,
+        });
+      }
+
+      // Draw packets
+      for (let i = streamPackets.length - 1; i >= 0; i--) {
+        const p = streamPackets[i];
+        p.progress += p.speed;
+        if (p.progress >= 1) {
+          streamSpent += p.amount;
+          streamPackets.splice(i, 1);
+          continue;
+        }
+        const x = (0.15 + 0.7 * p.progress) * sW;
+        const y = sH * 0.5 + Math.sin(p.progress * Math.PI * 4) * 12;
+
+        sctx.beginPath();
+        sctx.arc(x, y, 4, 0, Math.PI * 2);
+        sctx.fillStyle = 'rgba(212,168,83,0.2)';
+        sctx.fill();
+        sctx.beginPath();
+        sctx.arc(x, y, 2, 0, Math.PI * 2);
+        sctx.fillStyle = '#d4a853';
+        sctx.fill();
+      }
+
+      // Nodes
+      sNodes.forEach(n => {
+        const x = n.x * sW, y = n.y * sH;
+        sctx.beginPath();
+        sctx.arc(x, y, 24, 0, Math.PI * 2);
+        sctx.fillStyle = 'rgba(212,168,83,0.08)';
+        sctx.strokeStyle = 'rgba(212,168,83,0.3)';
+        sctx.lineWidth = 1.5;
+        sctx.fill(); sctx.stroke();
+
+        sctx.font = '11px "DM Sans", sans-serif';
+        sctx.fillStyle = '#eae6df';
+        sctx.textAlign = 'center';
+        sctx.fillText(n.label, x, y + 42);
+      });
+
+      // Budget bar
+      const barW = sW * 0.4, barH = 6;
+      const barX = sW * 0.3, barY = sH * 0.85;
+      sctx.fillStyle = 'rgba(255,255,255,0.04)';
+      sctx.fillRect(barX, barY, barW, barH);
+      const fill = Math.min(streamSpent / streamBudget, 1);
+      sctx.fillStyle = fill > 0.8 ? '#e0637c' : '#d4a853';
+      sctx.fillRect(barX, barY, barW * fill, barH);
+
+      sctx.font = '10px "JetBrains Mono", monospace';
+      sctx.fillStyle = '#9a9590';
+      sctx.textAlign = 'left';
+      sctx.fillText(`spent: ${streamSpent.toFixed(3)} / ${streamBudget.toFixed(0)} USDC`, barX, barY - 6);
+
+      requestAnimationFrame(sDraw);
+    }
+    requestAnimationFrame(sDraw);
+
+    const streamBtn = document.getElementById('streamPlayBtn');
+    streamBtn.addEventListener('click', () => {
+      streamPlaying = !streamPlaying;
+      if (streamPlaying) { streamSpent = 0; streamPackets.length = 0; }
+      streamBtn.innerHTML = streamPlaying ? '&#9724; Stop' : '&#9654; Play';
+      streamBtn.classList.toggle('active', streamPlaying);
+    });
+  }
+
+  /* ========== AUCTION CANVAS ========== */
+  const aCvs = document.getElementById('auctionCanvas');
+  if (aCvs) {
+    const actx = aCvs.getContext('2d');
+    let aW, aH, aDpr;
+    let auctionPhase = 0; // 0=idle, 1=bidding, 2=winner, 3=settling
+    let aPhaseTimer = 0;
+    const bids = [
+      { name: 'Abhi', bid: 1.20, color: '#5b9cf5', x: 0.25, y: 0.25 },
+      { name: 'Tridib', bid: 0.90, color: '#4ecb71', x: 0.25, y: 0.5 },
+      { name: 'Hana', bid: 1.05, color: '#a78bfa', x: 0.25, y: 0.75 },
+    ];
+    let winner = null;
+
+    function aResize() {
+      aDpr = window.devicePixelRatio || 1;
+      const r = aCvs.parentElement.getBoundingClientRect();
+      aW = r.width; aH = r.height;
+      aCvs.width = aW * aDpr; aCvs.height = aH * aDpr;
+      aCvs.style.width = aW + 'px'; aCvs.style.height = aH + 'px';
+      actx.setTransform(aDpr, 0, 0, aDpr, 0, 0);
+    }
+    aResize();
+    window.addEventListener('resize', aResize);
+
+    function aDraw(t) {
+      actx.clearRect(0, 0, aW, aH);
+
+      // Grid
+      actx.strokeStyle = 'rgba(212,168,83,0.03)';
+      for (let x = 0; x < aW; x += 40) { actx.beginPath(); actx.moveTo(x, 0); actx.lineTo(x, aH); actx.stroke(); }
+      for (let y = 0; y < aH; y += 40) { actx.beginPath(); actx.moveTo(0, y); actx.lineTo(aW, y); actx.stroke(); }
+
+      // Iris (requester)
+      const irisX = aW * 0.75, irisY = aH * 0.5;
+      actx.beginPath();
+      actx.arc(irisX, irisY, 28, 0, Math.PI * 2);
+      actx.fillStyle = 'rgba(212,168,83,0.1)';
+      actx.strokeStyle = 'rgba(212,168,83,0.4)';
+      actx.lineWidth = 2;
+      actx.fill(); actx.stroke();
+      actx.font = '600 13px "DM Sans", sans-serif';
+      actx.fillStyle = '#d4a853';
+      actx.textAlign = 'center';
+      actx.fillText('Iris', irisX, irisY + 5);
+      actx.font = '10px "JetBrains Mono", monospace';
+      actx.fillStyle = '#9a9590';
+      actx.fillText('requester', irisX, irisY + 46);
+      actx.fillText('budget: 1.50', irisX, irisY + 58);
+
+      // Bidders
+      bids.forEach((b, i) => {
+        const bx = b.x * aW, by = b.y * aH;
+        const isWinner = winner === i;
+        actx.beginPath();
+        actx.arc(bx, by, 22, 0, Math.PI * 2);
+        actx.fillStyle = isWinner ? b.color + '33' : 'rgba(255,255,255,0.04)';
+        actx.strokeStyle = isWinner ? b.color : 'rgba(255,255,255,0.1)';
+        actx.lineWidth = isWinner ? 2.5 : 1;
+        actx.fill(); actx.stroke();
+
+        actx.font = '500 12px "DM Sans", sans-serif';
+        actx.fillStyle = isWinner ? b.color : '#eae6df';
+        actx.textAlign = 'center';
+        actx.fillText(b.name, bx, by + 4);
+
+        if (auctionPhase >= 1) {
+          // Show bid
+          actx.font = '700 11px "JetBrains Mono", monospace';
+          actx.fillStyle = isWinner ? b.color : '#9a9590';
+          actx.fillText(b.bid.toFixed(2) + ' USDC', bx, by + 40);
+
+          // Bid line to Iris
+          actx.beginPath();
+          actx.moveTo(bx + 24, by);
+          actx.lineTo(irisX - 30, irisY);
+          actx.strokeStyle = isWinner ? b.color + '60' : 'rgba(255,255,255,0.04)';
+          actx.lineWidth = isWinner ? 2 : 1;
+          actx.stroke();
+        }
+
+        if (isWinner && auctionPhase >= 2) {
+          // Winner badge
+          actx.font = '700 9px "JetBrains Mono", monospace';
+          actx.fillStyle = b.color;
+          actx.fillText('WINNER', bx, by - 30);
+        }
+      });
+
+      // Phase label
+      const phases = ['Waiting for bids...', 'Bids received', 'Winner: Tridib (0.90)', 'Escrow settled'];
+      actx.font = '500 12px "DM Sans", sans-serif';
+      actx.fillStyle = '#d4a853';
+      actx.textAlign = 'center';
+      actx.fillText(phases[auctionPhase] || '', aW * 0.5, aH - 24);
+
+      // Auto-advance
+      if (auctionPhase > 0 && auctionPhase < 3) {
+        aPhaseTimer++;
+        if (aPhaseTimer > 90) {
+          aPhaseTimer = 0;
+          auctionPhase++;
+          if (auctionPhase === 2) winner = 1; // Tridib wins
+        }
+      }
+
+      requestAnimationFrame(aDraw);
+    }
+    requestAnimationFrame(aDraw);
+
+    const aBtn = document.getElementById('auctionPlayBtn');
+    aBtn.addEventListener('click', () => {
+      auctionPhase = 1;
+      aPhaseTimer = 0;
+      winner = null;
+      aBtn.innerHTML = '&#8635; Restart';
+    });
+  }
+
+})();
+</script>
+</body>
+</html>

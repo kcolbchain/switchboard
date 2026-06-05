@@ -10,417 +10,265 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://kcolbchain.github.io/brand/tokens.css" />
   <style>
-    /* ---------- base ---------- */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: var(--font);
-      font-size: var(--t-3);   /* 15px body — larger, no compression */
-      line-height: 1.65;
-      background: var(--bg);
-      color: var(--fg-muted);
-      -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
+    /* ========== RESET & BASE ========== */
+    *{margin:0;padding:0;box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      font-family:var(--font);
+      font-size:var(--t-3);
+      line-height:1.65;
+      background:var(--bg);
+      color:var(--fg-muted);
+      -webkit-font-smoothing:antialiased;
+      text-rendering:optimizeLegibility;
+      overflow-x:hidden;
     }
-    a {
-      color: var(--fg);
-      text-decoration: none;
-      border-bottom: 1px solid var(--line);
-      transition: border-color .15s ease, color .15s ease;
+    a{color:var(--fg);text-decoration:none;border-bottom:1px solid var(--line);transition:border-color .15s,color .15s}
+    a:hover{color:var(--mark);border-bottom-color:var(--mark)}
+    code{font-family:var(--font);color:var(--fg);background:var(--bg-elev);padding:1px 5px;border-radius:2px;font-size:.92em}
+
+    /* ========== ATMOSPHERE ========== */
+    body::before{
+      content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+      background:repeating-linear-gradient(
+        0deg,
+        transparent,transparent 2px,
+        rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px
+      );
     }
-    a:hover { color: var(--mark); border-bottom-color: var(--mark); }
-    code {
-      font-family: var(--font);
-      color: var(--fg);
-      background: var(--bg-elev);
-      padding: 1px 5px;
-      border-radius: 2px;
-      font-size: 0.92em;
+    body::after{
+      content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
+      background:radial-gradient(ellipse at 50% 0%,rgba(245,224,58,.04) 0%,transparent 60%),
+                 radial-gradient(ellipse at 80% 100%,rgba(110,192,122,.02) 0%,transparent 50%);
     }
 
-    /* ---------- header ---------- */
-    header.top {
-      position: sticky; top: 0; z-index: 50;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: var(--s-3) var(--s-5);
-      background: rgba(11, 11, 13, 0.86);
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid var(--line);
-      gap: var(--s-4); flex-wrap: wrap;
-    }
-    header.top .wm {
-      font-family: var(--font);
-      font-size: var(--t-3);
-      font-weight: 500;
-      color: var(--fg);
-      letter-spacing: -0.01em;
-      border-bottom: none;
-      white-space: nowrap;
-    }
-    header.top .wm em {
-      color: var(--mark);
-      font-style: normal;
-      font-weight: 700;
-    }
-    header.top .wm .sep  { color: var(--fg-faint); font-weight: 400; margin: 0 var(--s-2); }
-    header.top .wm .desc { color: var(--fg-muted); font-weight: 400; }
-    header.top nav { display: flex; gap: var(--s-4); flex-wrap: wrap; font-size: var(--t-2); }
-    header.top nav a { color: var(--fg-faint); border-bottom: none; }
-    header.top nav a:hover { color: var(--mark); }
+    /* ========== REVEAL ANIMATION ========== */
+    .reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+    .reveal.visible{opacity:1;transform:translateY(0)}
 
-    /* ---------- container ---------- */
-    .container {
-      max-width: var(--col-wide);
-      margin: 0 auto;
-      padding: 0 var(--s-5);
+    /* ========== HEADER ========== */
+    header.top{
+      position:sticky;top:0;z-index:50;
+      display:flex;align-items:center;justify-content:space-between;
+      padding:var(--s-3) var(--s-5);
+      background:rgba(11,11,13,.86);backdrop-filter:blur(10px);
+      border-bottom:1px solid var(--line);
+      gap:var(--s-4);flex-wrap:wrap;
     }
-    @media (max-width: 720px) { .container { padding: 0 var(--s-3); } }
+    header.top .wm{font-size:var(--t-3);font-weight:500;color:var(--fg);letter-spacing:-.01em;border-bottom:none;white-space:nowrap}
+    header.top .wm em{color:var(--mark);font-style:normal;font-weight:700}
+    header.top .wm .sep{color:var(--fg-faint);font-weight:400;margin:0 var(--s-2)}
+    header.top .wm .desc{color:var(--fg-muted);font-weight:400}
+    header.top nav{display:flex;gap:var(--s-4);flex-wrap:wrap;font-size:var(--t-2)}
+    header.top nav a{color:var(--fg-faint);border-bottom:none;position:relative}
+    header.top nav a::after{content:'';position:absolute;bottom:-2px;left:0;width:0;height:1px;background:var(--mark);transition:width .25s ease}
+    header.top nav a:hover{color:var(--mark)}
+    header.top nav a:hover::after{width:100%}
 
-    /* ---------- hero ---------- */
-    .hero {
-      padding: var(--s-7) 0 var(--s-6);
-      position: relative;
-    }
-    .hero h1 {
-      font-family: var(--font);
-      font-size: clamp(32px, 6vw, 64px);
-      font-weight: 500;
-      color: var(--fg);
-      letter-spacing: -0.025em;
-      line-height: 1.02;
-      margin-bottom: var(--s-4);
-      max-width: 18ch;
-    }
-    .hero h1 em { color: var(--mark); font-style: normal; font-weight: 700; }
-    .hero .lead {
-      font-size: var(--t-4);    /* 20px lead */
-      color: var(--fg-muted);
-      max-width: 56ch;
-      line-height: 1.5;
-      margin-bottom: var(--s-5);
-    }
-    .hero-chips {
-      display: flex; gap: var(--s-2); flex-wrap: wrap;
-    }
-    .hero-chips .chip {
-      padding: 6px 14px;
-      border-radius: 999px;
-      background: var(--bg-elev);
-      color: var(--fg-muted);
-      font-size: var(--t-2);
-      border: 1px solid var(--line);
-      white-space: nowrap;
-    }
-    .hero-chips .chip.mark {
-      background: var(--mark-soft);
-      color: var(--mark);
-      border-color: transparent;
-    }
+    /* ========== CONTAINER ========== */
+    .container{max-width:var(--col-wide);margin:0 auto;padding:0 var(--s-5)}
+    @media(max-width:720px){.container{padding:0 var(--s-3)}}
 
-    /* ---------- section ---------- */
-    section.s {
-      padding: var(--s-6) 0 var(--s-5);
-      border-top: 1px solid var(--line);
+    /* ========== HERO ========== */
+    .hero{
+      padding:var(--s-7) 0 var(--s-6);
+      position:relative;
+      display:grid;grid-template-columns:1fr 1fr;gap:var(--s-5);align-items:center;
     }
-    section.s:first-of-type { border-top: none; }
-    section.s .head {
-      display: flex; justify-content: space-between; align-items: baseline;
-      gap: var(--s-3); flex-wrap: wrap;
-      margin-bottom: var(--s-5);
+    @media(max-width:960px){
+      .hero{grid-template-columns:1fr;padding:var(--s-6) 0 var(--s-5)}
     }
-    section.s .head h2 {
-      font-family: var(--font);
-      font-size: var(--t-5);
-      font-weight: 500;
-      color: var(--fg);
-      letter-spacing: -0.01em;
+    .hero-text{position:relative;z-index:2}
+    .hero h1{
+      font-size:clamp(32px,5.5vw,60px);font-weight:500;color:var(--fg);
+      letter-spacing:-.025em;line-height:1.05;margin-bottom:var(--s-4);max-width:16ch;
     }
-    section.s .head .meta {
-      font-family: var(--font);
-      font-size: var(--t-1);
-      color: var(--fg-faint);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
+    .hero h1 em{color:var(--mark);font-style:normal;font-weight:700}
+    .hero .lead{font-size:var(--t-4);color:var(--fg-muted);max-width:48ch;line-height:1.5;margin-bottom:var(--s-5)}
+    .hero-chips{display:flex;gap:var(--s-2);flex-wrap:wrap}
+    .hero-chips .chip{
+      padding:6px 14px;border-radius:999px;background:var(--bg-elev);color:var(--fg-muted);
+      font-size:var(--t-2);border:1px solid var(--line);white-space:nowrap;
+      transition:all .2s ease;
     }
-    section.s .intro {
-      font-size: var(--t-3);
-      color: var(--fg-muted);
-      max-width: 62ch;
-      margin-bottom: var(--s-5);
-    }
+    .hero-chips .chip:hover{border-color:var(--fg-faint);color:var(--fg)}
+    .hero-chips .chip.mark{background:var(--mark-soft);color:var(--mark);border-color:transparent}
+    .hero-chips .chip.mark:hover{background:rgba(245,224,58,.22)}
 
-    /* ---------- grid ---------- */
-    .grid {
-      display: grid;
-      gap: var(--s-3);
-      grid-template-columns: 1fr;
+    /* ========== HERO FLOW VISUALIZATION ========== */
+    .hero-viz{
+      position:relative;height:340px;
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      overflow:hidden;
     }
-    @media (min-width: 640px) {
-      .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
-      .grid.cols-4 { grid-template-columns: repeat(2, 1fr); }
+    .hero-viz canvas{width:100%;height:100%;display:block}
+    .hero-viz .viz-label{
+      position:absolute;bottom:var(--s-3);right:var(--s-3);
+      font-size:var(--t-1);color:var(--fg-faint);
+      text-transform:uppercase;letter-spacing:.08em;
     }
-    @media (min-width: 960px) {
-      .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
-      .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
-    }
-    .grid.auto {
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    }
+    @media(max-width:960px){.hero-viz{height:240px}}
 
-    /* ---------- stat ---------- */
-    .stat {
-      background: var(--bg-elev);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: var(--s-4);
+    /* ========== SECTION ========== */
+    section.s{padding:var(--s-6) 0 var(--s-5);border-top:1px solid var(--line)}
+    section.s:first-of-type{border-top:none}
+    section.s .head{
+      display:flex;justify-content:space-between;align-items:baseline;
+      gap:var(--s-3);flex-wrap:wrap;margin-bottom:var(--s-5);
     }
-    .stat .stat-label {
-      font-family: var(--font);
-      font-size: var(--t-1);
-      color: var(--fg-faint);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: var(--s-2);
-    }
-    .stat .stat-value {
-      font-family: var(--font);
-      font-size: var(--t-6);
-      font-weight: 500;
-      color: var(--fg);
-      letter-spacing: -0.02em;
-      line-height: 1;
-    }
-    .stat .stat-sub {
-      font-size: var(--t-2);
-      color: var(--fg-muted);
-      margin-top: var(--s-2);
-    }
+    section.s .head h2{font-size:var(--t-5);font-weight:500;color:var(--fg);letter-spacing:-.01em}
+    section.s .head .meta{font-size:var(--t-1);color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em}
+    section.s .intro{font-size:var(--t-3);color:var(--fg-muted);max-width:62ch;margin-bottom:var(--s-5)}
 
-    /* ---------- chip ---------- */
-    .chip {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 999px;
-      background: var(--bg);
-      color: var(--fg-muted);
-      font-family: var(--font);
-      font-size: var(--t-1);
-      border: 1px solid var(--line);
-    }
-    .chip.ok   { background: var(--ok-soft);   color: var(--ok);   border-color: transparent; }
-    .chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
-    .chip.hot  { background: var(--hot-soft);  color: var(--hot);  border-color: transparent; }
-    .chip.mark { background: var(--mark-soft); color: var(--mark); border-color: transparent; }
+    /* ========== GRID ========== */
+    .grid{display:grid;gap:var(--s-3);grid-template-columns:1fr}
+    @media(min-width:640px){.grid.cols-2{grid-template-columns:repeat(2,1fr)}.grid.cols-4{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:960px){.grid.cols-3{grid-template-columns:repeat(3,1fr)}.grid.cols-4{grid-template-columns:repeat(4,1fr)}}
+    .grid.auto{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
 
-    /* ---------- card (module) ---------- */
-    .card {
-      background: var(--bg-elev);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: var(--s-4);
-      display: flex; flex-direction: column;
+    /* ========== STAT (animated) ========== */
+    .stat{
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      padding:var(--s-4);position:relative;overflow:hidden;
+      transition:border-color .3s ease;
     }
-    .card .card-top {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: var(--s-3);
-      gap: var(--s-2);
+    .stat:hover{border-color:var(--fg-faint)}
+    .stat::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:2px;
+      background:linear-gradient(90deg,transparent,var(--mark),transparent);
+      opacity:0;transition:opacity .3s ease;
     }
-    .card .card-top h3 {
-      font-family: var(--font);
-      font-size: var(--t-3);
-      font-weight: 500;
-      color: var(--fg);
-    }
-    .card .card-body {
-      flex: 1;
-      font-size: var(--t-2);
-      color: var(--fg-muted);
-      margin-bottom: var(--s-3);
-      line-height: 1.6;
-    }
-    .card .card-foot {
-      display: flex; gap: var(--s-3); flex-wrap: wrap;
-      padding-top: var(--s-3);
-      border-top: 1px solid var(--line);
-      font-size: var(--t-1);
-    }
-    .card .card-foot a {
-      color: var(--fg-faint);
-      border-bottom: none;
-    }
-    .card .card-foot a:hover { color: var(--mark); }
-    .card .card-foot .sep { color: var(--fg-faint); border: none; }
+    .stat:hover::before{opacity:1}
+    .stat .stat-label{font-size:var(--t-1);color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:var(--s-2)}
+    .stat .stat-value{font-size:var(--t-6);font-weight:500;color:var(--fg);letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+    .stat .stat-sub{font-size:var(--t-2);color:var(--fg-muted);margin-top:var(--s-2)}
 
-    /* ---------- matrix (compatibility) ---------- */
-    .matrix-wrap {
-      overflow-x: auto;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--bg-elev);
+    /* ========== CHIP ========== */
+    .chip{
+      display:inline-block;padding:3px 10px;border-radius:999px;
+      background:var(--bg);color:var(--fg-muted);font-size:var(--t-1);border:1px solid var(--line);
     }
-    table.matrix {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: var(--t-2);
-      min-width: 720px;
-    }
-    table.matrix th, table.matrix td {
-      padding: var(--s-3) var(--s-4);
-      text-align: left;
-      vertical-align: top;
-      border-bottom: 1px solid var(--line);
-    }
-    table.matrix thead th {
-      font-family: var(--font);
-      color: var(--fg-faint);
-      font-weight: 500;
-      font-size: var(--t-1);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-    }
-    table.matrix tbody td.label {
-      color: var(--fg);
-      width: 22%;
-      font-weight: 500;
-    }
-    table.matrix .y  { color: var(--ok);    font-family: var(--font); }
-    table.matrix .n  { color: var(--hot);   font-family: var(--font); }
-    table.matrix .p  { color: var(--warn);  font-family: var(--font); }
-    table.matrix .na { color: var(--fg-faint); }
-    table.matrix tbody tr:last-child td { border-bottom: none; }
+    .chip.ok{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+    .chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+    .chip.hot{background:var(--hot-soft);color:var(--hot);border-color:transparent}
+    .chip.mark{background:var(--mark-soft);color:var(--mark);border-color:transparent}
 
-    /* ---------- chain map ---------- */
-    .chain-map {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: var(--s-3);
-      background: var(--bg-elev);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: var(--s-5);
+    /* ========== CARD (module) ========== */
+    .card{
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      padding:var(--s-4);display:flex;flex-direction:column;
+      position:relative;overflow:hidden;
+      transition:border-color .3s ease,transform .2s ease,box-shadow .3s ease;
     }
-    @media (min-width: 880px) {
-      .chain-map {
-        grid-template-columns: 1fr auto 1fr;
-        align-items: stretch;
-      }
+    .card:hover{
+      border-color:rgba(245,224,58,.3);
+      transform:translateY(-2px);
+      box-shadow:0 4px 24px rgba(245,224,58,.06),0 0 0 1px rgba(245,224,58,.08);
     }
-    .chain-map .col {
-      display: flex; flex-direction: column; gap: var(--s-2);
+    .card::after{
+      content:'';position:absolute;top:0;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,transparent,var(--mark),transparent);
+      opacity:0;transition:opacity .3s ease;
     }
-    .chain-map .col h4 {
-      font-family: var(--font);
-      font-size: var(--t-1);
-      color: var(--fg-faint);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: var(--s-2);
+    .card:hover::after{opacity:.6}
+    .card .card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--s-3);gap:var(--s-2)}
+    .card .card-top h3{font-size:var(--t-3);font-weight:500;color:var(--fg);transition:color .2s ease}
+    .card:hover .card-top h3{color:var(--mark)}
+    .card .card-body{flex:1;font-size:var(--t-2);color:var(--fg-muted);margin-bottom:var(--s-3);line-height:1.6}
+    .card .card-foot{
+      display:flex;gap:var(--s-3);flex-wrap:wrap;padding-top:var(--s-3);
+      border-top:1px solid var(--line);font-size:var(--t-1);
     }
-    .chain-map .rail {
-      padding: var(--s-3);
-      background: var(--bg);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      color: var(--fg);
-      font-family: var(--font);
-      display: flex; justify-content: space-between; align-items: center;
-      gap: var(--s-3);
-    }
-    .chain-map .rail .rail-meta { color: var(--fg-faint); font-size: var(--t-1); }
-    .chain-map .rail.lux {
-      background: var(--mark-soft);
-      border-color: var(--mark);
-      color: var(--mark);
-    }
-    .chain-map .arrow {
-      display: flex; align-items: center; justify-content: center;
-      color: var(--fg-faint);
-      font-family: var(--font);
-      font-size: var(--t-4);
-      padding: 0 var(--s-3);
-    }
-    @media (max-width: 879px) {
-      .chain-map .arrow { transform: rotate(90deg); padding: var(--s-3) 0; }
-    }
+    .card .card-foot a{color:var(--fg-faint);border-bottom:none}
+    .card .card-foot a:hover{color:var(--mark)}
+    .card .card-foot .sep{color:var(--fg-faint);border:none}
 
-    /* ---------- code ---------- */
-    pre.code {
-      background: var(--bg-elev);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: var(--s-4) var(--s-5);
-      font-family: var(--font);
-      font-size: var(--t-2);
-      color: var(--fg);
-      line-height: 1.65;
-      overflow-x: auto;
-      white-space: pre;
-    }
-    pre.code .kw  { color: #c4b5fd; }
-    pre.code .str { color: #86efac; }
-    pre.code .com { color: var(--fg-faint); font-style: italic; }
-    pre.code .fn  { color: var(--mark); }
+    /* ========== MATRIX ========== */
+    .matrix-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-elev)}
+    table.matrix{width:100%;border-collapse:collapse;font-size:var(--t-2);min-width:720px}
+    table.matrix th,table.matrix td{padding:var(--s-3) var(--s-4);text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+    table.matrix thead th{color:var(--fg-faint);font-weight:500;font-size:var(--t-1);text-transform:uppercase;letter-spacing:.08em}
+    table.matrix tbody td.label{color:var(--fg);width:22%;font-weight:500}
+    table.matrix .y{color:var(--ok)}
+    table.matrix .n{color:var(--hot)}
+    table.matrix .p{color:var(--warn)}
+    table.matrix .na{color:var(--fg-faint)}
+    table.matrix tbody tr{transition:background .15s ease}
+    table.matrix tbody tr:hover{background:rgba(245,224,58,.03)}
+    table.matrix tbody tr:last-child td{border-bottom:none}
 
-    /* ---------- scenes ---------- */
-    .scene-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: var(--s-2);
+    /* ========== CHAIN MAP ========== */
+    .chain-map{
+      display:grid;grid-template-columns:1fr;gap:var(--s-3);
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);padding:var(--s-5);
     }
-    .scene-grid a.scene {
-      padding: var(--s-3);
-      background: var(--bg-elev);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      color: var(--fg);
-      border-bottom: 1px solid var(--line);
-      transition: all .15s ease;
+    @media(min-width:880px){.chain-map{grid-template-columns:1fr auto 1fr;align-items:stretch}}
+    .chain-map .col{display:flex;flex-direction:column;gap:var(--s-2)}
+    .chain-map .col h4{font-size:var(--t-1);color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:var(--s-2)}
+    .chain-map .rail{
+      padding:var(--s-3);background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);
+      color:var(--fg);display:flex;justify-content:space-between;align-items:center;gap:var(--s-3);
+      transition:border-color .2s ease,transform .15s ease;
     }
-    .scene-grid a.scene:hover {
-      border-color: var(--mark);
-      color: var(--mark);
+    .chain-map .rail:hover{border-color:var(--fg-faint);transform:translateX(4px)}
+    .chain-map .rail .rail-meta{color:var(--fg-faint);font-size:var(--t-1)}
+    .chain-map .rail.lux{background:var(--mark-soft);border-color:var(--mark);color:var(--mark)}
+    .chain-map .rail.lux:hover{transform:translateX(4px);box-shadow:0 0 20px rgba(245,224,58,.1)}
+    .chain-map .arrow{
+      display:flex;align-items:center;justify-content:center;color:var(--fg-faint);font-size:var(--t-4);padding:0 var(--s-3);
     }
-    .scene-grid a.scene .num {
-      font-family: var(--font);
-      font-size: var(--t-1);
-      color: var(--fg-faint);
-    }
-    .scene-grid a.scene .name {
-      font-family: var(--font);
-      font-size: var(--t-2);
-      margin-top: var(--s-1);
-    }
+    /* Arrow pulse animation */
+    .chain-map .arrow{animation:arrowPulse 2s ease-in-out infinite}
+    @keyframes arrowPulse{0%,100%{opacity:.4}50%{opacity:1;color:var(--mark)}}
+    @media(max-width:879px){.chain-map .arrow{transform:rotate(90deg);padding:var(--s-3) 0}}
 
-    /* ---------- footer ---------- */
-    footer.bottom {
-      padding: var(--s-6) 0 var(--s-7);
-      border-top: 1px solid var(--line);
-      margin-top: var(--s-6);
+    /* ========== CODE ========== */
+    pre.code{
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      padding:var(--s-4) var(--s-5);font-size:var(--t-2);color:var(--fg);
+      line-height:1.65;overflow-x:auto;white-space:pre;position:relative;
     }
-    footer.bottom .row {
-      display: flex; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap;
-      font-size: var(--t-2);
+    pre.code::before{
+      content:'';position:absolute;top:0;left:0;bottom:0;width:3px;
+      background:linear-gradient(180deg,var(--mark),transparent);border-radius:var(--radius) 0 0 var(--radius);
     }
-    footer.bottom .row .links {
-      display: flex; gap: var(--s-4); flex-wrap: wrap;
-    }
-    footer.bottom .row .links a {
-      color: var(--fg-faint);
-      border-bottom: none;
-    }
-    footer.bottom .row .links a:hover { color: var(--mark); }
-    footer.bottom .legal {
-      margin-top: var(--s-3);
-      font-size: var(--t-1);
-      color: var(--fg-faint);
-    }
+    pre.code .kw{color:#c4b5fd}
+    pre.code .str{color:#86efac}
+    pre.code .com{color:var(--fg-faint);font-style:italic}
+    pre.code .fn{color:var(--mark)}
 
-    /* ---------- responsive bump for very small ---------- */
-    @media (max-width: 480px) {
-      body { font-size: var(--t-2); }
-      .hero { padding: var(--s-5) 0 var(--s-4); }
-      section.s { padding: var(--s-5) 0 var(--s-4); }
-      section.s .head h2 { font-size: var(--t-4); }
+    /* ========== SCENES ========== */
+    .scene-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--s-2)}
+    .scene-grid a.scene{
+      padding:var(--s-3);background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      color:var(--fg);border-bottom:1px solid var(--line);
+      transition:all .2s ease;position:relative;overflow:hidden;
+    }
+    .scene-grid a.scene::before{
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(135deg,rgba(245,224,58,.04),transparent 60%);
+      opacity:0;transition:opacity .2s ease;
+    }
+    .scene-grid a.scene:hover{border-color:var(--mark);color:var(--mark);transform:translateY(-1px)}
+    .scene-grid a.scene:hover::before{opacity:1}
+    .scene-grid a.scene .num{font-size:var(--t-1);color:var(--fg-faint);transition:color .2s}
+    .scene-grid a.scene:hover .num{color:var(--mark)}
+    .scene-grid a.scene .name{font-size:var(--t-2);margin-top:var(--s-1)}
+
+    /* ========== FOOTER ========== */
+    footer.bottom{padding:var(--s-6) 0 var(--s-7);border-top:1px solid var(--line);margin-top:var(--s-6)}
+    footer.bottom .row{display:flex;justify-content:space-between;gap:var(--s-4);flex-wrap:wrap;font-size:var(--t-2)}
+    footer.bottom .row .links{display:flex;gap:var(--s-4);flex-wrap:wrap}
+    footer.bottom .row .links a{color:var(--fg-faint);border-bottom:none}
+    footer.bottom .row .links a:hover{color:var(--mark)}
+    footer.bottom .legal{margin-top:var(--s-3);font-size:var(--t-1);color:var(--fg-faint)}
+
+    /* ========== RESPONSIVE ========== */
+    @media(max-width:480px){
+      body{font-size:var(--t-2)}
+      .hero{padding:var(--s-5) 0 var(--s-4)}
+      section.s{padding:var(--s-5) 0 var(--s-4)}
+      section.s .head h2{font-size:var(--t-4)}
     }
   </style>
 </head>
@@ -437,7 +285,7 @@
     <a href="#novel">novel</a>
     <a href="#pq">post-quantum</a>
     <a href="./docs.html">docs</a>
-    <a href="./agents-demo.html">lab ↗</a>
+    <a href="./lab/index.html">lab ↗</a>
     <a href="./simulator.html">simulator ↗</a>
     <a href="https://github.com/kcolbchain/switchboard">source ↗</a>
   </nav>
@@ -447,22 +295,28 @@
 
   <!-- ============== HERO ============== -->
   <section class="hero">
-    <h1>programmable payments for <em>agents</em>.</h1>
-    <p class="lead">
-      One Python library, one contract suite, one binary wire — so two AI agents
-      from different teams can pay each other for work, without a human in the loop.
-    </p>
-    <div class="hero-chips">
-      <span class="chip mark">post-quantum</span>
-      <span class="chip">chain-agnostic</span>
-      <span class="chip">token-agnostic</span>
-      <span class="chip">agent-native</span>
-      <span class="chip">HTTP 402 · MPP · AP2 · ZAP wire</span>
+    <div class="hero-text reveal">
+      <h1>programmable payments for <em>agents</em>.</h1>
+      <p class="lead">
+        One Python library, one contract suite, one binary wire — so two AI agents
+        from different teams can pay each other for work, without a human in the loop.
+      </p>
+      <div class="hero-chips">
+        <span class="chip mark">post-quantum</span>
+        <span class="chip">chain-agnostic</span>
+        <span class="chip">token-agnostic</span>
+        <span class="chip">agent-native</span>
+        <span class="chip">HTTP 402 · MPP · AP2 · ZAP wire</span>
+      </div>
+    </div>
+    <div class="hero-viz reveal" style="transition-delay:.15s">
+      <canvas id="flowCanvas"></canvas>
+      <div class="viz-label">live payment flow</div>
     </div>
   </section>
 
   <!-- ============== STATS ============== -->
-  <section class="s" id="stats">
+  <section class="s reveal" id="stats">
     <div class="head">
       <h2>at a glance</h2>
       <span class="meta">v0.1.1 · active</span>
@@ -470,29 +324,29 @@
     <div class="grid cols-4">
       <div class="stat">
         <div class="stat-label">modules</div>
-        <div class="stat-value">12</div>
+        <div class="stat-value" data-count="12">0</div>
         <div class="stat-sub">11 shipped, 1 in PR</div>
       </div>
       <div class="stat">
         <div class="stat-label">PRs merged</div>
-        <div class="stat-value">30+</div>
+        <div class="stat-value" data-count="30" data-suffix="+">0</div>
         <div class="stat-sub">x402 · MPP · MPC · PQ · escrow · oracle</div>
       </div>
       <div class="stat">
         <div class="stat-label">lab scenes</div>
-        <div class="stat-value">16</div>
+        <div class="stat-value" data-count="16">0</div>
         <div class="stat-sub">animated, fork-and-extend</div>
       </div>
       <div class="stat">
         <div class="stat-label">chains targeted</div>
-        <div class="stat-value">5</div>
+        <div class="stat-value" data-count="5">0</div>
         <div class="stat-sub">LUX · ETH · Base · AVAX · TRON</div>
       </div>
     </div>
   </section>
 
   <!-- ============== MODULES ============== -->
-  <section class="s" id="modules">
+  <section class="s reveal" id="modules">
     <div class="head">
       <h2>modules</h2>
       <span class="meta">one library, twelve pieces</span>
@@ -506,232 +360,92 @@
 
     <div class="grid auto">
 
-      <div class="card">
-        <div class="card-top">
-          <h3>x402_middleware</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          Server-side HTTP <code>402</code> gate. Drop into FastAPI or Flask;
-          verifies <code>X-PAYMENT</code> signatures and emits the standard
-          <code>accepts[]</code> envelope. The whole pay-per-call story in one
-          middleware.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#x402_middleware">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/19">PR #19</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/blob/main/switchboard/x402_middleware.py">source</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>x402_middleware</h3><span class="chip ok">shipped</span></div>
+        <div class="card-body">Server-side HTTP <code>402</code> gate. Drop into FastAPI or Flask; verifies <code>X-PAYMENT</code> signatures and emits the standard <code>accepts[]</code> envelope.</div>
+        <div class="card-foot"><a href="./docs.html#x402_middleware">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/19">PR #19</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/blob/main/switchboard/x402_middleware.py">source</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>zap_transport</h3>
-          <span class="chip warn">in PR</span>
-        </div>
-        <div class="card-body">
-          Binary wire for <code>PaymentOffer</code> / <code>PaymentProof</code>
-          over <a href="https://github.com/luxfi/zap">luxfi/zap</a>. Zero-allocation,
-          roughly an order of magnitude smaller than JSON. First production
-          consumer of <code>zap_py</code>.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#zap_transport">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/21">PR #21</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>zap_transport</h3><span class="chip warn">in PR</span></div>
+        <div class="card-body">Binary wire for <code>PaymentOffer</code>/<code>PaymentProof</code> over <a href="https://github.com/luxfi/zap">luxfi/zap</a>. Zero-allocation, ~10× smaller than JSON.</div>
+        <div class="card-foot"><a href="./docs.html#zap_transport">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/21">PR #21</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>gas_tracker · gas_budget</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          Hard gas budgets — per-hour, per-day — so a runaway agent loop can't
-          drain its own treasury. Closes the #1 footgun of autonomous on-chain
-          agents.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#gas_budget">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/14">PR #14</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>gas_tracker · gas_budget</h3><span class="chip ok">shipped</span></div>
+        <div class="card-body">Hard gas budgets — per-hour, per-day — so a runaway agent loop can't drain its own treasury. Closes the #1 footgun of autonomous on-chain agents.</div>
+        <div class="card-foot"><a href="./docs.html#gas_budget">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/14">PR #14</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>nonce_manager</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          Client-side nonce manager with reorg protection. The piece every
-          shipping agent eventually has to write — written once, here.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#nonce_manager">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/11">PR #11</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>nonce_manager</h3><span class="chip ok">shipped</span></div>
+        <div class="card-body">Client-side nonce manager with reorg protection. The piece every shipping agent eventually has to write — written once, here.</div>
+        <div class="card-foot"><a href="./docs.html#nonce_manager">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/11">PR #11</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>AgentEscrow.sol</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          Trustless escrow with timeout, challenge period, and mutual cancel.
-          Solidity contract + Python client + CLI. The native-ETH variant is
-          drafted as an EIP.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#agent_escrow">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/8">PR #8</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/issues/50">EIP draft</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>AgentEscrow.sol</h3><span class="chip ok">shipped</span></div>
+        <div class="card-body">Trustless escrow with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI. The native-ETH variant is drafted as an EIP.</div>
+        <div class="card-foot"><a href="./docs.html#agent_escrow">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/8">PR #8</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/issues/50">EIP draft</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>pq · post-quantum</h3>
-          <span class="chip mark">north star</span>
-        </div>
-        <div class="card-body">
-          <code>liboqs</code> wrapper for PQ signatures (Dilithium / Falcon /
-          SPHINCS+). Every <code>PaymentProof</code> carries a
-          <code>signature_alg</code> + signature; the wire format is PQ-ready out
-          of the box. <a href="https://github.com/kcolbchain/switchboard/issues/33">PQ-0 → PQ-5</a>.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#pq">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/issues/33">spec</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>pq · post-quantum</h3><span class="chip mark">north star</span></div>
+        <div class="card-body"><code>liboqs</code> wrapper for PQ signatures (Dilithium / Falcon / SPHINCS+). Every <code>PaymentProof</code> carries a <code>signature_alg</code>; the wire format is PQ-ready out of the box.</div>
+        <div class="card-foot"><a href="./docs.html#pq">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/issues/33">spec</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>a2a_x402 adapter</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          Adapter between Google's A2A (Agent-to-Agent) framework and x402.
-          Lets an A2A agent be paid in the open x402 protocol.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#a2a_x402">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/29">PR #29</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>a2a_x402 adapter</h3><span class="chip ok">shipped</span></div>
+        <div class="card-body">Adapter between Google's A2A framework and x402. Lets an A2A agent be paid in the open x402 protocol.</div>
+        <div class="card-foot"><a href="./docs.html#a2a_x402">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/29">PR #29</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>multi-chain settlement</h3>
-          <span class="chip ok">design v0.1</span>
-        </div>
-        <div class="card-body">
-          The chain-agnostic settlement surface. Notary attestation for v1,
-          ZK-relay for v2, native PQ verification on LUX. Spec landed in
-          <code>docs/multi-chain-settlement.md</code>.
-        </div>
-        <div class="card-foot">
-          <a href="#multichain">how it fits</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md">spec</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/71">PR #71</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>multi-chain settlement</h3><span class="chip ok">design v0.1</span></div>
+        <div class="card-body">The chain-agnostic settlement surface. Notary attestation for v1, ZK-relay for v2, native PQ verification on LUX.</div>
+        <div class="card-foot"><a href="#multichain">how it fits</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md">spec</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/71">PR #71</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>mpc_wallet</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          Multi-party-computation wallet — threshold signatures across an
-          agent fleet, no single key on any one machine.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#mpc_wallet">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>mpc_wallet</h3><span class="chip ok">shipped</span></div>
+        <div class="card-body">Multi-party-computation wallet — threshold signatures across an agent fleet, no single key on any one machine.</div>
+        <div class="card-foot"><a href="./docs.html#mpc_wallet">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>mpp/session</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          Multi-party payment sessions — open a streaming channel under a
-          budget cap, settle on close. The Tempo / Stripe-style rail for
-          long-running agent work.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#mpp_session">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>mpp/session</h3><span class="chip ok">shipped</span></div>
+        <div class="card-body">Streaming payment sessions — open a channel under a budget cap, settle on close. The Stripe-style rail for long-running agent work.</div>
+        <div class="card-foot"><a href="./docs.html#mpp_session">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>adapters/lucidly</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          syUSD auto-park for idle agent balances. Any USDC the agent isn't
-          actively using earns yield by default; pulled back automatically
-          when needed for a payment.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#lucidly">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>adapters/lucidly</h3><span class="chip ok">shipped</span></div>
+        <div class="card-body">syUSD auto-park for idle agent balances. Any USDC the agent isn't actively using earns yield by default; pulled back when needed.</div>
+        <div class="card-foot"><a href="./docs.html#lucidly">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/53">PR #53</a></div>
       </div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>OracleAggregator</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          Oracle-mediated escrow release — <code>releaseByAttestation</code>
-          lets a designated oracle aggregate sign off on delivery, settling
-          the escrow without on-chain dispute.
-        </div>
-        <div class="card-foot">
-          <a href="./docs.html#oracle_aggregator">docs</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/52">PR #52</a>
-        </div>
+      <div class="card reveal">
+        <div class="card-top"><h3>OracleAggregator</h3><span class="chip ok">shipped</span></div>
+        <div class="card-body">Oracle-mediated escrow release — <code>releaseByAttestation</code> lets a designated oracle aggregate sign off on delivery, settling without on-chain dispute.</div>
+        <div class="card-foot"><a href="./docs.html#oracle_aggregator">docs</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/52">PR #52</a></div>
       </div>
 
     </div>
   </section>
 
   <!-- ============== MULTI-CHAIN ============== -->
-  <section class="s" id="multichain">
+  <section class="s reveal" id="multichain">
     <div class="head">
       <h2>multi-chain · LUX-settled</h2>
       <span class="meta">#59 resolved · design v0.1</span>
     </div>
     <p class="intro">
       Switchboard is <em>chain-agnostic</em> and <em>token-agnostic</em>: agents transact on
-      whichever chain fits the job (TRON for sub-cent micropayments, AVAX C-chain
-      for liquidity, Base for USDC, ETH for canonical native-ETH escrow), with
-      whichever asset both sides agree on. <em>LUX is the preferred settlement layer</em> —
-      PQ-signed receipts anchor on LUX regardless of where the underlying transfer
-      happened.
+      whichever chain fits the job, with whichever asset both sides agree on.
+      <em>LUX is the preferred settlement layer</em> — PQ-signed receipts anchor on LUX
+      regardless of where the underlying transfer happened.
     </p>
 
     <div class="chain-map">
@@ -752,218 +466,80 @@
       </div>
     </div>
 
-    <p class="intro" style="margin-top: var(--s-5)">
+    <p class="intro" style="margin-top:var(--s-5)">
       <strong>Design v0.1 landed</strong> (<a href="https://github.com/kcolbchain/switchboard/pull/71">PR #71</a>,
       closing <a href="https://github.com/kcolbchain/switchboard/issues/59">#59</a>).
-      The chosen path is a <em>notary attestation</em> model for v1, upgradable in-place to
-      <em>ZK-relay</em> as Groth16 verification matures on LUX. TRON finality at 19 blocks,
-      Avalanche C-Chain at 5, LUX at 2. Full spec, finality tables, and per-chain
-      considerations in
-      <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md">
-      <code>docs/multi-chain-settlement.md</code></a>.
+      Notary attestation for v1, upgradable to ZK-relay as Groth16 matures on LUX. Full spec in
+      <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md"><code>docs/multi-chain-settlement.md</code></a>.
     </p>
   </section>
 
   <!-- ============== RAILS COMPATIBILITY ============== -->
-  <section class="s" id="rails">
+  <section class="s reveal" id="rails">
     <div class="head">
       <h2>rails compatibility</h2>
       <span class="meta">x402 · MPP · AP2 · Circle · escrow</span>
     </div>
     <p class="intro">
       The four open agent-payment rails of 2026, plus on-chain escrow. Switchboard
-      speaks all of them — the same module surface, the same wire envelope, the
-      same agent identity. The matrix shows where each rail draws the line.
+      speaks all of them — same module surface, same wire envelope, same agent identity.
     </p>
 
     <div class="matrix-wrap">
       <table class="matrix">
         <thead>
-          <tr>
-            <th>capability</th>
-            <th>x402</th>
-            <th>MPP</th>
-            <th>AP2</th>
-            <th>Circle Nano</th>
-            <th>AgentEscrow</th>
-          </tr>
+          <tr><th>capability</th><th>x402</th><th>MPP</th><th>AP2</th><th>Circle Nano</th><th>AgentEscrow</th></tr>
         </thead>
         <tbody>
-          <tr><td class="label">HTTP 402 paywall</td>
-            <td class="y">✓ native</td>
-            <td class="p">via session</td>
-            <td class="p">via card</td>
-            <td class="n">—</td>
-            <td class="n">—</td></tr>
-          <tr><td class="label">streaming micropayments</td>
-            <td class="p">per-call</td>
-            <td class="y">✓ native</td>
-            <td class="p">card auth</td>
-            <td class="y">✓ native</td>
-            <td class="n">—</td></tr>
-          <tr><td class="label">trustless escrow</td>
-            <td class="n">—</td>
-            <td class="n">—</td>
-            <td class="n">—</td>
-            <td class="n">—</td>
-            <td class="y">✓ native</td></tr>
-          <tr><td class="label">refund / dispute</td>
-            <td class="p">off-chain</td>
-            <td class="p">off-chain</td>
-            <td class="y">✓ chargeback</td>
-            <td class="p">off-chain</td>
-            <td class="y">✓ on-chain</td></tr>
-          <tr><td class="label">chain-agnostic</td>
-            <td class="y">✓</td>
-            <td class="y">✓</td>
-            <td class="na">n/a (card)</td>
-            <td class="p">USDC only</td>
-            <td class="y">✓ (with #59)</td></tr>
-          <tr><td class="label">PQ-signed</td>
-            <td class="y">✓ via switchboard</td>
-            <td class="y">✓ via switchboard</td>
-            <td class="n">—</td>
-            <td class="n">—</td>
-            <td class="y">✓ via switchboard</td></tr>
-          <tr><td class="label">binary wire (ZAP)</td>
-            <td class="y">✓</td>
-            <td class="y">✓</td>
-            <td class="na">n/a</td>
-            <td class="na">n/a</td>
-            <td class="y">✓</td></tr>
+          <tr><td class="label">HTTP 402 paywall</td><td class="y">✓ native</td><td class="p">via session</td><td class="p">via card</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td class="label">streaming micropayments</td><td class="p">per-call</td><td class="y">✓ native</td><td class="p">card auth</td><td class="y">✓ native</td><td class="n">—</td></tr>
+          <tr><td class="label">trustless escrow</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="y">✓ native</td></tr>
+          <tr><td class="label">refund / dispute</td><td class="p">off-chain</td><td class="p">off-chain</td><td class="y">✓ chargeback</td><td class="p">off-chain</td><td class="y">✓ on-chain</td></tr>
+          <tr><td class="label">chain-agnostic</td><td class="y">✓</td><td class="y">✓</td><td class="na">n/a (card)</td><td class="p">USDC only</td><td class="y">✓ (with #59)</td></tr>
+          <tr><td class="label">PQ-signed</td><td class="y">✓ via switchboard</td><td class="y">✓ via switchboard</td><td class="n">—</td><td class="n">—</td><td class="y">✓ via switchboard</td></tr>
+          <tr><td class="label">binary wire (ZAP)</td><td class="y">✓</td><td class="y">✓</td><td class="na">n/a</td><td class="na">n/a</td><td class="y">✓</td></tr>
         </tbody>
       </table>
     </div>
   </section>
 
   <!-- ============== NOVEL CONCEPTS ============== -->
-  <section class="s" id="novel">
+  <section class="s reveal" id="novel">
     <div class="head">
       <h2>what's novel</h2>
       <span class="meta">we think nobody else is doing these</span>
     </div>
     <p class="intro">
-      Open questions and proposals switchboard is pushing into the world of agent
-      payments. Each is filed as a research issue in the public tracker. PRs
-      and counter-proposals welcome.
+      Open questions and proposals switchboard is pushing into agent payments.
+      Each is filed as a research issue. PRs and counter-proposals welcome.
     </p>
 
     <div class="grid auto">
+      <div class="card reveal"><div class="card-top"><h3>native-ETH A2A escrow</h3><span class="chip mark">EIP draft</span></div><div class="card-body">Trustless agent-to-agent escrow in native ETH (no token wrapper). Formalized as a Standards-Track ERC. Are we the only ones?</div><div class="card-foot"><a href="https://github.com/kcolbchain/switchboard/issues/50">#50</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/issues/49">survey #49</a></div></div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>native-ETH A2A escrow</h3>
-          <span class="chip mark">EIP draft</span>
-        </div>
-        <div class="card-body">
-          Trustless agent-to-agent escrow in native ETH (no token wrapper).
-          Formalized as a Standards-Track ERC. Are we the only ones?
-        </div>
-        <div class="card-foot">
-          <a href="https://github.com/kcolbchain/switchboard/issues/50">#50</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/issues/49">survey #49</a>
-        </div>
-      </div>
+      <div class="card reveal"><div class="card-top"><h3>composable refund policies</h3><span class="chip">innovation</span></div><div class="card-body">Refund logic as on-chain plugins. Compose pro-rata, gated, time-decay, slashing — every contract gets the policy it needs without forking the escrow.</div><div class="card-foot"><a href="https://github.com/kcolbchain/switchboard/issues/46">#46</a></div></div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>composable refund policies</h3>
-          <span class="chip">innovation</span>
-        </div>
-        <div class="card-body">
-          Refund logic as on-chain plugins. Compose pro-rata, gated, time-decay,
-          slashing — every contract gets the policy it needs without forking the
-          escrow.
-        </div>
-        <div class="card-foot">
-          <a href="https://github.com/kcolbchain/switchboard/issues/46">#46</a>
-        </div>
-      </div>
+      <div class="card reveal"><div class="card-top"><h3>adversarial conformance harness</h3><span class="chip ok">shipped</span></div><div class="card-body">A test corpus every implementation <em>must reject</em>. The negative space defines the protocol as much as the positive space.</div><div class="card-foot"><a href="https://github.com/kcolbchain/switchboard/issues/45">#45</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/62">PR #62</a></div></div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>adversarial conformance harness</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          A test corpus every other-language implementation of the wire format
-          <em>must reject</em>. The negative space defines the protocol as much
-          as the positive space. Vectors in
-          <code>tests/conformance/adversarial_vectors.json</code>.
-        </div>
-        <div class="card-foot">
-          <a href="https://github.com/kcolbchain/switchboard/issues/45">#45</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/62">PR #62</a>
-        </div>
-      </div>
+      <div class="card reveal"><div class="card-top"><h3>private x402</h3><span class="chip">innovation</span></div><div class="card-body">Pay an agent <em>without revealing the amount</em>. Range proofs on the payment envelope; the server learns "yes, paid above threshold," nothing more.</div><div class="card-foot"><a href="https://github.com/kcolbchain/switchboard/issues/44">#44</a></div></div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>private x402</h3>
-          <span class="chip">innovation</span>
-        </div>
-        <div class="card-body">
-          Pay an agent <em>without revealing the amount</em>. Range proofs on the
-          payment envelope; the server learns "yes, paid above threshold," nothing
-          more.
-        </div>
-        <div class="card-foot">
-          <a href="https://github.com/kcolbchain/switchboard/issues/44">#44</a>
-        </div>
-      </div>
+      <div class="card reveal"><div class="card-top"><h3>receipt aggregation</h3><span class="chip">innovation</span></div><div class="card-body">N off-chain micropayments collapse into 1 on-chain settlement. Save gas on the boring stretch; settle when stakes cross a threshold.</div><div class="card-foot"><a href="https://github.com/kcolbchain/switchboard/issues/43">#43</a></div></div>
 
-      <div class="card">
-        <div class="card-top">
-          <h3>receipt aggregation</h3>
-          <span class="chip">innovation</span>
-        </div>
-        <div class="card-body">
-          N off-chain micropayments collapse into 1 on-chain settlement. Save
-          gas on the boring stretch; settle on-chain when the relationship ends
-          or stakes cross a threshold.
-        </div>
-        <div class="card-foot">
-          <a href="https://github.com/kcolbchain/switchboard/issues/43">#43</a>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-top">
-          <h3>.well-known/agent-payment.json</h3>
-          <span class="chip ok">shipped</span>
-        </div>
-        <div class="card-body">
-          Discoverable agent identity hub at a well-known URL. Pay-to address,
-          accepted assets, PQ key, ZAP endpoint, rate-limit policy — one
-          fetch, one source of truth. Schema in
-          <code>docs/well-known-agent-payment.md</code>.
-        </div>
-        <div class="card-foot">
-          <a href="https://github.com/kcolbchain/switchboard/issues/42">#42</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/pull/61">PR #61</a>
-          <span class="sep">·</span>
-          <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/well-known-agent-payment.md">schema</a>
-        </div>
-      </div>
-
+      <div class="card reveal"><div class="card-top"><h3>.well-known/agent-payment.json</h3><span class="chip ok">shipped</span></div><div class="card-body">Discoverable agent identity hub at a well-known URL. Pay-to address, accepted assets, PQ key, ZAP endpoint — one fetch, one source of truth.</div><div class="card-foot"><a href="https://github.com/kcolbchain/switchboard/issues/42">#42</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/pull/61">PR #61</a><span class="sep">·</span><a href="https://github.com/kcolbchain/switchboard/blob/main/docs/well-known-agent-payment.md">schema</a></div></div>
     </div>
   </section>
 
   <!-- ============== PQ STORY ============== -->
-  <section class="s" id="pq">
+  <section class="s reveal" id="pq">
     <div class="head">
       <h2>post-quantum, by default</h2>
       <span class="meta">PQ-0 → PQ-5 · in flight</span>
     </div>
     <p class="intro">
       Every <code>PaymentOffer</code> and <code>PaymentProof</code> carries an
-      explicit <code>signature_alg</code> and a signature in that algorithm.
-      Dilithium is the default; Falcon and SPHINCS+ are first-class. The wire
-      format is forward-compatible — when NIST adds a Round-4 winner, the
-      registry adds an entry; the protocol doesn't change.
+      explicit <code>signature_alg</code>. Dilithium is the default; Falcon and SPHINCS+
+      are first-class. When NIST adds a Round-4 winner, the registry adds an entry;
+      the protocol doesn't change.
     </p>
 
 <pre class="code"><span class="com"># two-line PQ signing on a payment offer</span>
@@ -978,64 +554,51 @@ offer = <span class="fn">PaymentOffer</span>(
     signature_alg=ALG_DILITHIUM3,
 )
 offer.signature = <span class="fn">sign</span>(offer.canonical(), pq_key)</pre>
-
-    <p class="intro" style="margin-top: var(--s-5)">
-      On the verifier side, dispatch on <code>signature_alg</code> happens at
-      the adapter layer. On LUX, the spec assumes native PQ precompiles and
-      ZK precompiles for Groth16 verification (per
-      <a href="https://github.com/kcolbchain/switchboard/blob/main/docs/multi-chain-settlement.md">
-      <code>docs/multi-chain-settlement.md</code></a>) — confirming this
-      against current <code>luxfi/*</code> code is the next open question.
-    </p>
   </section>
 
   <!-- ============== LAB / SCENES ============== -->
-  <section class="s" id="lab">
+  <section class="s reveal" id="lab">
     <div class="head">
       <h2>the lab · 16 scenes</h2>
       <span class="meta">single-file canvas, no build</span>
     </div>
     <p class="intro">
-      Animated scenes that play out every protocol switchboard documents. Each
-      scene is ~150 lines and follows the <a href="https://github.com/kcolbchain/switchboard/blob/main/web/SCENES.md">SCENES.md</a>
-      contract. Touch the scene for a tooltip, scrub the simulator slider, or
-      step through with <code>space</code> / <code>n</code> / <code>r</code>.
+      Animated scenes that play out every protocol switchboard documents.
+      <code>space</code> / <code>n</code> / <code>r</code> to control playback.
     </p>
 
     <div class="scene-grid">
-      <a class="scene" href="./agents-demo.html#scene-1"><div class="num">01</div><div class="name">x402 paywall</div></a>
-      <a class="scene" href="./agents-demo.html#scene-2"><div class="num">02</div><div class="name">escrow + refund</div></a>
-      <a class="scene" href="./agents-demo.html#scene-3"><div class="num">03</div><div class="name">streaming MPP</div></a>
-      <a class="scene" href="./agents-demo.html#scene-4"><div class="num">04</div><div class="name">AI compute auction</div></a>
-      <a class="scene" href="./agents-demo.html#scene-5"><div class="num">05</div><div class="name">human-in-the-loop</div></a>
-      <a class="scene" href="./agents-demo.html#scene-6"><div class="num">06</div><div class="name">treasury rebalance</div></a>
-      <a class="scene" href="./agents-demo.html#scene-7"><div class="num">07</div><div class="name">signed oracle pulls</div></a>
-      <a class="scene" href="./agents-demo.html#scene-8"><div class="num">08</div><div class="name">PQ envelope</div></a>
-      <a class="scene" href="./agents-demo.html#scene-9"><div class="num">09</div><div class="name">taxi handover</div></a>
-      <a class="scene" href="./agents-demo.html#scene-10"><div class="num">10</div><div class="name">café walk-by</div></a>
-      <a class="scene" href="./agents-demo.html#scene-11"><div class="num">11</div><div class="name">food delivery</div></a>
-      <a class="scene" href="./agents-demo.html#scene-12"><div class="num">12</div><div class="name">split bill</div></a>
-      <a class="scene" href="./agents-demo.html#scene-13"><div class="num">13</div><div class="name">native-ETH escrow</div></a>
-      <a class="scene" href="./agents-demo.html#scene-14"><div class="num">14</div><div class="name">subscription</div></a>
-      <a class="scene" href="./agents-demo.html#scene-15"><div class="num">15</div><div class="name">multi-city trip</div></a>
-      <a class="scene" href="./agents-demo.html#scene-16"><div class="num">16</div><div class="name">+ add yours</div></a>
+      <a class="scene" href="./agents-demo.html#scene=x402"><div class="num">01</div><div class="name">x402 paywall</div></a>
+      <a class="scene" href="./agents-demo.html#scene=escrow"><div class="num">02</div><div class="name">escrow + refund</div></a>
+      <a class="scene" href="./agents-demo.html#scene=stream"><div class="num">03</div><div class="name">streaming MPP</div></a>
+      <a class="scene" href="./agents-demo.html#scene=auction"><div class="num">04</div><div class="name">AI compute auction</div></a>
+      <a class="scene" href="./agents-demo.html#scene=hitl"><div class="num">05</div><div class="name">human-in-the-loop</div></a>
+      <a class="scene" href="./agents-demo.html#scene=fanout"><div class="num">06</div><div class="name">treasury rebalance</div></a>
+      <a class="scene" href="./agents-demo.html#scene=oracle"><div class="num">07</div><div class="name">signed oracle pulls</div></a>
+      <a class="scene" href="./agents-demo.html#scene=pq"><div class="num">08</div><div class="name">PQ envelope</div></a>
+      <a class="scene" href="./agents-demo.html#scene=taxi"><div class="num">09</div><div class="name">taxi handover</div></a>
+      <a class="scene" href="./agents-demo.html#scene=cafe"><div class="num">10</div><div class="name">cafe walk-by</div></a>
+      <a class="scene" href="./agents-demo.html#scene=delivery"><div class="num">11</div><div class="name">food delivery</div></a>
+      <a class="scene" href="./agents-demo.html#scene=split"><div class="num">12</div><div class="name">split bill</div></a>
+      <a class="scene" href="./agents-demo.html#scene=ethEscrow"><div class="num">13</div><div class="name">native-ETH escrow</div></a>
+      <a class="scene" href="./agents-demo.html#scene=subscribe"><div class="num">14</div><div class="name">subscription</div></a>
+      <a class="scene" href="./agents-demo.html#scene=trip"><div class="num">15</div><div class="name">multi-city trip</div></a>
+      <a class="scene" href="https://github.com/kcolbchain/switchboard/blob/main/web/SCENES.md"><div class="num">16</div><div class="name">+ add yours</div></a>
     </div>
 
-    <p class="intro" style="margin-top: var(--s-5)">
-      <a href="./agents-demo.html">Open the full lab →</a>
+    <p class="intro" style="margin-top:var(--s-5)">
+      <a href="./lab/index.html">Open the full lab →</a> · <a href="./agents-demo.html">Canvas playground →</a>
     </p>
   </section>
 
   <!-- ============== QUICKSTART ============== -->
-  <section class="s" id="quickstart">
+  <section class="s reveal" id="quickstart">
     <div class="head">
       <h2>30-second quickstart</h2>
       <span class="meta">one route, one middleware</span>
     </div>
     <p class="intro">
-      Gate any HTTP route behind on-chain payment. The middleware does the rest —
-      verifies the <code>X-PAYMENT</code> envelope, emits the <code>accepts[]</code> response,
-      lets the caller settle in any supported asset on any supported chain.
+      Gate any HTTP route behind on-chain payment. The middleware does the rest.
     </p>
 
 <pre class="code"><span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI
@@ -1055,7 +618,7 @@ app.<span class="fn">add_middleware</span>(
 <span class="kw">def</span> <span class="fn">agent_only</span>():
     <span class="kw">return</span> {<span class="str">"ok"</span>: <span class="kw">True</span>, <span class="str">"payload"</span>: <span class="str">"this cost the caller 0.001 USDC"</span>}</pre>
 
-    <p class="intro" style="margin-top: var(--s-5)">
+    <p class="intro" style="margin-top:var(--s-5)">
       Full backend reference at <a href="./docs.html">docs</a> · install via
       <code>pip install switchboard[pq]</code>.
     </p>
@@ -1066,14 +629,14 @@ app.<span class="fn">add_middleware</span>(
 <footer class="bottom">
   <div class="container">
     <div class="row">
-      <a class="wm" href="./" style="font-family: var(--font); color: var(--fg); border: none;">
-        <em style="color: var(--mark); font-style: normal; font-weight: 700;">kcolb</em>chain
-        <span style="color: var(--fg-faint); margin: 0 var(--s-2);">/</span>
-        <span style="color: var(--fg-muted);">switchboard</span>
+      <a class="wm" href="./" style="color:var(--fg);border:none">
+        <em style="color:var(--mark);font-style:normal;font-weight:700">kcolb</em>chain
+        <span style="color:var(--fg-faint);margin:0 var(--s-2)">/</span>
+        <span style="color:var(--fg-muted)">switchboard</span>
       </a>
       <div class="links">
         <a href="./docs.html">docs</a>
-        <a href="./agents-demo.html">lab</a>
+        <a href="./lab/index.html">lab</a>
         <a href="./simulator.html">simulator</a>
         <a href="https://github.com/kcolbchain/switchboard">source</a>
         <a href="https://github.com/kcolbchain/switchboard/issues">issues</a>
@@ -1089,6 +652,231 @@ app.<span class="fn">add_middleware</span>(
     </p>
   </div>
 </footer>
+
+<script>
+/* ========== SCROLL REVEAL ========== */
+(function(){
+  const els = document.querySelectorAll('.reveal');
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        // Stagger children with .reveal class
+        const parent = e.target;
+        const children = parent.querySelectorAll('.reveal');
+        if (children.length > 0) {
+          children.forEach((c, j) => {
+            c.style.transitionDelay = (j * 0.06) + 's';
+            c.classList.add('visible');
+          });
+        }
+        parent.classList.add('visible');
+        obs.unobserve(parent);
+      }
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+  els.forEach(el => obs.observe(el));
+})();
+
+/* ========== COUNT-UP ANIMATION ========== */
+(function(){
+  const counters = document.querySelectorAll('[data-count]');
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      const el = e.target;
+      const target = parseInt(el.dataset.count);
+      const suffix = el.dataset.suffix || '';
+      const duration = 1200;
+      const start = performance.now();
+      function tick(now) {
+        const p = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - p, 3); // ease-out cubic
+        el.textContent = Math.round(target * ease) + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+      obs.unobserve(el);
+    });
+  }, { threshold: 0.5 });
+  counters.forEach(c => obs.observe(c));
+})();
+
+/* ========== HERO PAYMENT FLOW CANVAS ========== */
+(function(){
+  const canvas = document.getElementById('flowCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let W, H, dpr;
+  const MARK = '#f5e03a';
+  const OK = '#6ec07a';
+  const FAINT = '#5a5a62';
+  const BG = '#131316';
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Nodes: agents and services
+  const nodes = [
+    { label: 'Agent A',     x: 0.12, y: 0.25, type: 'agent' },
+    { label: 'Agent B',     x: 0.88, y: 0.25, type: 'agent' },
+    { label: 'x402 gate',   x: 0.50, y: 0.15, type: 'service' },
+    { label: 'Escrow',      x: 0.50, y: 0.50, type: 'contract' },
+    { label: 'Oracle',      x: 0.78, y: 0.65, type: 'service' },
+    { label: 'LUX settle',  x: 0.50, y: 0.82, type: 'chain' },
+    { label: 'PQ signer',   x: 0.22, y: 0.65, type: 'service' },
+  ];
+
+  // Packets: animated payment flows between nodes
+  const flows = [
+    { from: 0, to: 2, color: MARK },
+    { from: 2, to: 1, color: OK },
+    { from: 0, to: 3, color: MARK },
+    { from: 3, to: 4, color: FAINT },
+    { from: 4, to: 3, color: OK },
+    { from: 3, to: 5, color: MARK },
+    { from: 0, to: 6, color: FAINT },
+    { from: 6, to: 3, color: MARK },
+  ];
+
+  const packets = [];
+  let lastSpawn = 0;
+  const SPAWN_INTERVAL = 600;
+
+  function spawnPacket(t) {
+    const f = flows[Math.floor(Math.random() * flows.length)];
+    packets.push({
+      from: f.from, to: f.to, color: f.color,
+      progress: 0, speed: 0.4 + Math.random() * 0.3,
+      born: t,
+    });
+  }
+
+  function drawNode(n, pulse) {
+    const x = n.x * W, y = n.y * H;
+    const r = n.type === 'contract' ? 18 : n.type === 'agent' ? 16 : 12;
+
+    // Glow
+    if (pulse > 0) {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 8, 0, Math.PI * 2);
+      ctx.fillStyle = n.type === 'chain'
+        ? `rgba(245,224,58,${pulse * 0.15})`
+        : `rgba(110,192,122,${pulse * 0.12})`;
+      ctx.fill();
+    }
+
+    // Shape
+    ctx.beginPath();
+    if (n.type === 'agent') {
+      // Rounded square
+      const s = r;
+      ctx.roundRect(x - s, y - s, s * 2, s * 2, 4);
+    } else if (n.type === 'contract') {
+      // Hexagon
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI / 3) * i - Math.PI / 6;
+        const px = x + r * Math.cos(a), py = y + r * Math.sin(a);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    } else {
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = n.type === 'chain' ? 'rgba(245,224,58,0.12)' : BG;
+    ctx.strokeStyle = n.type === 'chain' ? MARK : '#2a2a30';
+    ctx.lineWidth = 1.5;
+    ctx.fill();
+    ctx.stroke();
+
+    // Label
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.fillStyle = n.type === 'chain' ? MARK : FAINT;
+    ctx.textAlign = 'center';
+    ctx.fillText(n.label, x, y + r + 14);
+  }
+
+  function draw(t) {
+    ctx.clearRect(0, 0, W, H);
+
+    // Spawn packets
+    if (t - lastSpawn > SPAWN_INTERVAL) {
+      spawnPacket(t);
+      lastSpawn = t;
+    }
+
+    // Draw connection lines
+    ctx.strokeStyle = '#1a1a20';
+    ctx.lineWidth = 1;
+    flows.forEach(f => {
+      const a = nodes[f.from], b = nodes[f.to];
+      ctx.beginPath();
+      ctx.moveTo(a.x * W, a.y * H);
+      ctx.lineTo(b.x * W, b.y * H);
+      ctx.stroke();
+    });
+
+    // Track node pulses
+    const pulses = new Array(nodes.length).fill(0);
+
+    // Update and draw packets
+    for (let i = packets.length - 1; i >= 0; i--) {
+      const p = packets[i];
+      p.progress += p.speed * 0.016;
+      if (p.progress >= 1) {
+        pulses[p.to] = 1;
+        packets.splice(i, 1);
+        continue;
+      }
+      const a = nodes[p.from], b = nodes[p.to];
+      const x = (a.x + (b.x - a.x) * p.progress) * W;
+      const y = (a.y + (b.y - a.y) * p.progress) * H;
+
+      // Packet glow
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = p.color === MARK
+        ? 'rgba(245,224,58,0.15)'
+        : p.color === OK
+        ? 'rgba(110,192,122,0.12)'
+        : 'rgba(90,90,98,0.1)';
+      ctx.fill();
+
+      // Packet dot
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+
+      // Trail
+      const tx = (a.x + (b.x - a.x) * Math.max(0, p.progress - 0.15)) * W;
+      const ty = (a.y + (b.y - a.y) * Math.max(0, p.progress - 0.15)) * H;
+      const grad = ctx.createLinearGradient(tx, ty, x, y);
+      grad.addColorStop(0, 'transparent');
+      grad.addColorStop(1, p.color);
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(x, y);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // Draw nodes
+    nodes.forEach((n, i) => drawNode(n, pulses[i]));
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+</script>
 
 </body>
 </html>
