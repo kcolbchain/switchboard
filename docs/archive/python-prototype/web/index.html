@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>switchboard — agent payments infrastructure</title>
+<meta name="description" content="Agent wallets, gas budgets, agent-to-agent escrow. x402 / MPP / AP2 / Circle-Nanopayments compatibility map. By kcolbchain." />
+<style>
+  :root {
+    --bg: #0b0d10; --panel: #13161b; --panel-2: #0f1216; --border: #23272f;
+    --fg: #e7e9ee; --muted: #8a93a3;
+    --accent: #60a5fa; --ok: #34d399; --warn: #fbbf24; --hot: #f87171; --info: #7dd3fc;
+    --payer: #7dd3fc; --payee: #f59e0b; --escrow: #a78bfa;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header { padding: 22px 32px; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:12px; }
+  header h1 { margin:0; font-size: 20px; }
+  header h1 .dot { color: var(--accent); }
+  header p { margin:0; color: var(--muted); font-size: 13px; }
+  main { padding: 24px 32px 80px 32px; max-width: 1200px; margin: 0 auto; }
+  h2 { font-size: 16px; margin: 28px 0 10px 0; }
+  h2:first-of-type { margin-top: 0; }
+  h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+  .two-col { display: grid; grid-template-columns: 320px 1fr; gap: 16px; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tab { background: var(--panel); color: var(--muted); border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13px; }
+  .tab.active { background: var(--panel-2); color: var(--fg); border-color: var(--accent); }
+  .tab:hover { color: var(--fg); }
+  .controls { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .field { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; gap: 10px; }
+  .field label { color: var(--muted); font-size: 12px; flex: 1; }
+  .field select, .field input { background: var(--panel-2); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; font-size: 12px; }
+  .field select { width: 150px; }
+  .field input[type=number] { width: 100px; font-family: var(--mono); text-align: right; }
+  .viz { position: relative; min-height: 360px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  svg.flow { display: block; width: 100%; height: 360px; }
+  svg.flow .lane { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+  svg.flow .lane-label { fill: var(--muted); font-size: 11px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em; }
+  svg.flow .actor { fill: var(--panel); stroke: var(--border); stroke-width: 1; }
+  svg.flow .actor.payer { stroke: var(--payer); }
+  svg.flow .actor.payee { stroke: var(--payee); }
+  svg.flow .actor.escrow { stroke: var(--escrow); }
+  svg.flow .actor-label { fill: var(--fg); font-size: 13px; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  svg.flow .msg { stroke: var(--accent); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+  svg.flow .msg.active { stroke: var(--warn); stroke-width: 2.5; }
+  svg.flow .msg-label { fill: var(--muted); font-size: 11px; font-family: var(--mono); }
+  svg.flow .msg-label.active { fill: var(--warn); font-weight: 600; }
+  table.matrix { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.matrix th, table.matrix td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+  table.matrix thead th { color: var(--muted); font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+  table.matrix td.label { color: var(--muted); width: 200px; }
+  table.matrix .y   { color: var(--ok); }
+  table.matrix .n   { color: var(--hot); }
+  table.matrix .p   { color: var(--warn); }
+  table.matrix .na  { color: var(--muted); opacity: 0.6; }
+  table.matrix .cell { width: 15%; }
+  .logo-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .tag { font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 99px; background: #1f232b; color: var(--muted); }
+  .tag.kcb { background: #0e2a1e; color: var(--ok); }
+  .steps { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+  .steps li { padding: 8px 10px; margin: 4px 0; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--border); cursor: pointer; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; }
+  .steps li:hover { border-color: var(--muted); }
+  .steps li.active { border-color: var(--warn); background: #2a220e; }
+  .steps li .num { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+  .steps li.active .num { color: var(--warn); }
+  .steps li .body { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .steps li.active .body { color: var(--fg); }
+  pre { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-family: var(--mono); font-size: 12px; line-height: 1.55; margin: 0; }
+  .kw  { color: #c4b5fd; }
+  .str { color: #86efac; }
+  .com { color: var(--muted); font-style: italic; }
+  .typ { color: var(--info); }
+  .fn  { color: var(--warn); }
+  .prop { color: var(--accent); }
+  footer { padding: 20px 32px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>switchboard<span class="dot">.</span> <span style="color:var(--muted);font-weight:400">agent payments infrastructure</span></h1>
+    <p>Agent wallets, gas budgets, agent-to-agent escrow. Compatible with the open agent-payment rails of 2026: x402, MPP, AP2, Circle Nanopayments.</p>
+  </div>
+  <div style="display:flex;gap:14px;align-items:center">
+    <a href="https://github.com/kcolbchain/switchboard">source</a>
+    <a href="https://docs.kcolbchain.com/switchboard/">docs</a>
+  </div>
+</header>
+
+<main>
+
+  <h2>Protocol flow</h2>
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-p="x402">x402 <span class="tag">Linux Foundation</span></button>
+    <button class="tab" data-p="mpp">MPP <span class="tag">Tempo / Stripe</span></button>
+    <button class="tab" data-p="ap2">AP2 <span class="tag">Google</span></button>
+    <button class="tab" data-p="nano">Circle Nanopayments</button>
+    <button class="tab" data-p="switchboard">switchboard escrow <span class="tag kcb">this repo</span></button>
+  </div>
+
+  <div class="two-col">
+    <div>
+      <div class="controls" id="info">
+        <h3 id="infoTitle">—</h3>
+        <div style="color: var(--muted); font-size: 12.5px; line-height: 1.55" id="infoBlurb"></div>
+        <div style="margin-top: 10px" class="logo-row" id="infoTags"></div>
+      </div>
+      <div style="margin-top: 12px">
+        <h3>Steps</h3>
+        <ol class="steps" id="stepsList"></ol>
+      </div>
+    </div>
+
+    <div>
+      <div class="viz">
+        <svg class="flow" id="flow" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 Z" fill="currentColor"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+      <div class="panel" style="margin-top: 12px">
+        <h3>Reference code — current step</h3>
+        <pre id="codeBox">Click a step on the left to see the wire-level snippet.</pre>
+      </div>
+    </div>
+  </div>
+
+  <h2>Compatibility matrix</h2>
+  <div class="panel" style="overflow-x: auto">
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th class="label"></th>
+          <th class="cell">x402</th>
+          <th class="cell">MPP</th>
+          <th class="cell">AP2</th>
+          <th class="cell">Circle Nano</th>
+          <th class="cell">switchboard escrow</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="label">Transport</td>
+          <td>HTTP header on 402</td><td>HTTP + Tempo txs</td><td>A2A over gRPC/JSON-RPC</td><td>HTTP/SDK, off-chain+onchain</td><td>HTTP + chain txs (escrow)</td>
+        </tr>
+        <tr><td class="label">Settlement asset</td>
+          <td>USDC (multichain)</td><td>USDC on Tempo, fiat via SPT</td><td>protocol-agnostic</td><td>USDC nanopayments</td><td>native ETH/token + USDC</td>
+        </tr>
+        <tr><td class="label">Agent ↔ Agent</td>
+          <td class="p">indirect (server intermediary)</td><td class="y">native</td><td class="y">native</td><td class="p">via Circle Wallets</td><td class="y">native</td>
+        </tr>
+        <tr><td class="label">Agent ↔ API / MCP server</td>
+          <td class="y">primary use case</td><td class="y">supported</td><td class="p">via payments facilitator</td><td class="y">native</td><td class="p">via wrapper</td>
+        </tr>
+        <tr><td class="label">Streaming / sessions</td>
+          <td class="p">per-request (v2 adds multi-step)</td><td class="y">streamed micro-txs per session</td><td class="p">yes (verifiable intent mandate)</td><td class="y">nanopayments &lt; $0.000001</td><td class="p">timeout + challenge-period escrow</td>
+        </tr>
+        <tr><td class="label">Dispute / refund</td>
+          <td class="n">none (idempotent retry)</td><td>SPT + card dispute rails</td><td>AP2 verifiable intent → issuer</td><td>Circle policy + rules</td><td class="y">on-chain timeout + refund</td>
+        </tr>
+        <tr><td class="label">Fiat rails</td>
+          <td class="n">crypto only</td><td class="y">via Stripe SPT</td><td class="y">card networks (Visa, MC)</td><td class="p">via Circle on/off ramp</td><td class="n">crypto only</td>
+        </tr>
+        <tr><td class="label">License</td>
+          <td>Apache-2.0</td><td>Apache-2.0</td><td>Apache-2.0</td><td>proprietary SDK + open skills</td><td class="y">MIT</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>How switchboard fits</h2>
+  <div class="panel">
+    <p style="margin:0 0 10px 0">The open rails above <strong>settle</strong> agent payments; they don't manage the agent side — keys, nonces, gas budgets, counterparty escrow. <code>switchboard</code> fills that gap:</p>
+    <ul style="margin:0 0 0 18px;padding:0;color:var(--muted);font-size:13px">
+      <li><strong>Agent wallets</strong> — MPC key management for autonomous actors (tracked in <a href="https://github.com/kcolbchain/switchboard/issues/1">#1</a>).</li>
+      <li><strong>Client-side nonce manager with reorg protection</strong> — so a bursty agent doesn't brick its own queue.</li>
+      <li><strong>Gas budget tracker</strong> — rolling hour/day limits, auto-pause on exhaustion (<a href="https://github.com/kcolbchain/switchboard/pull/14">#14</a>, merged).</li>
+      <li><strong>Agent-to-agent escrow</strong> — <code>AgentEscrow.sol</code> with timeout + challenge-period refund (<a href="https://github.com/kcolbchain/switchboard/issues/2">#2</a>, merged).</li>
+      <li><strong>x402 / MPP / AP2 server middleware</strong> — so switchboard-managed agents can respond to <code>402 Payment Required</code> and initiate MPP sessions out of the box (tokenomics / integration issues incoming).</li>
+    </ul>
+  </div>
+
+</main>
+
+<footer>
+  Protocol summaries reflect the Apr 2026 agent-payment landscape. x402 joined the Linux Foundation on 2026-04-02 with
+  Google / AWS / Microsoft / Stripe / Visa / Mastercard as founding members. Tempo launched its mainnet on 2026-03-18
+  with MPP as its co-authored protocol with Stripe. Circle Nanopayments testnet went live on 2026-03-03. AP2 was
+  announced by Google Cloud the same week. Switchboard itself is MIT-licensed and kcolbchain-maintained.
+</footer>
+
+<script>
+// ================================================================= data
+
+const PROTOCOLS = {
+  x402: {
+    title: "x402 — HTTP 402 Payment Required, for AI agents",
+    blurb: "Open standard (Linux Foundation, Apr 2026) from Coinbase + friends. A resource server replies 402 with PaymentRequirements; the agent retries with a PAYMENT-SIGNATURE header over USDC. 35M+ transactions on Solana since its summer 2025 debut.",
+    tags: ["Linux Foundation", "USDC", "Coinbase", "HTTP-native"],
+    actors: [
+      { id: "agent",   role: "payer",  label: "Agent", y: 60 },
+      { id: "server",  role: "payee",  label: "API / MCP server", y: 300 },
+    ],
+    steps: [
+      { from: "agent",  to: "server", msg: "GET /resource",
+        desc: "Agent requests a protected resource without any payment metadata.",
+        code: `<span class="kw">GET</span> /v1/premium-data <span class="str">HTTP/1.1</span>\nHost: api.example.com` },
+      { from: "server", to: "agent",  msg: "402 + PaymentRequirements",
+        desc: "Server responds with 402 and the list of schemes / networks / amounts it accepts.",
+        code: `<span class="kw">HTTP/1.1 402 Payment Required</span>\nAccept-Payment: <span class="prop">x402/v1</span>\n\n{\n  <span class="prop">"scheme"</span>: <span class="str">"exact"</span>,\n  <span class="prop">"network"</span>: <span class="str">"base"</span>,\n  <span class="prop">"asset"</span>: <span class="str">"USDC"</span>,\n  <span class="prop">"amount"</span>: <span class="str">"0.001"</span>,\n  <span class="prop">"recipient"</span>: <span class="str">"0x…"</span>\n}` },
+      { from: "agent",  to: "server", msg: "GET + PAYMENT-SIGNATURE",
+        desc: "Agent retries with a signed PaymentPayload in the header.",
+        code: `<span class="kw">GET</span> /v1/premium-data\nPAYMENT-SIGNATURE: <span class="prop">x402/v1;payload=</span><span class="str">eyJz…</span>` },
+      { from: "server", to: "agent",  msg: "200 + resource",
+        desc: "Server verifies the payload (on-chain or via a facilitator) and serves the resource.",
+        code: `<span class="kw">HTTP/1.1 200 OK</span>\nContent-Type: application/json\n\n{ <span class="prop">"data"</span>: <span class="str">"…"</span> }` },
+    ],
+  },
+
+  mpp: {
+    title: "MPP — Machine Payments Protocol (Stripe × Tempo)",
+    blurb: "Co-authored by Stripe + Tempo, live on Tempo L1 mainnet since Mar 2026. Introduces a 'session' primitive: the agent authorises a spending limit upfront, then streams micro-payments without a tx per interaction. Stripe maps Shared Payment Tokens (SPT) back to fiat cards.",
+    tags: ["Stripe", "Paradigm", "Tempo L1", "SPT / fiat"],
+    actors: [
+      { id: "agent",    role: "payer",  label: "Agent",           y: 40 },
+      { id: "session",  role: "escrow", label: "Session (Tempo)", y: 180 },
+      { id: "merchant", role: "payee",  label: "Merchant / peer", y: 320 },
+    ],
+    steps: [
+      { from: "agent", to: "session", msg: "OpenSession(limit=$5)",
+        desc: "Agent opens a session with a spending cap and TTL. Stripe SPT optionally bridges a fiat credential.",
+        code: `<span class="kw">POST</span> /mpp/sessions\n{\n  <span class="prop">"limit"</span>: <span class="str">"5.00 USDC"</span>,\n  <span class="prop">"ttl_seconds"</span>: <span class="str">"3600"</span>,\n  <span class="prop">"spt"</span>: <span class="str">"pm_1Q…"</span>\n}` },
+      { from: "session", to: "agent", msg: "SessionToken",
+        desc: "Session contract returns a bearer token scoped to the session; agent carries it on downstream requests.",
+        code: `<span class="prop">session_id</span>: <span class="str">"sess_…"</span>\n<span class="prop">token</span>: <span class="str">"mpp_…"</span>` },
+      { from: "agent", to: "merchant", msg: "Streamed micro-pay",
+        desc: "Per request, the agent signs a small debit under the session cap. No on-chain tx until session close.",
+        code: `<span class="kw">POST</span> /mpp/charge\n{\n  <span class="prop">"session"</span>: <span class="str">"sess_…"</span>,\n  <span class="prop">"amount"</span>: <span class="str">"0.003"</span>,\n  <span class="prop">"ref"</span>: <span class="str">"req_42"</span>\n}` },
+      { from: "session", to: "merchant", msg: "Settle on close",
+        desc: "When session closes, the net amount settles on Tempo L1; merchant sees one net tx instead of thousands.",
+        code: `// on-chain:\n<span class="fn">settle</span>(<span class="prop">session</span>, <span class="prop">totals</span>, <span class="prop">sigs</span>)` },
+    ],
+  },
+
+  ap2: {
+    title: "AP2 — Agent Payments Protocol (Google)",
+    blurb: "Google's agents-to-payments protocol, built on A2A. Uses Verifiable Intent mandates (Mastercard-aligned) so a payer card network can verify an agent was authorised to pay on a user's behalf. Transport-agnostic.",
+    tags: ["Google Cloud", "A2A", "Verifiable Intent", "Mandates"],
+    actors: [
+      { id: "user",       role: "escrow", label: "User",                  y: 40 },
+      { id: "agent",      role: "payer",  label: "Agent",                 y: 180 },
+      { id: "facilitator",role: "payee",  label: "Payments facilitator",  y: 320 },
+    ],
+    steps: [
+      { from: "user", to: "agent", msg: "Intent mandate",
+        desc: "User authorises the agent for a specific merchant / category / cap. Signed by the user's wallet or card issuer.",
+        code: `{\n  <span class="prop">"kind"</span>: <span class="str">"verifiable_intent"</span>,\n  <span class="prop">"merchant"</span>: <span class="str">"acme.example"</span>,\n  <span class="prop">"cap"</span>: <span class="str">"20.00 USD"</span>,\n  <span class="prop">"sig"</span>: <span class="str">"0x…"</span>\n}` },
+      { from: "agent", to: "facilitator", msg: "Charge request + mandate",
+        desc: "Agent forwards the mandate + transaction details to the facilitator (card network or crypto rail).",
+        code: `<span class="kw">POST</span> /ap2/charge\n{\n  <span class="prop">"mandate"</span>: {…},\n  <span class="prop">"amount"</span>: <span class="str">"12.30 USD"</span>,\n  <span class="prop">"merchant"</span>: <span class="str">"acme.example"</span>\n}` },
+      { from: "facilitator", to: "agent", msg: "Auth + capture",
+        desc: "Facilitator verifies the mandate, debits the user's funding source (card or crypto), and returns an auth receipt.",
+        code: `{\n  <span class="prop">"status"</span>: <span class="str">"captured"</span>,\n  <span class="prop">"tx"</span>: <span class="str">"ch_…"</span>,\n  <span class="prop">"network"</span>: <span class="str">"visa"</span>\n}` },
+      { from: "agent", to: "user", msg: "Notify",
+        desc: "Agent reports back to the user with the receipt and mandate usage.",
+        code: `// A2A notification\n{ <span class="prop">"type"</span>: <span class="str">"agent.paid"</span>, <span class="prop">"tx"</span>: <span class="str">"ch_…"</span> }` },
+    ],
+  },
+
+  nano: {
+    title: "Circle Nanopayments — sub-cent USDC for agents",
+    blurb: "Circle's gas-free USDC transfers as small as $0.000001, testnet since Mar 2026. Uses Circle Wallets + developer-provisioned policies. Open-sources Circle Skills for use inside agents / IDE assistants.",
+    tags: ["Circle", "USDC", "Nanopayments", "Arc"],
+    actors: [
+      { id: "agent",  role: "payer",  label: "Agent (Circle Wallet)", y: 60 },
+      { id: "rail",   role: "escrow", label: "Circle rail",           y: 200 },
+      { id: "peer",   role: "payee",  label: "Data / API service",    y: 320 },
+    ],
+    steps: [
+      { from: "agent", to: "rail", msg: "Skill: send 0.0001 USDC",
+        desc: "Agent triggers a nano-send via Circle Skills (installed with `npx skills add circlefin/skills`).",
+        code: `<span class="kw">await</span> circle.<span class="fn">send</span>({\n  <span class="prop">from</span>: <span class="str">"agent-wallet-id"</span>,\n  <span class="prop">to</span>: peerAddr,\n  <span class="prop">amount</span>: <span class="str">"0.0001 USDC"</span>,\n});` },
+      { from: "rail", to: "peer", msg: "Credit nano-balance",
+        desc: "Circle's nanopayment rail applies the debit/credit off-chain; periodically roll-ups settle on-chain.",
+        code: `// internal to Circle rail\nbalance[peer] += <span class="str">"0.0001 USDC"</span>;` },
+      { from: "peer", to: "agent", msg: "Deliver service",
+        desc: "Peer serves data / inference / API keyed by the nano-payment receipt.",
+        code: `// HTTP 200 with the answer` },
+      { from: "rail", to: "peer", msg: "Periodic roll-up on-chain",
+        desc: "Aggregated nanopayments settle to the peer on-chain at a configurable cadence — one tx instead of 10⁶.",
+        code: `// on Arc / Base\nUSDC.<span class="fn">transfer</span>(peer, rollupAmount);` },
+    ],
+  },
+
+  switchboard: {
+    title: "switchboard escrow — chain-native agent-to-agent payment",
+    blurb: "This repo's AgentEscrow.sol. Trustless escrow with explicit timeout + challenge-period refund. Use it when both sides are on-chain agents and you want dispute-resolution without depending on a card network.",
+    tags: ["kcolbchain", "on-chain", "escrow", "MIT"],
+    actors: [
+      { id: "payer",  role: "payer",  label: "Payer agent",    y: 60 },
+      { id: "esc",    role: "escrow", label: "AgentEscrow.sol", y: 200 },
+      { id: "payee",  role: "payee",  label: "Payee agent",    y: 320 },
+    ],
+    steps: [
+      { from: "payer", to: "esc", msg: "createPayment(payee, amt, timeout)",
+        desc: "Payer locks funds in escrow with a timeout block and challenge-period window.",
+        code: `escrow.<span class="fn">createPayment</span>{<span class="prop">value</span>: <span class="str">1e18</span>}(\n  payee,\n  <span class="prop">timeout_blocks</span>:          <span class="str">100</span>,\n  <span class="prop">challenge_period_blocks</span>:  <span class="str">10</span>\n);` },
+      { from: "payee", to: "payer", msg: "deliver work (off-chain)",
+        desc: "Payee performs the work; this step is off-chain but referenced by the escrow ID.",
+        code: `// off-chain: deliver the result\n// reference: request_id` },
+      { from: "payer", to: "esc", msg: "confirmPayment(id)",
+        desc: "Payer confirms — funds release to the payee. Alternatively, requestRefund() after timeout + challenge.",
+        code: `escrow.<span class="fn">confirmPayment</span>(request_id);` },
+      { from: "esc",   to: "payee", msg: "transfer funds",
+        desc: "Escrow forwards the locked amount to the payee address.",
+        code: `// internal\npayee.<span class="fn">transfer</span>(amount);` },
+    ],
+  },
+};
+
+// ================================================================= render
+
+const flow = document.getElementById("flow");
+let currentProto = "x402";
+let currentStep = 0;
+
+function tabClick(p) {
+  currentProto = p;
+  currentStep = 0;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.p === p));
+  renderAll();
+}
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => tabClick(t.dataset.p)));
+
+function renderAll() {
+  const proto = PROTOCOLS[currentProto];
+  document.getElementById("infoTitle").textContent = proto.title;
+  document.getElementById("infoBlurb").textContent = proto.blurb;
+  document.getElementById("infoTags").innerHTML = proto.tags.map(t => `<span class="tag">${t}</span>`).join("");
+
+  // steps
+  document.getElementById("stepsList").innerHTML = proto.steps.map((s, i) => `
+    <li class="${i === currentStep ? 'active' : ''}" data-i="${i}">
+      <span class="num">${i+1}</span>
+      <div>
+        <div><strong>${s.msg}</strong></div>
+        <div class="body">${s.desc}</div>
+      </div>
+    </li>
+  `).join("");
+  document.querySelectorAll(".steps li").forEach(li => li.addEventListener("click", () => {
+    currentStep = parseInt(li.dataset.i, 10);
+    renderAll();
+  }));
+
+  // svg
+  drawFlow(proto);
+
+  // code
+  document.getElementById("codeBox").innerHTML = proto.steps[currentStep].code;
+}
+
+function drawFlow(proto) {
+  const W = 720;
+  const actorW = 170, actorH = 44;
+  const nActors = proto.actors.length;
+  const stepsH = Math.max(nActors * 60, 340);
+  const xMap = {};
+  proto.actors.forEach((a, i) => { xMap[a.id] = 80 + i * ((W - 160) / Math.max(1, nActors - 1)); });
+
+  // clear
+  flow.innerHTML = `
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 Z" fill="var(--accent)"/>
+      </marker>
+      <marker id="arrowActive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 Z" fill="var(--warn)"/>
+      </marker>
+    </defs>
+  `;
+
+  // vertical swim-lanes per actor
+  proto.actors.forEach(a => {
+    const x = xMap[a.id];
+    flow.innerHTML += `
+      <line class="lane" x1="${x}" y1="40" x2="${x}" y2="340" />
+      <rect class="actor ${a.role}" x="${x - actorW/2}" y="14" width="${actorW}" height="${actorH}" rx="8" />
+      <text class="actor-label" x="${x}" y="42" text-anchor="middle">${a.label}</text>
+    `;
+  });
+
+  // steps arranged vertically
+  proto.steps.forEach((s, i) => {
+    const y = 80 + i * 55;
+    const x1 = xMap[s.from];
+    const x2 = xMap[s.to];
+    const active = i === currentStep;
+    const mid = (x1 + x2) / 2;
+    const marker = active ? "arrowActive" : "arrow";
+    flow.innerHTML += `
+      <line class="msg ${active ? 'active' : ''}" x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" marker-end="url(#${marker})" style="color: ${active ? 'var(--warn)' : 'var(--accent)'}"/>
+      <text class="msg-label ${active ? 'active' : ''}" x="${mid}" y="${y - 6}" text-anchor="middle">${i+1}. ${s.msg}</text>
+    `;
+  });
+}
+
+renderAll();
+</script>
+</body>
+</html>
