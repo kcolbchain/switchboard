@@ -7,7 +7,9 @@ Skipped if zap_py is not installed — install with::
 
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 
 import pytest
 
@@ -357,6 +359,147 @@ def test_zap_not_available_raises_when_disabled(monkeypatch):
         zt.encode_offer(offer)
     with pytest.raises(zt.ZapNotAvailable):
         zt.decode_offer(b"junk")
+
+
+def test_nested_tag_policy_rejects_reserved_tags():
+    with pytest.raises(zt.ReservedNestedTag, match="RESERVED_NESTED_TAG"):
+        zt._validate_nested_tag(0x03)
+    with pytest.raises(zt.ReservedNestedTag, match="RESERVED_NESTED_TAG"):
+        zt._validate_nested_tag(0xFF)
+
+
+def test_zap_nested_conformance_vectors_cover_required_tags():
+    vectors = json.loads(
+        Path("tests/protocol_vectors/zap_nested.v1.json").read_text(encoding="utf-8")
+    )
+    assert vectors["schema"] == "switchboard/zap-nested/v1"
+    cases = {case["name"]: case for case in vectors["cases"]}
+    assert set(cases) == {
+        "no-nesting",
+        "x402-nested",
+        "warp-reserved-for-consumers",
+        "reserved-tag-rejected",
+    }
+    assert cases["no-nesting"]["nested_tag"] == zt.NESTED_NONE
+    assert cases["x402-nested"]["nested_tag"] == zt.NESTED_X402
+    assert cases["warp-reserved-for-consumers"]["nested_tag"] == zt.NESTED_WARP
+    assert cases["reserved-tag-rejected"]["expected"] == "RESERVED_NESTED_TAG"
+
+
+@ZAP_REQUIRED
+def test_generic_frame_no_nesting_roundtrip():
+    wire = zt.encode(
+        zt.ZAP_FRAME_VERSION,
+        PaymentScheme.EXACT,
+        b"\x00" * 32,
+        b"outer",
+        nested_tag=zt.NESTED_NONE,
+    )
+
+    assert zt.decode(wire) == (
+        zt.ZAP_FRAME_VERSION,
+        PaymentScheme.EXACT,
+        "0x" + "00" * 32,
+        b"outer",
+        zt.NESTED_NONE,
+        b"",
+    )
+
+
+@ZAP_REQUIRED
+def test_generic_frame_x402_nested_payload_roundtrips_against_parser():
+    x402_payload = json.dumps({
+        "amount": "1000",
+        "currency": "USDC",
+        "recipient": USDC,
+        "chainId": 8453,
+        "scheme": "exact",
+        "nonce": "nested-1",
+    }, separators=(",", ":")).encode()
+
+    wire = zt.encode(
+        zt.ZAP_FRAME_VERSION,
+        PaymentScheme.EXACT,
+        "11" * 32,
+        b"warp",
+        nested_tag=zt.NESTED_X402,
+        nested_payload=x402_payload,
+    )
+    version, scheme, header_digest, payload, nested_tag, nested_payload = zt.decode(wire)
+    nested_offer = PaymentOffer.from_header(nested_payload.decode(), endpoint="/zap")
+
+    assert version == zt.ZAP_FRAME_VERSION
+    assert scheme == PaymentScheme.EXACT
+    assert header_digest == "0x" + "11" * 32
+    assert payload == b"warp"
+    assert nested_tag == zt.NESTED_X402
+    assert nested_offer.amount_wei == 1000
+    assert nested_offer.recipient.lower() == USDC.lower()
+    assert nested_offer.endpoint == "/zap"
+
+
+@ZAP_REQUIRED
+def test_generic_frame_accepts_reserved_warp_tag_two_without_recursive_decode():
+    wire = zt.encode(
+        zt.ZAP_FRAME_VERSION,
+        PaymentScheme.ESCROW,
+        b"\x22" * 32,
+        b"outer",
+        nested_tag=zt.NESTED_WARP,
+        nested_payload=b"\x01\x02\x03",
+    )
+
+    assert zt.decode(wire) == (
+        zt.ZAP_FRAME_VERSION,
+        PaymentScheme.ESCROW,
+        "0x" + "22" * 32,
+        b"outer",
+        zt.NESTED_WARP,
+        b"\x01\x02\x03",
+    )
+
+
+@ZAP_REQUIRED
+def test_generic_frame_rejects_reserved_nested_tag_on_encode():
+    with pytest.raises(zt.ReservedNestedTag, match="RESERVED_NESTED_TAG"):
+        zt.encode(
+            zt.ZAP_FRAME_VERSION,
+            PaymentScheme.STREAMING,
+            b"\x33" * 32,
+            b"bad",
+            nested_tag=0x03,
+            nested_payload=b"\x00",
+        )
+
+
+@ZAP_REQUIRED
+def test_generic_frame_rejects_reserved_nested_tag_on_decode():
+    f = {fld.name: fld.offset for fld in zt.FRAME_SCHEMA.fields}
+    b = zap_py.Builder()
+    ob = b.start_object(zt.FRAME_SCHEMA.size)
+    ob.set_uint8(f["version"], zt.ZAP_FRAME_VERSION)
+    ob.set_uint8(f["scheme"], zt._SCHEME_TO_WIRE[PaymentScheme.STREAMING])
+    ob.set_uint8(f["nested_tag"], 0x03)
+    ob.set_hash(f["header_digest"], b"\x33" * 32)
+    ob.set_bytes(f["payload"], b"bad")
+    ob.set_bytes(f["nested_payload"], b"\x00")
+    ob.finish_as_root()
+
+    with pytest.raises(zt.ReservedNestedTag, match="RESERVED_NESTED_TAG"):
+        zt.decode(b.finish())
+
+
+@ZAP_REQUIRED
+def test_generic_frame_rejects_nested_payload_without_tag():
+    with pytest.raises(ValueError, match="nested_payload"):
+        zt.encode(
+            zt.ZAP_FRAME_VERSION,
+            PaymentScheme.EXACT,
+            b"\x44" * 32,
+            b"outer",
+            nested_tag=zt.NESTED_NONE,
+            nested_payload=b"unexpected",
+        )
 
 
 @ZAP_REQUIRED

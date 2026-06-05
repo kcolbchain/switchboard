@@ -1,0 +1,43 @@
+{
+  "schema": "switchboard/zap-nested/v1",
+  "version": 1,
+  "description": "Conformance vectors for ZAP frame nested payload tag handling.",
+  "cases": [
+    {
+      "name": "no-nesting",
+      "scheme": "exact",
+      "header_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+      "payload_hex": "7061796c6f6164",
+      "nested_tag": 0,
+      "nested_payload_hex": "",
+      "expected": "ok"
+    },
+    {
+      "name": "x402-nested",
+      "scheme": "exact",
+      "header_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+      "payload_hex": "77726170",
+      "nested_tag": 1,
+      "nested_payload_utf8": "{\"amount\":\"1000\",\"currency\":\"USDC\",\"recipient\":\"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48\",\"chainId\":8453,\"scheme\":\"exact\",\"nonce\":\"n-1\"}",
+      "expected": "ok"
+    },
+    {
+      "name": "warp-reserved-for-consumers",
+      "scheme": "escrow",
+      "header_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+      "payload_hex": "7772617032",
+      "nested_tag": 2,
+      "nested_payload_hex": "01020304",
+      "expected": "ok"
+    },
+    {
+      "name": "reserved-tag-rejected",
+      "scheme": "streaming",
+      "header_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+      "payload_hex": "626164",
+      "nested_tag": 3,
+      "nested_payload_hex": "00",
+      "expected": "RESERVED_NESTED_TAG"
+    }
+  ]
+}
