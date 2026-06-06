@@ -1,6 +1,15 @@
 """Tests for Lucidly syUSD auto-park adapter."""
 
-from switchboard.adapters.lucidly import LucidlyAutoPark, LucidlyConfig
+from switchboard.adapters.lucidly import LucidlyAutoPark, LucidlyConfig, MockLucidlyVault
+
+
+class SlippingVault(MockLucidlyVault):
+    def __init__(self, slippage_bps):
+        super().__init__()
+        self.slippage_bps = slippage_bps
+
+    def preview_deposit(self, chain: str, amount_usd: float) -> dict:
+        return {"shares": amount_usd, "slippage_bps": self.slippage_bps}
 
 
 def test_rebalance_parks_excess():
@@ -81,3 +90,29 @@ def test_cap_reached():
     assert r1["action"] == "parked"
     r2 = park.rebalance("base", liquid_balance_usd=10_000.0)
     assert r2["action"] == "cap_reached"
+
+
+def test_rebalance_skips_when_vault_entry_slippage_exceeds_cap():
+    config = LucidlyConfig(max_entry_slippage_bps=25)
+    park = LucidlyAutoPark(vault=SlippingVault(slippage_bps=30), config=config)
+
+    result = park.rebalance("base", liquid_balance_usd=10_000.0)
+
+    assert result == {
+        "action": "skip_slippage",
+        "chain": "base",
+        "slippage_bps": 30,
+        "max_entry_slippage_bps": 25,
+    }
+    assert park.status("base")["total_parked_usd"] == 0
+
+
+def test_ensure_liquid_unparks_to_threshold_buffer():
+    config = LucidlyConfig(idle_target_bps=8000, unpark_threshold_bps=1500)
+    park = LucidlyAutoPark(config=config)
+    park.rebalance("base", liquid_balance_usd=10_000.0)
+
+    returned = park.ensure_liquid("base", required_usd=1_000.0, liquid_balance_usd=1_000.0)
+
+    assert returned == 500.0
+    assert park.status("base")["liquid_buffer_usd"] == 1_500.0
