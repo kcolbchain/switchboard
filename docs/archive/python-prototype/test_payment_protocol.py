@@ -316,3 +316,8 @@ def test_payment_metadata():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def events(self):
+    """Event handler for payment protocol events"""
+    pass
