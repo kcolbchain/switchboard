@@ -46,8 +46,18 @@ except ImportError:  # pragma: no cover — exercised by environment, not tests
 __all__ = [
     "HAS_ZAP_PY",
     "ZapNotAvailable",
+    "ReservedNestedTag",
+    "ZAP_FRAME_VERSION",
+    "NESTED_NONE",
+    "NESTED_X402",
+    "NESTED_WARP",
+    "FRAME_SCHEMA",
     "OFFER_SCHEMA",
     "PROOF_SCHEMA",
+    "encode",
+    "decode",
+    "encode_frame",
+    "decode_frame",
     "encode_offer",
     "decode_offer",
     "encode_proof",
@@ -65,7 +75,16 @@ class ZapNotAvailable(RuntimeError):
 # Both schemas use uint256 amount-as-bytes (32 big-endian bytes) so we don't truncate
 # realistic on-chain values into a uint64 — the JSON path already accepts
 # arbitrarily large `int`s and we want byte-for-byte interop with that.
+class ReservedNestedTag(ValueError):
+    """A ZAP frame used a reserved nested payload tag."""
+
+
 _AMOUNT_BYTES = 32
+ZAP_FRAME_VERSION = 1
+NESTED_NONE = 0x00
+NESTED_X402 = 0x01
+NESTED_WARP = 0x02
+_SUPPORTED_NESTED_TAGS = {NESTED_NONE, NESTED_X402, NESTED_WARP}
 
 # ``scheme`` is encoded as uint8. Order matches the wire intent, not the Python
 # enum's iteration order — pin it here so a Go implementation can mirror it.
@@ -87,6 +106,21 @@ _PQ_ALG_TO_TAG = {
     "hybrid-ecdsa-ml-dsa-65": 0x80,
 }
 _TAG_TO_PQ_ALG = {v: k for k, v in _PQ_ALG_TO_TAG.items()}
+
+
+def _build_frame_schema():
+    if not HAS_ZAP_PY:
+        return None
+    return (
+        StructBuilder("SwitchboardZapFrame")
+        .uint8("version")
+        .uint8("scheme")
+        .uint8("nested_tag")
+        .hash("header_digest")
+        .bytes("payload")
+        .bytes("nested_payload")
+        .build()
+    )
 
 
 def _build_offer_schema():
@@ -151,6 +185,7 @@ def _build_proof_schema():
     )
 
 
+FRAME_SCHEMA = _build_frame_schema()
 OFFER_SCHEMA = _build_offer_schema()
 PROOF_SCHEMA = _build_proof_schema()
 
@@ -294,6 +329,77 @@ def _hash_from_hex(s: str) -> bytes:
     if len(raw) != HASH_SIZE:
         raise ValueError(f"tx_hash must be {HASH_SIZE} bytes, got {len(raw)}")
     return raw
+
+
+def _coerce_digest(header_digest: bytes | str) -> bytes:
+    if isinstance(header_digest, str):
+        if header_digest.startswith(("0x", "0X")):
+            header_digest = header_digest[2:]
+        raw = bytes.fromhex(header_digest)
+    else:
+        raw = bytes(header_digest)
+    if len(raw) != HASH_SIZE:
+        raise ValueError(f"header_digest must be {HASH_SIZE} bytes, got {len(raw)}")
+    return raw
+
+
+def _validate_nested_tag(nested_tag: int) -> None:
+    if nested_tag not in _SUPPORTED_NESTED_TAGS:
+        raise ReservedNestedTag(f"RESERVED_NESTED_TAG: 0x{nested_tag:02x}")
+
+
+def encode(
+    version: int,
+    scheme: PaymentScheme | int,
+    header_digest: bytes | str,
+    payload: bytes,
+    *,
+    nested_tag: int = NESTED_NONE,
+    nested_payload: bytes = b"",
+) -> bytes:
+    """Serialize a generic Switchboard ZAP frame with optional nested payload."""
+    _require_zap()
+    _validate_nested_tag(nested_tag)
+    if nested_tag == NESTED_NONE and nested_payload:
+        raise ValueError("nested_payload must be empty when nested_tag is 0x00")
+
+    f = {fld.name: fld.offset for fld in FRAME_SCHEMA.fields}
+    scheme_tag = _SCHEME_TO_WIRE[scheme] if isinstance(scheme, PaymentScheme) else int(scheme)
+
+    b = Builder()
+    ob = b.start_object(FRAME_SCHEMA.size)
+    ob.set_uint8(f["version"], version)
+    ob.set_uint8(f["scheme"], scheme_tag)
+    ob.set_uint8(f["nested_tag"], nested_tag)
+    ob.set_hash(f["header_digest"], _coerce_digest(header_digest))
+    ob.set_bytes(f["payload"], bytes(payload))
+    ob.set_bytes(f["nested_payload"], bytes(nested_payload))
+    ob.finish_as_root()
+    return b.finish()
+
+
+def decode(wire: bytes) -> tuple[int, PaymentScheme, str, bytes, int, bytes]:
+    """Decode `(version, scheme, header_digest, payload, nested_tag, nested_payload)`."""
+    _require_zap()
+    f = {fld.name: fld.offset for fld in FRAME_SCHEMA.fields}
+
+    msg = parse(wire)
+    root = msg.root()
+    nested_tag = root.uint8(f["nested_tag"])
+    _validate_nested_tag(nested_tag)
+
+    return (
+        root.uint8(f["version"]),
+        _WIRE_TO_SCHEME[root.uint8(f["scheme"])],
+        root.hash(f["header_digest"]).hex(),
+        root.bytes(f["payload"]),
+        nested_tag,
+        root.bytes(f["nested_payload"]),
+    )
+
+
+encode_frame = encode
+decode_frame = decode
 
 
 def encode_proof(proof: PaymentProof) -> bytes:
