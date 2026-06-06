@@ -31,7 +31,9 @@ References
 
 from __future__ import annotations
 
-from dataclasses import replace
+import struct
+from dataclasses import dataclass, field, replace
+from enum import IntEnum, IntFlag
 
 from .x402_middleware import PaymentOffer, PaymentProof, PaymentScheme
 
@@ -48,6 +50,15 @@ __all__ = [
     "ZapNotAvailable",
     "OFFER_SCHEMA",
     "PROOF_SCHEMA",
+    "ZAP_WIRE_MAGIC",
+    "ZAP_WIRE_VERSION",
+    "ZapRetryPolicy",
+    "ZapWireCapability",
+    "ZapWireFrame",
+    "ZapWireFrameType",
+    "ZapWireReceiveResult",
+    "ZapWireSession",
+    "ZapWireSessionError",
     "encode_offer",
     "decode_offer",
     "encode_proof",
@@ -58,6 +69,10 @@ __all__ = [
 
 class ZapNotAvailable(RuntimeError):
     """zap_py is not installed; ZAP transport is unavailable."""
+
+
+class ZapWireSessionError(ValueError):
+    """Raised when a ZAP v1.0 session frame violates the wire contract."""
 
 
 # ─── Wire constants ──────────────────────────────────────────────────────────
@@ -87,6 +102,257 @@ _PQ_ALG_TO_TAG = {
     "hybrid-ecdsa-ml-dsa-65": 0x80,
 }
 _TAG_TO_PQ_ALG = {v: k for k, v in _PQ_ALG_TO_TAG.items()}
+
+ZAP_WIRE_MAGIC = b"ZAP!"
+ZAP_WIRE_VERSION = 1
+_ZAP_WIRE_HEADER = struct.Struct(">4sBBHQI")
+_ACK_ECHO = struct.Struct(">I")
+_MAX_PAYLOAD_LEN = 16 * 1024
+
+
+class ZapWireFrameType(IntEnum):
+    """Connection-level frame types for the ZAP v1.0 session layer."""
+
+    HELLO = 0x01
+    HELLO_ACK = 0x02
+    DATA = 0x03
+    ACK = 0x04
+    FIN = 0x05
+    ERROR = 0x06
+
+
+class ZapWireCapability(IntFlag):
+    """Capability bits negotiated during the ZAP v1.0 handshake."""
+
+    NONE = 0
+    PQ_ENVELOPE = 1 << 0
+    NESTED_X402 = 1 << 1
+    MPP_SESSION = 1 << 2
+
+
+_KNOWN_CAPABILITIES = (
+    int(ZapWireCapability.PQ_ENVELOPE)
+    | int(ZapWireCapability.NESTED_X402)
+    | int(ZapWireCapability.MPP_SESSION)
+)
+
+
+def _check_u64(name: str, value: int) -> None:
+    if value < 0 or value > 0xFFFFFFFFFFFFFFFF:
+        raise ZapWireSessionError(f"{name} must fit uint64")
+
+
+def _check_u16(name: str, value: int) -> None:
+    if value < 0 or value > 0xFFFF:
+        raise ZapWireSessionError(f"{name} must fit uint16")
+
+
+def _check_payload(payload: bytes) -> None:
+    if len(payload) > _MAX_PAYLOAD_LEN:
+        raise ZapWireSessionError("ZAP v1.0 frame payload exceeds 16 KiB")
+
+
+@dataclass(frozen=True)
+class ZapWireFrame:
+    """A ZAP v1.0 connection-level frame.
+
+    The frame wraps existing ZAP payload bytes and adds session semantics:
+    magic/version negotiation, explicit sequence numbers, ACK/FIN control
+    frames, and a negotiated capability bitmask.
+    """
+
+    frame_type: ZapWireFrameType
+    seq: int = 0
+    payload: bytes = b""
+    capabilities: ZapWireCapability = ZapWireCapability.NONE
+    version: int = ZAP_WIRE_VERSION
+
+    def encode(self) -> bytes:
+        _check_u64("seq", self.seq)
+        _check_u16("capabilities", int(self.capabilities))
+        _check_payload(self.payload)
+        header = _ZAP_WIRE_HEADER.pack(
+            ZAP_WIRE_MAGIC,
+            self.version,
+            int(self.frame_type),
+            int(self.capabilities),
+            self.seq,
+            len(self.payload),
+        )
+        return header + self.payload
+
+    @classmethod
+    def decode(cls, wire: bytes) -> "ZapWireFrame":
+        if len(wire) < _ZAP_WIRE_HEADER.size:
+            raise ZapWireSessionError("ZAP v1.0 frame is shorter than the header")
+        magic, version, frame_type, capabilities, seq, payload_len = _ZAP_WIRE_HEADER.unpack(
+            wire[: _ZAP_WIRE_HEADER.size]
+        )
+        if magic != ZAP_WIRE_MAGIC:
+            raise ZapWireSessionError("invalid ZAP v1.0 magic")
+        if version != ZAP_WIRE_VERSION:
+            raise ZapWireSessionError(f"unsupported ZAP v1.0 version {version}")
+        if payload_len > _MAX_PAYLOAD_LEN:
+            raise ZapWireSessionError("ZAP v1.0 frame payload exceeds 16 KiB")
+        expected_len = _ZAP_WIRE_HEADER.size + payload_len
+        if len(wire) != expected_len:
+            raise ZapWireSessionError(
+                f"ZAP v1.0 frame length mismatch: expected {expected_len}, got {len(wire)}"
+            )
+        if capabilities & ~_KNOWN_CAPABILITIES:
+            raise ZapWireSessionError("unknown ZAP v1.0 capability bit")
+        try:
+            parsed_type = ZapWireFrameType(frame_type)
+            parsed_capabilities = ZapWireCapability(capabilities)
+        except ValueError as exc:
+            raise ZapWireSessionError("unknown ZAP v1.0 frame type or capability") from exc
+        return cls(
+            frame_type=parsed_type,
+            seq=seq,
+            payload=wire[_ZAP_WIRE_HEADER.size :],
+            capabilities=parsed_capabilities,
+            version=version,
+        )
+
+    @classmethod
+    def hello(cls, capabilities: ZapWireCapability, seq: int = 0) -> "ZapWireFrame":
+        return cls(ZapWireFrameType.HELLO, seq=seq, capabilities=capabilities)
+
+    @classmethod
+    def hello_ack(cls, capabilities: ZapWireCapability, seq: int = 0) -> "ZapWireFrame":
+        return cls(ZapWireFrameType.HELLO_ACK, seq=seq, capabilities=capabilities)
+
+    @classmethod
+    def ack(cls, acked_seq: int, seq: int = 0) -> "ZapWireFrame":
+        if acked_seq < 0 or acked_seq > 0xFFFFFFFF:
+            raise ZapWireSessionError("ACK echo must fit uint32")
+        return cls(ZapWireFrameType.ACK, seq=seq, payload=_ACK_ECHO.pack(acked_seq))
+
+    def acked_seq(self) -> int:
+        if self.frame_type != ZapWireFrameType.ACK or len(self.payload) != _ACK_ECHO.size:
+            raise ZapWireSessionError("frame is not a valid ZAP v1.0 ACK")
+        return _ACK_ECHO.unpack(self.payload)[0]
+
+
+@dataclass(frozen=True)
+class ZapRetryPolicy:
+    """Retry timing for unacknowledged ZAP v1.0 DATA frames."""
+
+    initial_timeout_ms: int = 200
+    max_timeout_ms: int = 5_000
+    max_attempts: int = 5
+
+    def timeout_ms_for_attempt(self, attempt: int) -> int:
+        if attempt < 0:
+            raise ValueError("attempt must be non-negative")
+        return min(self.max_timeout_ms, self.initial_timeout_ms * (2**attempt))
+
+
+@dataclass
+class _PendingZapFrame:
+    frame: ZapWireFrame
+    request_id: str | None = None
+    attempts: int = 0
+
+
+@dataclass(frozen=True)
+class ZapWireReceiveResult:
+    """Result of accepting or rejecting an inbound DATA frame."""
+
+    status: str
+    ack: ZapWireFrame | None = None
+    payload: bytes = b""
+    request_id: str | None = None
+
+
+@dataclass
+class ZapWireSession:
+    """Minimal state machine for ZAP v1.0 peer-to-peer session semantics."""
+
+    capabilities: ZapWireCapability = (
+        ZapWireCapability.PQ_ENVELOPE
+        | ZapWireCapability.NESTED_X402
+        | ZapWireCapability.MPP_SESSION
+    )
+    retry_policy: ZapRetryPolicy = field(default_factory=ZapRetryPolicy)
+    next_seq: int = 1
+    highest_seen_seq: int = 0
+    peer_capabilities: ZapWireCapability = ZapWireCapability.NONE
+    closed: bool = False
+    _pending: dict[int, _PendingZapFrame] = field(default_factory=dict)
+    _seen_request_ids: set[str] = field(default_factory=set)
+
+    def make_hello(self) -> ZapWireFrame:
+        return ZapWireFrame.hello(self.capabilities)
+
+    def accept_hello(self, frame: ZapWireFrame) -> ZapWireFrame:
+        if frame.frame_type not in {ZapWireFrameType.HELLO, ZapWireFrameType.HELLO_ACK}:
+            raise ZapWireSessionError("expected HELLO or HELLO_ACK frame")
+        self.peer_capabilities = self.capabilities & frame.capabilities
+        if frame.frame_type == ZapWireFrameType.HELLO:
+            return ZapWireFrame.hello_ack(self.peer_capabilities)
+        return ZapWireFrame.ack(frame.seq)
+
+    def make_data(self, payload: bytes, request_id: str | None = None) -> ZapWireFrame:
+        if self.closed:
+            raise ZapWireSessionError("cannot send DATA on a closed ZAP session")
+        seq = self.next_seq
+        self.next_seq += 1
+        frame = ZapWireFrame(ZapWireFrameType.DATA, seq=seq, payload=payload)
+        self._pending[seq] = _PendingZapFrame(frame=frame, request_id=request_id)
+        return frame
+
+    def receive_data(
+        self, frame: ZapWireFrame, request_id: str | None = None
+    ) -> ZapWireReceiveResult:
+        if frame.frame_type != ZapWireFrameType.DATA:
+            raise ZapWireSessionError("expected DATA frame")
+        if frame.seq <= self.highest_seen_seq or (
+            request_id is not None and request_id in self._seen_request_ids
+        ):
+            return ZapWireReceiveResult(
+                status="duplicate",
+                ack=ZapWireFrame.ack(frame.seq),
+                payload=frame.payload,
+                request_id=request_id,
+            )
+        self.highest_seen_seq = frame.seq
+        if request_id is not None:
+            self._seen_request_ids.add(request_id)
+        return ZapWireReceiveResult(
+            status="accepted",
+            ack=ZapWireFrame.ack(frame.seq),
+            payload=frame.payload,
+            request_id=request_id,
+        )
+
+    def receive_ack(self, frame: ZapWireFrame) -> int:
+        acked_seq = frame.acked_seq()
+        self._pending.pop(acked_seq, None)
+        return acked_seq
+
+    def next_retry(self, seq: int) -> tuple[ZapWireFrame, int] | None:
+        pending = self._pending.get(seq)
+        if pending is None:
+            return None
+        if pending.attempts >= self.retry_policy.max_attempts:
+            self._pending.pop(seq, None)
+            raise ZapWireSessionError(f"ZAP frame {seq} exceeded retry attempts")
+        timeout_ms = self.retry_policy.timeout_ms_for_attempt(pending.attempts)
+        pending.attempts += 1
+        return pending.frame, timeout_ms
+
+    def make_fin(self) -> ZapWireFrame:
+        self.closed = True
+        seq = self.next_seq
+        self.next_seq += 1
+        return ZapWireFrame(ZapWireFrameType.FIN, seq=seq)
+
+    def receive_fin(self, frame: ZapWireFrame) -> list[int]:
+        if frame.frame_type != ZapWireFrameType.FIN:
+            raise ZapWireSessionError("expected FIN frame")
+        self.closed = True
+        return sorted(self._pending)
 
 
 def _build_offer_schema():

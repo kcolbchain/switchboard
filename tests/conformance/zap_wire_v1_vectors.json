@@ -1,0 +1,34 @@
+[
+  {
+    "name": "hello-all-capabilities",
+    "frame_type": "HELLO",
+    "seq": 0,
+    "capabilities": 7,
+    "payload_hex": "",
+    "wire_hex": "5a41502101010007000000000000000000000000"
+  },
+  {
+    "name": "data-seq-one",
+    "frame_type": "DATA",
+    "seq": 1,
+    "capabilities": 0,
+    "payload_hex": "010203",
+    "wire_hex": "5a41502101030000000000000000000100000003010203"
+  },
+  {
+    "name": "ack-seq-one",
+    "frame_type": "ACK",
+    "seq": 0,
+    "capabilities": 0,
+    "payload_hex": "00000001",
+    "wire_hex": "5a4150210104000000000000000000000000000400000001"
+  },
+  {
+    "name": "fin-seq-two",
+    "frame_type": "FIN",
+    "seq": 2,
+    "capabilities": 0,
+    "payload_hex": "",
+    "wire_hex": "5a41502101050000000000000000000200000000"
+  }
+]
