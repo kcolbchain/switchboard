@@ -56,7 +56,7 @@ class ChargeRecord:
 class MPPSession:
     """Client for Tempo's MPP API — open / charge / close sessions.
 
-    Binds spending limits to GasBudgetTracker for unified cap enforcement.
+    Binds spending limits to GasManager for unified cap enforcement.
     """
 
     def __init__(
