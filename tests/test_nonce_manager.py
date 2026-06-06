@@ -4,7 +4,15 @@ from typing import Dict, Any, List, Callable
 from sortedcontainers import SortedSet
 
 # Assuming nonce_manager.py is correctly importable from 'switchboard' package
-from switchboard.nonce_manager import NonceManager, ChainClient
+from switchboard.nonce_manager import (
+    HybridSignatureAlgorithmReserved,
+    NonceManager,
+    ChainClient,
+    SIGNATURE_ALG_ECDSA,
+    SIGNATURE_ALG_HYBRID,
+    SIGNATURE_ALG_ML_DSA_65,
+    SignatureAlgorithmMismatch,
+)
 
 # --- Mock ChainClient for testing ---
 class MockChainClientImpl:
@@ -365,6 +373,170 @@ class TestNonceManager(unittest.TestCase):
         self.assertEqual(self.nonce_manager.get_pending_nonces(self.wallet_address_1), SortedSet()) # Pending 1 removed
         self.assertEqual(len(self.re_queued_txns), 1)
         self.assertEqual(self.re_queued_txns[0].nonce, 1)
+
+    def test_next_nonce_records_signature_alg_for_every_pending_record(self):
+        chain_id = 10
+
+        ecdsa_tx = MockTransaction(0, "ecdsa")
+        pq_tx = MockTransaction(1, "ml_dsa_65")
+        self.assertEqual(
+            self.nonce_manager.next_nonce(
+                chain_id,
+                self.wallet_address_1,
+                SIGNATURE_ALG_ECDSA,
+                ecdsa_tx,
+            ),
+            0,
+        )
+        self.assertEqual(
+            self.nonce_manager.next_nonce(
+                chain_id,
+                self.wallet_address_1,
+                SIGNATURE_ALG_ML_DSA_65,
+                pq_tx,
+            ),
+            1,
+        )
+
+        records = self.nonce_manager.get_pending_nonce_records(
+            self.wallet_address_1,
+            chain_id=chain_id,
+        )
+        self.assertEqual(records[0].signature_alg, SIGNATURE_ALG_ECDSA)
+        self.assertEqual(records[0].transaction, ecdsa_tx)
+        self.assertEqual(records[1].signature_alg, SIGNATURE_ALG_ML_DSA_65)
+        self.assertEqual(records[1].transaction, pq_tx)
+
+    def test_existing_pending_records_are_auto_tagged_as_ecdsa(self):
+        state = self.nonce_manager._get_wallet_state(self.wallet_address_1)
+        legacy_tx = MockTransaction(7, "legacy")
+        state.pending_nonces.add(7)
+        state.pending_transactions[7] = legacy_tx
+
+        records = self.nonce_manager.get_pending_nonce_records(self.wallet_address_1)
+        self.assertEqual(records[7].signature_alg, SIGNATURE_ALG_ECDSA)
+        self.assertEqual(records[7].transaction, legacy_tx)
+
+    def test_reorg_blocks_different_alg_rebroadcast_without_override(self):
+        chain_id = 1
+        pq_tx = MockTransaction(0, "pq_signed")
+
+        self.assertEqual(
+            self.nonce_manager.next_nonce(
+                chain_id,
+                self.wallet_address_1,
+                SIGNATURE_ALG_ML_DSA_65,
+                pq_tx,
+            ),
+            0,
+        )
+        self.nonce_manager.confirm_nonce(self.wallet_address_1, 0, chain_id=chain_id)
+        self.nonce_manager.on_reorg(self.wallet_address_1, 0, chain_id=chain_id)
+
+        with self.assertRaises(SignatureAlgorithmMismatch):
+            self.nonce_manager.next_nonce(
+                chain_id,
+                self.wallet_address_1,
+                SIGNATURE_ALG_ECDSA,
+                MockTransaction(0, "ecdsa_replacement"),
+            )
+
+        self.assertEqual(
+            self.nonce_manager.next_nonce(
+                chain_id,
+                self.wallet_address_1,
+                SIGNATURE_ALG_ML_DSA_65,
+                MockTransaction(0, "pq_rebroadcast"),
+            ),
+            0,
+        )
+
+    def test_force_rebroadcast_alg_allows_explicit_alg_change_after_reorg(self):
+        chain_id = 2
+
+        self.assertEqual(
+            self.nonce_manager.next_nonce(
+                chain_id,
+                self.wallet_address_1,
+                SIGNATURE_ALG_ML_DSA_65,
+                MockTransaction(0, "pq_signed"),
+            ),
+            0,
+        )
+        self.nonce_manager.on_reorg(self.wallet_address_1, 0, chain_id=chain_id)
+
+        self.assertEqual(
+            self.nonce_manager.next_nonce(
+                chain_id,
+                self.wallet_address_1,
+                SIGNATURE_ALG_ECDSA,
+                MockTransaction(0, "operator_forced_ecdsa"),
+                force_rebroadcast_alg=True,
+            ),
+            0,
+        )
+        records = self.nonce_manager.get_pending_nonce_records(
+            self.wallet_address_1,
+            chain_id=chain_id,
+        )
+        self.assertEqual(records[0].signature_alg, SIGNATURE_ALG_ECDSA)
+
+    def test_hybrid_signature_alg_is_reserved_behind_feature_flag(self):
+        with self.assertRaises(HybridSignatureAlgorithmReserved):
+            self.nonce_manager.next_nonce(
+                3,
+                self.wallet_address_1,
+                SIGNATURE_ALG_HYBRID,
+            )
+
+        hybrid_manager = NonceManager(self.mock_chain_client, allow_hybrid=True)
+        self.assertEqual(
+            hybrid_manager.next_nonce(
+                3,
+                self.wallet_address_1,
+                SIGNATURE_ALG_HYBRID,
+                MockTransaction(0, "hybrid_reserved"),
+            ),
+            0,
+        )
+        records = hybrid_manager.get_pending_nonce_records(self.wallet_address_1, chain_id=3)
+        self.assertEqual(records[0].signature_alg, SIGNATURE_ALG_HYBRID)
+
+    def test_signature_alg_cross_product_rebroadcast_mismatches(self):
+        algs = [
+            SIGNATURE_ALG_ECDSA,
+            SIGNATURE_ALG_ML_DSA_65,
+            SIGNATURE_ALG_HYBRID,
+        ]
+
+        for original_alg in algs:
+            for replacement_alg in algs:
+                if original_alg == replacement_alg:
+                    continue
+
+                with self.subTest(original_alg=original_alg, replacement_alg=replacement_alg):
+                    manager = NonceManager(self.mock_chain_client, allow_hybrid=True)
+                    address = f"{self.wallet_address_1}_{original_alg}_{replacement_alg}"
+                    chain_id = 99
+
+                    self.assertEqual(
+                        manager.next_nonce(
+                            chain_id,
+                            address,
+                            original_alg,
+                            MockTransaction(0, "original"),
+                        ),
+                        0,
+                    )
+                    manager.on_reorg(address, 0, chain_id=chain_id)
+
+                    with self.assertRaises(SignatureAlgorithmMismatch):
+                        manager.next_nonce(
+                            chain_id,
+                            address,
+                            replacement_alg,
+                            MockTransaction(0, "replacement"),
+                        )
 
     def test_concurrent_access(self):
         """
