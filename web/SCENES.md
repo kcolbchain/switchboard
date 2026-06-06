@@ -1,6 +1,6 @@
-# Adding a scene to the agent-payments lab
+# Adding a scene to the agent-payments canvas lab
 
-The lab (`web/agents-demo.html`) is a single static HTML file, no build
+The canvas lab (`web/agents-demo.html`) is a single static HTML file, no build
 step. Each "scene" is a self-contained object you append to the
 `SCENES` registry plus an entry in `SCENE_GROUPS`. Hot-swap any time.
 
@@ -139,7 +139,7 @@ Shape conventions:
 
 ## Tests
 
-`tests/test_web_lab.py` runs over the lab on every PR. If you add a
+`tests/test_web_lab.py` runs over the canvas lab on every PR. If you add a
 scene:
 
 1. Append your id to `EXPECTED_SCENES`.
