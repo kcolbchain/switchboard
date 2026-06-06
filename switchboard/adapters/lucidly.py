@@ -21,6 +21,8 @@ class LucidlyAdapterError(Exception):
 class LucidlyConfig:
     """Per-wallet configuration for auto-park."""
     idle_target_bps: int = 8000
+    unpark_threshold_bps: int = 1500
+    max_entry_slippage_bps: int = 25
     max_parked_usd: float = 100_000.0
     per_chain_targets: dict[str, int] = field(default_factory=lambda: {
         "ethereum": 5000,
@@ -56,9 +58,14 @@ class MockLucidlyVault:
         self._yield_rate_apy: float = 0.05
 
     def deposit(self, chain: str, amount_usd: float) -> float:
-        shares = amount_usd * (1 + self._yield_rate_apy / 36500)
+        preview = self.preview_deposit(chain, amount_usd)
+        shares = preview["shares"]
         self._positions[chain] = self._positions.get(chain, 0) + shares
         return shares
+
+    def preview_deposit(self, chain: str, amount_usd: float) -> dict[str, float]:
+        shares = amount_usd * (1 + self._yield_rate_apy / 36500)
+        return {"shares": shares, "slippage_bps": 0.0}
 
     def withdraw(self, chain: str, amount_usd: float) -> float:
         current = self._positions.get(chain, 0)
@@ -98,8 +105,12 @@ class LucidlyAutoPark:
         self._lock = threading.Lock()
         self._positions: dict[str, ParkedPosition] = {}
         self._liquid_buffer: dict[str, float] = {}
+        self._wallet_total_usd: dict[str, float] = {}
         self._total_parked: float = 0.0
         self._total_yield: float = 0.0
+
+    def _target_bps(self, chain: str) -> int:
+        return self.config.per_chain_targets.get(chain, self.config.idle_target_bps)
 
     def rebalance(self, chain: str, liquid_balance_usd: float) -> dict[str, Any]:
         """After settlement, move excess liquid above target into vault.
@@ -109,20 +120,35 @@ class LucidlyAutoPark:
         if not self.config.enabled:
             return {"action": "disabled", "chain": chain}
 
-        target_pct = self.config.per_chain_targets.get(chain, self.config.idle_target_pct) / 10_000
-        target_liquid = liquid_balance_usd * (1 - target_pct)
+        wallet_total = liquid_balance_usd + self.vault.balance(chain)
+        self._wallet_total_usd[chain] = wallet_total
+        target_pct = self._target_bps(chain) / 10_000
+        target_liquid = wallet_total * (1 - target_pct)
 
         with self._lock:
-            current_liquid = self._liquid_buffer.get(chain, liquid_balance_usd)
+            current_liquid = liquid_balance_usd
             excess = max(0.0, current_liquid - target_liquid)
 
             if excess < 1.0:
+                self._liquid_buffer[chain] = current_liquid
                 return {"action": "skip", "chain": chain, "excess": excess}
 
             if self._total_parked + excess > self.config.max_parked_usd:
                 excess = self.config.max_parked_usd - self._total_parked
                 if excess < 1.0:
+                    self._liquid_buffer[chain] = current_liquid
                     return {"action": "cap_reached", "chain": chain}
+
+            preview = self.vault.preview_deposit(chain, excess)
+            slippage_bps = preview.get("slippage_bps", 0.0)
+            if slippage_bps > self.config.max_entry_slippage_bps:
+                self._liquid_buffer[chain] = current_liquid
+                return {
+                    "action": "skip_slippage",
+                    "chain": chain,
+                    "slippage_bps": slippage_bps,
+                    "max_entry_slippage_bps": self.config.max_entry_slippage_bps,
+                }
 
             shares = self.vault.deposit(chain, excess)
             position = ParkedPosition(
@@ -165,9 +191,13 @@ class LucidlyAutoPark:
 
     def ensure_liquid(self, chain: str, required_usd: float, liquid_balance_usd: float) -> float:
         """Ensure enough liquid balance for a tx. Unpark if needed."""
-        if liquid_balance_usd >= required_usd:
+        self._liquid_buffer[chain] = liquid_balance_usd
+        threshold_usd = self._wallet_total_usd.get(chain, liquid_balance_usd)
+        threshold_usd *= self.config.unpark_threshold_bps / 10_000
+        target_liquid_usd = max(required_usd, threshold_usd)
+        if liquid_balance_usd >= target_liquid_usd:
             return 0.0
-        deficit = required_usd - liquid_balance_usd
+        deficit = target_liquid_usd - liquid_balance_usd
         returned = self.unpark(chain, deficit)
         return returned
 
