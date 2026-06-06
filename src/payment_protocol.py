@@ -105,119 +105,813 @@ class PaymentState(Enum):
 
 ESCROW_ABI = [
     {
-        "inputs": [],
-        "name": "chainId",
-        "outputs": [{"type": "uint256"}],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
+        "type": "constructor",
         "inputs": [
-            {"name": "requestId", "type": "string"},
-            {"name": "payee", "type": "address"},
-            {"name": "timeoutBlocks", "type": "uint256"},
-            {"name": "challengePeriod", "type": "uint256"}
-        ],
-        "name": "createPayment",
-        "outputs": [{"type": "bool"}],
-        "stateMutability": "payable",
-        "type": "function"
-    },
-    {
-        "inputs": [{"name": "requestId", "type": "string"}],
-        "name": "confirmPayment",
-        "outputs": [{"type": "bool"}],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [{"name": "requestId", "type": "string"}],
-        "name": "requestRefund",
-        "outputs": [{"type": "bool"}],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [{"name": "requestId", "type": "string"}],
-        "name": "cancelPayment",
-        "outputs": [{"type": "bool"}],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [{"name": "requestId", "type": "string"}],
-        "name": "getPayment",
-        "outputs": [
             {
-                "components": [
-                    {"name": "payer", "type": "address"},
-                    {"name": "payee", "type": "address"},
-                    {"name": "amount", "type": "uint256"},
-                    {"name": "timeoutBlocks", "type": "uint256"},
-                    {"name": "challengePeriod", "type": "uint256"},
-                    {"name": "state", "type": "uint8"},
-                    {"name": "requestId", "type": "string"},
-                    {"name": "createdAt", "type": "uint256"}
-                ],
-                "type": "tuple",
-                "name": "",
-                "internalType": "struct AgentEscrow.Payment"
+                "name": "_chainId",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "_aggregator",
+                "type": "address",
+                "internalType": "contract IOracleAggregator"
             }
         ],
-        "stateMutability": "view",
-        "type": "function"
+        "stateMutability": "nonpayable"
     },
     {
-        "inputs": [{"name": "requestId", "type": "string"}],
-        "name": "isState",
-        "outputs": [{"type": "bool"}],
-        "stateMutability": "view",
-        "type": "function"
+        "type": "function",
+        "name": "cancelPayment",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "nonpayable"
     },
     {
-        "inputs": [{"name": "requestId", "type": "string"}],
-        "name": "isExpired",
-        "outputs": [{"type": "bool"}],
-        "stateMutability": "view",
-        "type": "function"
+        "type": "function",
+        "name": "chainId",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint256",
+                "internalType": "uint256"
+            }
+        ],
+        "stateMutability": "view"
     },
     {
-        "inputs": [{"name": "agent", "type": "address"}],
-        "name": "registerAgent",
+        "type": "function",
+        "name": "confirmPayment",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "createPayment",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "payee",
+                "type": "address",
+                "internalType": "address"
+            },
+            {
+                "name": "timeoutBlocks",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "challengePeriod",
+                "type": "uint256",
+                "internalType": "uint256"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "payable"
+    },
+    {
+        "type": "function",
+        "name": "createPayment",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "payee",
+                "type": "address",
+                "internalType": "address"
+            },
+            {
+                "name": "policy",
+                "type": "address",
+                "internalType": "contract IRefundPolicy"
+            },
+            {
+                "name": "policyData",
+                "type": "bytes",
+                "internalType": "bytes"
+            },
+            {
+                "name": "timeoutBlocks",
+                "type": "uint256",
+                "internalType": "uint256"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "payable"
+    },
+    {
+        "type": "function",
+        "name": "createPaymentWithPolicy",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "payee",
+                "type": "address",
+                "internalType": "address"
+            },
+            {
+                "name": "timeoutBlocks",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "challengePeriod",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "policyHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "payable"
+    },
+    {
+        "type": "function",
+        "name": "deregisterAgent",
+        "inputs": [
+            {
+                "name": "agent",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
         "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
+        "stateMutability": "nonpayable"
     },
     {
-        "anonymous": False,
+        "type": "function",
+        "name": "getPayment",
         "inputs": [
-            {"name": "requestId", "type": "string", "indexed": True},
-            {"name": "payer", "type": "address", "indexed": True},
-            {"name": "payee", "type": "address", "indexed": True},
-            {"name": "amount", "type": "uint256"}
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            }
         ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "tuple",
+                "internalType": "struct AgentEscrowV2.Payment",
+                "components": [
+                    {
+                        "name": "payer",
+                        "type": "address",
+                        "internalType": "address"
+                    },
+                    {
+                        "name": "payee",
+                        "type": "address",
+                        "internalType": "address"
+                    },
+                    {
+                        "name": "amount",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    },
+                    {
+                        "name": "releasedAmount",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    },
+                    {
+                        "name": "refundedAmount",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    },
+                    {
+                        "name": "timeoutBlocks",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    },
+                    {
+                        "name": "challengePeriod",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    },
+                    {
+                        "name": "state",
+                        "type": "uint8",
+                        "internalType": "enum AgentEscrowV2.State"
+                    },
+                    {
+                        "name": "requestId",
+                        "type": "string",
+                        "internalType": "string"
+                    },
+                    {
+                        "name": "createdAt",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    },
+                    {
+                        "name": "policyHash",
+                        "type": "bytes32",
+                        "internalType": "bytes32"
+                    },
+                    {
+                        "name": "refundPolicy",
+                        "type": "address",
+                        "internalType": "contract IRefundPolicy"
+                    },
+                    {
+                        "name": "policyDataHash",
+                        "type": "bytes32",
+                        "internalType": "bytes32"
+                    }
+                ]
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "isExpired",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "isState",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "expected",
+                "type": "uint8",
+                "internalType": "enum AgentEscrowV2.State"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "oracleAggregator",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "address",
+                "internalType": "contract IOracleAggregator"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "owner",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "payments",
+        "inputs": [
+            {
+                "name": "",
+                "type": "string",
+                "internalType": "string"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "payer",
+                "type": "address",
+                "internalType": "address"
+            },
+            {
+                "name": "payee",
+                "type": "address",
+                "internalType": "address"
+            },
+            {
+                "name": "amount",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "releasedAmount",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "refundedAmount",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "timeoutBlocks",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "challengePeriod",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "state",
+                "type": "uint8",
+                "internalType": "enum AgentEscrowV2.State"
+            },
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "createdAt",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "policyHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+            },
+            {
+                "name": "refundPolicy",
+                "type": "address",
+                "internalType": "contract IRefundPolicy"
+            },
+            {
+                "name": "policyDataHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "registerAgent",
+        "inputs": [
+            {
+                "name": "agent",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "registeredAgents",
+        "inputs": [
+            {
+                "name": "",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "releaseByAttestation",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "attestationHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+            },
+            {
+                "name": "signatures",
+                "type": "bytes[]",
+                "internalType": "bytes[]"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "releasePartial",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "policyData",
+                "type": "bytes",
+                "internalType": "bytes"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "renounceOwnership",
+        "inputs": [],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "requestRefund",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            },
+            {
+                "name": "policyData",
+                "type": "bytes",
+                "internalType": "bytes"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "requestRefund",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "internalType": "string"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "transferOwnership",
+        "inputs": [
+            {
+                "name": "newOwner",
+                "type": "address",
+                "internalType": "address"
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "event",
+        "name": "AgentDeregistered",
+        "inputs": [
+            {
+                "name": "agent",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            }
+        ],
+        "anonymous": False
+    },
+    {
+        "type": "event",
+        "name": "AgentRegistered",
+        "inputs": [
+            {
+                "name": "agent",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            }
+        ],
+        "anonymous": False
+    },
+    {
+        "type": "event",
+        "name": "OwnershipTransferred",
+        "inputs": [
+            {
+                "name": "previousOwner",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            },
+            {
+                "name": "newOwner",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            }
+        ],
+        "anonymous": False
+    },
+    {
+        "type": "event",
+        "name": "PaymentCancelled",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "indexed": True,
+                "internalType": "string"
+            },
+            {
+                "name": "payer",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            },
+            {
+                "name": "amount",
+                "type": "uint256",
+                "indexed": False,
+                "internalType": "uint256"
+            }
+        ],
+        "anonymous": False
+    },
+    {
+        "type": "event",
+        "name": "PaymentConfirmed",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "indexed": True,
+                "internalType": "string"
+            },
+            {
+                "name": "payer",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            }
+        ],
+        "anonymous": False
+    },
+    {
+        "type": "event",
         "name": "PaymentCreated",
-        "type": "event"
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "indexed": True,
+                "internalType": "string"
+            },
+            {
+                "name": "payer",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            },
+            {
+                "name": "payee",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            },
+            {
+                "name": "amount",
+                "type": "uint256",
+                "indexed": False,
+                "internalType": "uint256"
+            }
+        ],
+        "anonymous": False
     },
     {
-        "anonymous": False,
+        "type": "event",
+        "name": "PaymentLocked",
         "inputs": [
-            {"name": "requestId", "type": "string", "indexed": True},
-            {"name": "payee", "type": "address", "indexed": True},
-            {"name": "amount", "type": "uint256"}
+            {
+                "name": "requestId",
+                "type": "string",
+                "indexed": True,
+                "internalType": "string"
+            }
         ],
-        "name": "PaymentReleased",
-        "type": "event"
+        "anonymous": False
     },
     {
-        "anonymous": False,
-        "inputs": [
-            {"name": "requestId", "type": "string", "indexed": True},
-            {"name": "payer", "type": "address", "indexed": True},
-            {"name": "amount", "type": "uint256"}
-        ],
+        "type": "event",
         "name": "PaymentRefunded",
-        "type": "event"
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "indexed": True,
+                "internalType": "string"
+            },
+            {
+                "name": "payer",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            },
+            {
+                "name": "amount",
+                "type": "uint256",
+                "indexed": False,
+                "internalType": "uint256"
+            }
+        ],
+        "anonymous": False
+    },
+    {
+        "type": "event",
+        "name": "PaymentReleased",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "indexed": True,
+                "internalType": "string"
+            },
+            {
+                "name": "payee",
+                "type": "address",
+                "indexed": True,
+                "internalType": "address"
+            },
+            {
+                "name": "amount",
+                "type": "uint256",
+                "indexed": False,
+                "internalType": "uint256"
+            }
+        ],
+        "anonymous": False
+    },
+    {
+        "type": "event",
+        "name": "PaymentReleasedByOracle",
+        "inputs": [
+            {
+                "name": "requestId",
+                "type": "string",
+                "indexed": True,
+                "internalType": "string"
+            },
+            {
+                "name": "policyHash",
+                "type": "bytes32",
+                "indexed": False,
+                "internalType": "bytes32"
+            },
+            {
+                "name": "attestationHash",
+                "type": "bytes32",
+                "indexed": False,
+                "internalType": "bytes32"
+            }
+        ],
+        "anonymous": False
+    },
+    {
+        "type": "error",
+        "name": "OwnableInvalidOwner",
+        "inputs": [
+            {
+                "name": "owner",
+                "type": "address",
+                "internalType": "address"
+            }
+        ]
+    },
+    {
+        "type": "error",
+        "name": "OwnableUnauthorizedAccount",
+        "inputs": [
+            {
+                "name": "account",
+                "type": "address",
+                "internalType": "address"
+            }
+        ]
+    },
+    {
+        "type": "error",
+        "name": "ReentrancyGuardReentrantCall",
+        "inputs": []
     }
 ]
 
@@ -308,6 +1002,8 @@ class PaymentClient:
         amount_wei: int,
         timeout_blocks: int = 100,
         challenge_period_blocks: int = 10,
+        policy: str = None,
+        policy_data: bytes = b'',
         request_id: str = None,
         description: str = "",
         metadata: dict = None
@@ -326,15 +1022,27 @@ class PaymentClient:
         payee_checksum = Web3.to_checksum_address(payee)
 
         # Build on-chain transaction
-        tx = self.contract.functions.createPayment(
-            request_id,
-            payee_checksum,
-            timeout_blocks,
-            challenge_period_blocks
-        ).build_transaction({
-            'from': self.wallet_address,
-            'value': amount_wei
-        })
+        if policy is not None:
+            tx = self.contract.functions.createPayment(
+                request_id,
+                payee_checksum,
+                Web3.to_checksum_address(policy),
+                policy_data,
+                timeout_blocks
+            ).build_transaction({
+                'from': self.wallet_address,
+                'value': amount_wei
+            })
+        else:
+            tx = self.contract.functions.createPayment(
+                request_id,
+                payee_checksum,
+                timeout_blocks,
+                challenge_period_blocks
+            ).build_transaction({
+                'from': self.wallet_address,
+                'value': amount_wei
+            })
 
         # Sign and send
         tx_hash = self.sign_and_send(tx)

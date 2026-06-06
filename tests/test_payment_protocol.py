@@ -74,7 +74,9 @@ class MockContractFunctions:
     def __init__(self, contract):
         self.contract = contract
 
-    def createPayment(self, requestId, payee, timeoutBlocks, challengePeriod):
+    def createPayment(self, requestId, payee, timeoutBlocks, challengePeriod, policy=None, policyData=b''):
+        if policy is not None:
+            return MockFn("createPayment", self.contract, requestId, payee, policy, policyData, timeoutBlocks)
         return MockFn("createPayment", self.contract, requestId, payee, timeoutBlocks, challengePeriod)
 
     def confirmPayment(self, requestId):
