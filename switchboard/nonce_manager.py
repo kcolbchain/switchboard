@@ -223,16 +223,24 @@ class NonceManager:
         self._ensure_pending_records(state)
 
         # Determine the next available nonce: the lowest nonce at or above
-        # `confirmed_nonce` that is not already pending. Walking up from
-        # `confirmed_nonce` (rather than taking ``max(pending) + 1``) means a
-        # nonce freed by `release_nonce` or a gap left by an out-of-order
-        # confirmation is reused before the sequence is extended. Ethereum
-        # requires gapless nonces, so leaving a hole would stall every
-        # higher-nonce pending tx until the gap is filled.
+        # `confirmed_nonce` that is neither already pending nor already
+        # confirmed out-of-order. Walking up from `confirmed_nonce` (rather
+        # than taking ``max(pending) + 1``) means a nonce freed by
+        # `release_nonce` or a gap left by an out-of-order confirmation is
+        # reused before the sequence is extended. Ethereum requires gapless
+        # nonces, so leaving a hole would stall every higher-nonce pending tx
+        # until the gap is filled.
+        #
+        # `out_of_order_confirmations` must be skipped too: a nonce confirmed
+        # ahead of `confirmed_nonce` is already mined on-chain but is not in
+        # `pending_nonces` (it was dropped on confirmation), so a plain
+        # pending-only walk would re-hand it out and the chain would reject the
+        # new tx with "nonce too low", stalling the queue.
         next_nonce = state.confirmed_nonce
-        for pending in state.pending_nonces.irange(minimum=next_nonce):
-            if pending != next_nonce:
-                break
+        while (
+            next_nonce in state.pending_nonces
+            or next_nonce in state.out_of_order_confirmations
+        ):
             next_nonce += 1
 
         self._assert_rebroadcast_alg(
