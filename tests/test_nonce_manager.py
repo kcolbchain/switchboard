@@ -238,6 +238,40 @@ class TestNonceManager(unittest.TestCase):
         self.assertEqual(self.nonce_manager.acquire_nonce(self.wallet_address_1, tx_w1_2), 2)
         self.assertEqual(self.nonce_manager.get_pending_nonces(self.wallet_address_1), SortedSet([0, 1, 2]))
 
+    def test_acquire_skips_out_of_order_confirmed_nonce(self):
+        """
+        A nonce confirmed ahead of `confirmed_nonce` (out-of-order) is already
+        mined on-chain, but it is no longer in `pending_nonces` (it was dropped
+        on confirmation) and it is not below `confirmed_nonce`. The gap-reuse
+        walk must therefore skip it — otherwise `acquire_nonce` re-hands out an
+        already-confirmed nonce and the chain rejects the new tx with "nonce
+        too low", stalling the queue.
+
+        Regression test: previously the walk only consulted `pending_nonces`,
+        so after an out-of-order confirmation it re-issued the confirmed nonce.
+        """
+        # Acquire nonces 0, 1, 2.
+        self.nonce_manager.acquire_nonce(self.wallet_address_1, MockTransaction(0, "w1_0"))
+        self.nonce_manager.acquire_nonce(self.wallet_address_1, MockTransaction(1, "w1_1"))
+        self.nonce_manager.acquire_nonce(self.wallet_address_1, MockTransaction(2, "w1_2"))
+
+        # Nonce 2 is mined out of order while 0 and 1 are still pending.
+        self.nonce_manager.confirm_nonce(self.wallet_address_1, 2)
+        self.assertEqual(self.nonce_manager.get_confirmed_nonce(self.wallet_address_1), 0)
+        self.assertEqual(self.nonce_manager.get_pending_nonces(self.wallet_address_1), SortedSet([0, 1]))
+
+        # The next acquire must NOT return 2 (already confirmed); it must jump to 3.
+        acquired = self.nonce_manager.acquire_nonce(self.wallet_address_1, MockTransaction(3, "w1_3"))
+        self.assertEqual(acquired, 3)
+        self.assertEqual(self.nonce_manager.get_pending_nonces(self.wallet_address_1), SortedSet([0, 1, 3]))
+
+        # Confirming the remaining pending nonces rolls confirmed_nonce forward
+        # through the stashed out-of-order confirmation of 2.
+        self.nonce_manager.confirm_nonce(self.wallet_address_1, 0)
+        self.nonce_manager.confirm_nonce(self.wallet_address_1, 1)
+        # 0 -> 1 -> 2 (stashed) -> 3 is still pending, so confirmed stops at 3.
+        self.assertEqual(self.nonce_manager.get_confirmed_nonce(self.wallet_address_1), 3)
+
     def test_sync_with_onchain_nonce_external_confirmation(self):
         """
         Tests synchronization with the on-chain nonce when external transactions
