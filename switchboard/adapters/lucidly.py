@@ -232,5 +232,5 @@ class LucidlyAutoPark:
                 "vault_balance_usd": self.vault.balance(chain),
                 "total_parked_usd": self._total_parked,
                 "enabled": self.config.enabled,
-                "idle_target_pct": self.config.per_chain_targets.get(chain, self.config.idle_target_bps) / 100.0,
+                "idle_target_pct": self._target_bps(chain) / 10_000.0,
             }

@@ -76,6 +76,31 @@ def test_status():
     assert status["idle_target_pct"] > 0
 
 
+def test_status_idle_target_pct_is_a_fraction_matching_config_convention():
+    # `idle_target_pct` must use the same bps->fraction convention everywhere:
+    # LucidlyConfig.idle_target_pct (= bps / 10_000) and the rebalance math
+    # (target_pct = bps / 10_000) both yield a 0..1 fraction. status() used
+    # `/ 100` instead, returning a value 100x too large (e.g. 80.0 vs 0.8).
+    config = LucidlyConfig(per_chain_targets={"base": 8000}, idle_target_bps=8000)
+    park = LucidlyAutoPark(config=config)
+    park.rebalance("base", liquid_balance_usd=10_000.0)
+
+    status = park.status("base")
+    assert status["idle_target_pct"] == 0.8
+    assert status["idle_target_pct"] == config.idle_target_pct
+    # A fraction in [0, 1], not a percentage.
+    assert 0.0 <= status["idle_target_pct"] <= 1.0
+
+
+def test_status_idle_target_pct_falls_back_to_default_bps_as_fraction():
+    # Chain absent from per_chain_targets falls back to idle_target_bps,
+    # still expressed as a 0..1 fraction (not 50.0).
+    config = LucidlyConfig(per_chain_targets={}, idle_target_bps=5000)
+    park = LucidlyAutoPark(config=config)
+    status = park.status("optimism")
+    assert status["idle_target_pct"] == 0.5
+
+
 def test_different_chain_targets():
     config = LucidlyConfig(per_chain_targets={"ethereum": 5000, "base": 8000})
     park = LucidlyAutoPark(config=config)
