@@ -10,10 +10,37 @@ from typing import Any
 
 __version__ = "0.1.0"
 
-__all__ = ["__version__", "load_registry", "GasManager", "GasLimits", "BudgetStatus", "BudgetExhausted"]
+__all__ = [
+    "__version__",
+    "load_registry",
+    "GasManager",
+    "GasLimits",
+    "BudgetStatus",
+    "BudgetExhausted",
+    "A2AChannel",
+    "CreateProtocolSurfaceError",
+    "MeterReceipt",
+    "a2a_handshake",
+    "meter",
+    "provision_wallet",
+    "recovery_quorum",
+    "rotate",
+    "sign",
+]
 
 
 from switchboard.gas_manager import BudgetExhausted, GasLimits, GasManager, BudgetStatus
+from switchboard.create_protocol import (
+    A2AChannel,
+    CreateProtocolSurfaceError,
+    MeterReceipt,
+    a2a_handshake,
+    meter,
+    provision_wallet,
+    recovery_quorum,
+    rotate,
+    sign,
+)
 
 
 def load_registry() -> dict[str, Any]:

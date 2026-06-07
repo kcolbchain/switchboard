@@ -178,6 +178,7 @@ roundtrip = decode_offer(wire)           # exact equality
 - **Agent marketplaces.** Two MCP servers settle on `AgentEscrow` with timeout protection. Provider only paid when work confirms; payer can claim back if provider goes silent.
 - **High-volume A2A.** Agents on the same Lux/Base subnet exchange `PaymentOffer`/`PaymentProof` over ZAP wire — zero parse-time allocation, ~10× smaller than JSON, schema-locked across Python ↔ Go.
 - **Autonomous burn caps.** Long-running agents enforce per-hour / per-day spend limits before the on-chain submit, killing the runaway-loop class of bugs.
+- **Create Protocol registry integration.** The stable registry-facing surface is pinned in [`docs/create-protocol-stable.md`](docs/create-protocol-stable.md).
 
 ---
 
