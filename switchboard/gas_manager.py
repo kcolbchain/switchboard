@@ -258,15 +258,21 @@ class GasManager:
     def _update_pause_state_locked(
         self, ledger: _WalletLedger, limits: GasLimits
     ) -> None:
-        """Re-evaluate pause flag after limit changes."""
-        if not ledger.paused:
-            return
-        still_exhausted = (
+        """Re-evaluate the pause flag after a limit change, in BOTH directions.
+
+        Mirrors ``GasTracker._update_pause_state``: tightening a wallet's limit
+        below its current spend must *pause* it, and loosening the limit above
+        the current spend must *unpause* it. The previous implementation only
+        cleared an existing pause and never set one, so lowering a limit below
+        the recorded spend left ``is_paused()`` reporting ``False`` while
+        ``can_spend()`` (correctly) returned ``False`` — an inconsistency that
+        breaks the documented drop-in parity with ``GasTracker``.
+        """
+        self._evict_locked(ledger, limits)
+        ledger.paused = (
             (limits.per_hour is not None and ledger.sum_hour >= limits.per_hour)
             or (limits.per_day is not None and ledger.sum_day >= limits.per_day)
         )
-        if not still_exhausted:
-            ledger.paused = False
 
     def _status_locked(
         self, wallet: str, ledger: _WalletLedger, limits: GasLimits
