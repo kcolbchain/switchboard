@@ -141,3 +141,24 @@ def test_ensure_liquid_unparks_to_threshold_buffer():
 
     assert returned == 500.0
     assert park.status("base")["liquid_buffer_usd"] == 1_500.0
+
+
+def test_two_parks_same_chain_same_clock_are_distinct_positions():
+    # The position key was `chain:clock()`. The adapter takes an injectable
+    # deterministic clock ("Pluggable clock for deterministic tests"), so two
+    # parks on the same chain at the same clock value mapped to the SAME key —
+    # the second ParkedPosition silently overwrote the first, dropping its
+    # per-position yield accrual even though `_total_parked` still counted both.
+    fixed_t = 1_000_000.0
+    park = LucidlyAutoPark(clock=lambda: fixed_t)
+
+    r1 = park.rebalance("base", liquid_balance_usd=10_000.0)
+    r2 = park.rebalance("base", liquid_balance_usd=10_000.0)
+    assert r1["action"] == "parked"
+    assert r2["action"] == "parked"
+
+    report = park.yield_report()
+    # Both park events must be retained as distinct positions, and the position
+    # count must stay consistent with the parked total (which already sums both).
+    assert report["positions"] == 2
+    assert report["total_parked_usd"] == r1["amount_usd"] + r2["amount_usd"]
