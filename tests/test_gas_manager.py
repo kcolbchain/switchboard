@@ -404,6 +404,46 @@ class TestGasManager:
         m.set_limits(WALLET, GasLimits(per_hour=120))
         assert m.is_paused(WALLET) is True
 
+    def test_set_limits_below_spend_pauses_and_stays_consistent(self):
+        # A wallet healthy under its current limit must become paused when
+        # set_limits tightens the limit below its current spend — and
+        # is_paused() must agree with can_spend(). Regression: the old
+        # _update_pause_state_locked only cleared a pause, never set one, so
+        # is_paused() reported False while can_spend() returned False.
+        m = GasManager(default_limits=GasLimits(per_hour=200))
+        m.record(WALLET, 150)
+        assert m.is_paused(WALLET) is False
+        assert m.can_spend(WALLET, 1) is True
+
+        m.set_limits(WALLET, GasLimits(per_hour=100))  # now below the 150 spent
+        assert m.can_spend(WALLET, 1) is False
+        assert m.is_paused(WALLET) is True  # must not disagree with can_spend
+
+    def test_set_limits_per_day_below_spend_pauses(self):
+        m = GasManager(default_limits=GasLimits(per_day=20_000))
+        m.record(WALLET, 9_000)
+        assert m.is_paused(WALLET) is False
+
+        m.set_limits(WALLET, GasLimits(per_day=5_000))
+        assert m.is_paused(WALLET) is True
+        assert m.can_spend(WALLET, 1) is False
+
+    def test_set_limits_above_spend_unpauses_consistently(self):
+        # The other direction of the same symmetry: a wallet paused because its
+        # limit sits below current spend must *unpause* the moment set_limits
+        # raises the limit back above the spend, and is_paused() must again
+        # agree with can_spend(). Guards the "BOTH directions" contract in
+        # _update_pause_state_locked against a future regression that restores
+        # only the pause half.
+        m = GasManager(default_limits=GasLimits(per_hour=100))
+        m.record(WALLET, 150)  # over the limit -> paused
+        assert m.is_paused(WALLET) is True
+        assert m.can_spend(WALLET, 1) is False
+
+        m.set_limits(WALLET, GasLimits(per_hour=200))  # now above the 150 spent
+        assert m.is_paused(WALLET) is False
+        assert m.can_spend(WALLET, 1) is True
+
     def test_evict_respects_hourly_boundary(self):
         clock = FakeClock()
         m = GasManager(default_limits=GasLimits(per_hour=1000), clock=clock)
