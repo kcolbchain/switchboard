@@ -2,7 +2,7 @@
 
 **Programmable payments for AI agents.** One Python library, one contract suite, and one binary wire format that lets agents pay each other for work — over HTTP/402, on-chain escrow, multi-party micropayments, or stablecoin rails — without a human in the loop.
 
-[![tests](https://img.shields.io/badge/tests-passing-brightgreen)](#test-results) [![python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/) [![status](https://img.shields.io/badge/status-active-success)](https://github.com/kcolbchain/switchboard) [![org](https://img.shields.io/badge/org-kcolbchain-7c3aed)](https://kcolbchain.com)
+[![CI](https://github.com/kcolbchain/switchboard/actions/workflows/ci.yml/badge.svg)](https://github.com/kcolbchain/switchboard/actions/workflows/ci.yml) [![python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/) [![status](https://img.shields.io/badge/status-active-success)](https://github.com/kcolbchain/switchboard) [![org](https://img.shields.io/badge/org-kcolbchain-7c3aed)](https://kcolbchain.com)
 
 ---
 
