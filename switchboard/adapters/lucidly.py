@@ -108,6 +108,9 @@ class LucidlyAutoPark:
         self._wallet_total_usd: dict[str, float] = {}
         self._total_parked: float = 0.0
         self._total_yield: float = 0.0
+        # Monotonic suffix so two parks on the same chain at the same clock
+        # value get distinct keys instead of silently overwriting each other.
+        self._position_seq: int = 0
 
     def _target_bps(self, chain: str) -> int:
         return self.config.per_chain_targets.get(chain, self.config.idle_target_bps)
@@ -157,7 +160,8 @@ class LucidlyAutoPark:
                 syUSD_shares=shares,
                 parked_at=self.clock(),
             )
-            self._positions[f"{chain}:{self.clock()}"] = position
+            self._position_seq += 1
+            self._positions[f"{chain}:{self.clock()}:{self._position_seq}"] = position
             self._liquid_buffer[chain] = current_liquid - excess
             self._total_parked += excess
 
