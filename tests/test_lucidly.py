@@ -1,6 +1,12 @@
 """Tests for Lucidly syUSD auto-park adapter."""
 
 from switchboard.adapters.lucidly import LucidlyAutoPark, LucidlyConfig, MockLucidlyVault
+from switchboard.x402_middleware import (
+    PaymentOffer,
+    PaymentProof,
+    PaymentRecord,
+    X402Middleware,
+)
 
 
 class SlippingVault(MockLucidlyVault):
@@ -141,6 +147,86 @@ def test_ensure_liquid_unparks_to_threshold_buffer():
 
     assert returned == 500.0
     assert park.status("base")["liquid_buffer_usd"] == 1_500.0
+
+
+# ─── weekly realized-APY card (issue #80 AC #4) ───────────────────────────────
+
+def test_weekly_yield_report_exposes_realized_30d_apy_per_wallet():
+    # AC #4: a weekly cron emits a per-wallet `realized_30d_apy` JSON blob to a
+    # public surface. The adapter must expose that surface.
+    park = LucidlyAutoPark()
+    park.rebalance("base", liquid_balance_usd=10_000.0)
+    park.vault.simulate_yield(days=30)
+
+    report = park.weekly_yield_report()
+
+    assert report["window_days"] == 30
+    assert "realized_30d_apy" in report
+    assert report["realized_30d_apy"] >= 0.0
+    assert "by_chain" in report
+    assert "generated_at" in report
+
+
+def test_weekly_yield_report_is_json_serializable():
+    import json
+
+    park = LucidlyAutoPark()
+    park.rebalance("base", liquid_balance_usd=10_000.0)
+    # Must serialize cleanly for the public surface the cron writes.
+    blob = json.dumps(park.weekly_yield_report())
+    assert "realized_30d_apy" in blob
+
+
+# ─── guarded post-settlement rebalance hook in x402 middleware (issue #80) ─────
+
+def _make_record(amount_wei=1_000_000, chain_id=8453, recipient="0xPAYEE"):
+    offer = PaymentOffer(amount_wei=amount_wei, currency="USDC", recipient=recipient, chain_id=chain_id)
+    proof = PaymentProof(tx_hash="0xabc", chain_id=chain_id, payer="0xPAYER", amount_wei=amount_wei)
+    return PaymentRecord(endpoint="https://agent.example/infer", offer=offer, proof=proof, response_status=200)
+
+
+class _RecordingPark:
+    """Stand-in adapter that records rebalance() calls."""
+
+    def __init__(self):
+        self.calls = []
+
+    def rebalance(self, chain, liquid_balance_usd):
+        self.calls.append((chain, liquid_balance_usd))
+        return {"action": "parked", "chain": chain}
+
+
+def test_settlement_invokes_lucidly_rebalance_hook():
+    # After a payment settles, the middleware must invoke the Lucidly adapter's
+    # rebalance so idle float gets parked.
+    client = object()  # not used by the synchronous hook path
+    park = _RecordingPark()
+    mw = X402Middleware(payment_client=client, lucidly_park=park)
+
+    record = _make_record(amount_wei=2_000_000, chain_id=8453)
+    mw._post_settlement_rebalance(record)
+
+    assert len(park.calls) == 1
+    chain, _liquid = park.calls[0]
+    # Base mainnet chain id -> "base" chain key for the adapter.
+    assert chain == "base"
+
+
+def test_settlement_hook_is_a_noop_without_adapter():
+    # No adapter configured -> the hook must be a harmless no-op (no crash).
+    mw = X402Middleware(payment_client=object())
+    mw._post_settlement_rebalance(_make_record())  # must not raise
+
+
+def test_settlement_hook_is_guarded_against_adapter_errors():
+    # A misbehaving adapter must never break payment settlement.
+    class _Boom:
+        def rebalance(self, *a, **k):
+            raise RuntimeError("vault down")
+
+    mw = X402Middleware(payment_client=object(), lucidly_park=_Boom())
+    # Guarded: swallows the error rather than propagating into the payment path.
+    mw._post_settlement_rebalance(_make_record())
 
 
 def test_two_parks_same_chain_same_clock_are_distinct_positions():

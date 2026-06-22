@@ -227,6 +227,55 @@ class LucidlyAutoPark:
             "positions": len(self._positions),
         }
 
+    def weekly_yield_report(self, window_days: int = 30) -> dict[str, Any]:
+        """Per-wallet realized-APY card for the weekly disclosure cron (issue #80 AC #4).
+
+        Emits a JSON-serializable blob with a ``realized_30d_apy`` figure
+        derived from accrued yield over the parked principal, annualized across
+        ``window_days``. This is the public-surface disclosure that closes the
+        loop on the Lucidly co-marketing. The shape is intentionally flat and
+        free of non-JSON types so a cron can write it straight to a static
+        surface.
+        """
+        base = self.yield_report()
+        total_yield = base["total_yield_usd"]
+        total_parked = base["total_parked_usd"]
+
+        # realized APY = (yield / principal) annualized over the window.
+        if total_parked > 0 and window_days > 0:
+            realized_apy = (total_yield / total_parked) * (365.0 / window_days)
+        else:
+            realized_apy = 0.0
+
+        per_chain_parked: dict[str, float] = {}
+        for k, p in self._positions.items():
+            c = k.split(":")[0]
+            per_chain_parked[c] = per_chain_parked.get(c, 0.0) + p.amount_usd
+
+        by_chain: dict[str, dict[str, float]] = {}
+        for chain, parked in per_chain_parked.items():
+            chain_yield = base["by_chain"].get(chain, 0.0)
+            apy = (
+                (chain_yield / parked) * (365.0 / window_days)
+                if parked > 0 and window_days > 0
+                else 0.0
+            )
+            by_chain[chain] = {
+                "parked_usd": parked,
+                "yield_usd": chain_yield,
+                "realized_30d_apy": apy,
+            }
+
+        return {
+            "window_days": window_days,
+            "realized_30d_apy": realized_apy,
+            "total_parked_usd": total_parked,
+            "total_yield_usd": total_yield,
+            "positions": base["positions"],
+            "by_chain": by_chain,
+            "generated_at": self.clock(),
+        }
+
     def status(self, chain: str) -> dict[str, Any]:
         """Return current status for a chain."""
         with self._lock:

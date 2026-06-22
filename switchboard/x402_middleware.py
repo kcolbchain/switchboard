@@ -149,6 +149,7 @@ class X402Middleware:
         allowed_recipients: set | None = None,
         auto_pay: bool = True,
         on_payment: Callable[[PaymentRecord], None] | None = None,
+        lucidly_park=None,
     ):
         self.payment_client = payment_client
         self.gas_tracker = gas_tracker
@@ -156,6 +157,11 @@ class X402Middleware:
         self.allowed_recipients = allowed_recipients
         self.auto_pay = auto_pay
         self.on_payment = on_payment
+        # Optional Lucidly idle-balance adapter (switchboard.adapters.lucidly).
+        # When set, idle float is rebalanced into the syUSD vault after each
+        # settlement. Kept duck-typed so there is NO hard web3 dependency and
+        # the module still imports when web3 / the adapter are absent (issue #80).
+        self.lucidly_park = lucidly_park
 
         self.payment_history: list[PaymentRecord] = []
         self.total_spent_wei: int = 0
@@ -286,7 +292,53 @@ class X402Middleware:
         if self.on_payment:
             self.on_payment(record)
 
+        # Park idle float after the settlement (guarded; never fails the payment).
+        self._post_settlement_rebalance(record)
+
         return resp2
+
+    # CAIP-2-ish chain-id -> Lucidly adapter chain key. Kept tiny and local so
+    # the hook carries no chain-config dependency.
+    _CHAIN_KEYS: dict[int, str] = {
+        1: "ethereum",
+        8453: "base",
+        42161: "arbitrum",
+        10: "optimism",
+    }
+
+    def _chain_key(self, chain_id: int) -> str:
+        return self._CHAIN_KEYS.get(chain_id, f"eip155:{chain_id}")
+
+    def _post_settlement_rebalance(self, record: "PaymentRecord") -> None:
+        """Guarded post-settlement hook: rebalance idle float into Lucidly.
+
+        No-op when no adapter is configured. Any error from the adapter (vault
+        down, RPC failure, etc.) is swallowed: parking idle yield must NEVER
+        break or roll back a completed payment. There is no hard web3 dependency
+        here — the adapter is duck-typed and entirely optional (issue #80).
+        """
+        park = self.lucidly_park
+        if park is None:
+            return
+        try:
+            chain = self._chain_key(record.offer.chain_id)
+            liquid_usd = self._liquid_balance_usd(chain)
+            park.rebalance(chain, liquid_balance_usd=liquid_usd)
+        except Exception:
+            # Intentionally swallowed — see docstring.
+            return
+
+    def _liquid_balance_usd(self, chain: str) -> float:
+        """Best-effort idle USD balance for `chain`, sourced from the payment
+        client if it exposes one. Falls back to 0.0 (adapter treats as no-op)."""
+        client = self.payment_client
+        getter = getattr(client, "liquid_balance_usd", None)
+        if callable(getter):
+            try:
+                return float(getter(chain))
+            except Exception:
+                return 0.0
+        return 0.0
 
     def get_spend_summary(self) -> dict:
         """Return summary of all payments made."""
