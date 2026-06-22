@@ -528,3 +528,370 @@ def test_offer_wire_smaller_than_json():
     # Not an absolute guarantee (small offers may bloat with the ZAP header),
     # but for any realistic offer the binary form should win.
     assert len(wire) <= len(json_blob) + 64  # tolerance for fixed ZAP header
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# ZAP wire v1.0 session layer (issue #85)
+#
+# Pure-Python, no zap_py dependency. These tests are NOT gated by ZAP_REQUIRED:
+# the session framing and state machine must work with the standard library.
+# See docs/zap-wire-spec-v1.0.md.
+# ───────────────────────────────────────────────────────────────────────────
+
+
+class FakeClock:
+    """Deterministic injectable clock for retransmit-timeout tests."""
+
+    def __init__(self, start: float = 0.0):
+        self.t = start
+
+    def __call__(self) -> float:
+        return self.t
+
+    def advance(self, dt: float) -> None:
+        self.t += dt
+
+
+# ─── Frame encode/decode ─────────────────────────────────────────────────────
+
+
+def test_session_frame_header_is_26_bytes():
+    wire = zt.encode_session_frame(zt.SessionFrame(frame_type=zt.FRAME_DATA, seq=0))
+    assert len(wire) == zt.SESSION_HEADER_SIZE == 26
+
+
+def test_session_frame_roundtrip_all_fields():
+    frame = zt.SessionFrame(
+        frame_type=zt.FRAME_DATA,
+        flags=zt.FLAG_ACK_PRESENT | zt.FLAG_REQ,
+        seq=7,
+        ack=3,
+        request_id=0xDEADBEEFCAFE,
+        payload=b"hello-zap",
+    )
+    wire = zt.encode_session_frame(frame)
+    out = zt.decode_session_frame(wire)
+    assert out.frame_type == zt.FRAME_DATA
+    assert out.flags == zt.FLAG_ACK_PRESENT | zt.FLAG_REQ
+    assert out.seq == 7
+    assert out.ack == 3
+    assert out.request_id == 0xDEADBEEFCAFE
+    assert out.payload == b"hello-zap"
+
+
+def test_session_frame_starts_with_magic_and_version():
+    wire = zt.encode_session_frame(zt.SessionFrame(frame_type=zt.FRAME_HELLO, seq=0))
+    assert wire[0:2] == zt.WIRE_MAGIC.to_bytes(2, "big")
+    assert wire[2] == zt.WIRE_VERSION
+
+
+def test_session_frame_decode_rejects_bad_magic():
+    wire = bytearray(zt.encode_session_frame(zt.SessionFrame(frame_type=zt.FRAME_DATA, seq=0)))
+    wire[0] ^= 0xFF
+    with pytest.raises(zt.SessionProtocolError):
+        zt.decode_session_frame(bytes(wire))
+
+
+def test_session_frame_decode_rejects_unknown_version():
+    wire = bytearray(zt.encode_session_frame(zt.SessionFrame(frame_type=zt.FRAME_DATA, seq=0)))
+    wire[2] = 0x99
+    with pytest.raises(zt.SessionProtocolError):
+        zt.decode_session_frame(bytes(wire))
+
+
+# ─── Capability bitmask + negotiation ───────────────────────────────────────
+
+
+def test_capability_bitmask_layout_is_8_version_24_flags():
+    caps = zt.make_capabilities(zt.WIRE_VERSION, zt.CAP_ACK | zt.CAP_FIN)
+    assert zt.capability_version(caps) == zt.WIRE_VERSION
+    assert zt.capability_flags(caps) == (zt.CAP_ACK | zt.CAP_FIN)
+    # version lives in the high 8 bits
+    assert caps >> 24 == zt.WIRE_VERSION
+    # flags live in the low 24 bits
+    assert caps & 0x00FFFFFF == (zt.CAP_ACK | zt.CAP_FIN)
+
+
+def test_capability_baseline_mask_is_0x0100001f():
+    assert zt.CAP_BASELINE == 0x0100001F
+
+
+def test_negotiate_intersects_flags_and_min_version():
+    local = zt.make_capabilities(2, zt.CAP_ACK | zt.CAP_RETRY | zt.CAP_FIN)
+    remote = zt.make_capabilities(1, zt.CAP_ACK | zt.CAP_IDEMPOTENT | zt.CAP_FIN)
+    negotiated = zt.negotiate_capabilities(local, remote)
+    assert zt.capability_version(negotiated) == 1  # min(2, 1)
+    assert zt.capability_flags(negotiated) == (zt.CAP_ACK | zt.CAP_FIN)  # intersection
+
+
+def test_negotiate_no_common_version_raises():
+    local = zt.make_capabilities(0, zt.CAP_ACK)
+    remote = zt.make_capabilities(1, zt.CAP_ACK)
+    with pytest.raises(zt.SessionVersionError):
+        zt.negotiate_capabilities(local, remote)
+
+
+# ─── Handshake roundtrip + capability negotiation ───────────────────────────
+
+
+def test_handshake_roundtrip_and_capability_negotiation():
+    initiator = zt.ZapSession(capabilities=zt.make_capabilities(zt.WIRE_VERSION, zt.CAP_ACK | zt.CAP_FIN))
+    responder = zt.ZapSession(capabilities=zt.make_capabilities(zt.WIRE_VERSION, zt.CAP_ACK | zt.CAP_RETRY))
+
+    hello = initiator.connect(session_id=0x1234)
+    decoded_hello = zt.decode_session_frame(hello)
+    assert decoded_hello.frame_type == zt.FRAME_HELLO
+    assert decoded_hello.seq == 0
+
+    welcome = responder.accept(hello)
+    decoded_welcome = zt.decode_session_frame(welcome)
+    assert decoded_welcome.frame_type == zt.FRAME_WELCOME
+
+    initiator.process(welcome)
+
+    assert initiator.state == zt.SessionState.ESTABLISHED
+    assert responder.state == zt.SessionState.ESTABLISHED
+    # negotiated = intersection of the two flag sets
+    assert zt.capability_flags(initiator.negotiated) == zt.CAP_ACK
+    assert zt.capability_flags(responder.negotiated) == zt.CAP_ACK
+
+
+def test_accept_rejects_data_before_handshake():
+    responder = zt.ZapSession()
+    data = zt.encode_session_frame(zt.SessionFrame(frame_type=zt.FRAME_DATA, seq=0, payload=b"x"))
+    with pytest.raises(zt.SessionProtocolError):
+        responder.process(data)
+
+
+def test_welcome_session_id_mismatch_raises():
+    initiator = zt.ZapSession()
+    initiator.connect(session_id=0xAAAA)
+    # A WELCOME echoing the wrong session id must be rejected (spec §4.3).
+    bad = zt.encode_session_frame(
+        zt.SessionFrame(
+            frame_type=zt.FRAME_WELCOME,
+            seq=0,
+            flags=zt.FLAG_ACK_PRESENT,
+            payload=zt.encode_capabilities_payload(zt.CAP_BASELINE, session_id=0x9999),
+        )
+    )
+    with pytest.raises(zt.SessionProtocolError):
+        initiator.process(bad)
+
+
+# ─── In-order / out-of-order sequence handling + ACK ─────────────────────────
+
+
+def _establish_pair():
+    initiator = zt.ZapSession(capabilities=zt.CAP_BASELINE)
+    responder = zt.ZapSession(capabilities=zt.CAP_BASELINE)
+    hello = initiator.connect(session_id=0x55)
+    welcome = responder.accept(hello)
+    initiator.process(welcome)
+    return initiator, responder
+
+
+def test_in_order_data_delivered_and_acked():
+    initiator, responder = _establish_pair()
+    f1 = initiator.send_data(b"one")
+    f2 = initiator.send_data(b"two")
+
+    r1 = responder.process(f1)
+    r2 = responder.process(f2)
+
+    assert r1.delivered == [b"one"]
+    assert r2.delivered == [b"two"]
+    # cumulative ack: responder has delivered up to seq 2 (hello=0, one=1, two=2)
+    assert responder.ack_seq == 2
+
+
+def test_out_of_order_data_buffered_then_drained():
+    initiator, responder = _establish_pair()
+    f1 = initiator.send_data(b"one")  # seq 1
+    f2 = initiator.send_data(b"two")  # seq 2
+
+    # deliver f2 before f1
+    r_future = responder.process(f2)
+    assert r_future.delivered == []  # buffered, nothing delivered yet
+    assert responder.ack_seq == 0  # still only handshake is contiguous
+
+    r_gap = responder.process(f1)
+    # now both drain in order
+    assert r_gap.delivered == [b"one", b"two"]
+    assert responder.ack_seq == 2
+
+
+def test_duplicate_past_frame_dropped_but_reacked():
+    initiator, responder = _establish_pair()
+    f1 = initiator.send_data(b"one")
+    responder.process(f1)
+    r_dup = responder.process(f1)  # same seq again
+    assert r_dup.delivered == []  # not redelivered
+    assert r_dup.should_ack is True  # but we re-ack
+    assert responder.ack_seq == 1
+
+
+def test_ack_retires_retransmit_queue():
+    initiator, responder = _establish_pair()
+    f1 = initiator.send_data(b"one")  # seq 1
+    f2 = initiator.send_data(b"two")  # seq 2
+    assert initiator.unacked_seqs() == [1, 2]
+
+    # Deliver both in order so the responder can cumulatively ack up to seq 2.
+    responder.process(f1)
+    ack_frame = responder.process(f2)
+    assert ack_frame.should_ack
+    assert responder.ack_seq == 2
+
+    initiator.process(responder.make_ack())  # ACK = 2 retires seq 1 and 2
+    assert initiator.unacked_seqs() == []
+
+
+# ─── Retry after timeout ─────────────────────────────────────────────────────
+
+
+def test_no_retransmit_before_rto():
+    clock = FakeClock()
+    initiator = zt.ZapSession(capabilities=zt.CAP_BASELINE, rtt=0.2, now=clock)
+    responder = zt.ZapSession(capabilities=zt.CAP_BASELINE, now=clock)
+    initiator.process(responder.accept(initiator.connect(session_id=1)))
+
+    initiator.send_data(b"lossy")  # seq 1, sent at t=0
+    clock.advance(0.1)  # < rtt
+    assert initiator.due_retransmissions() == []
+
+
+def test_retransmit_after_rto_sets_retransmit_flag():
+    clock = FakeClock()
+    initiator = zt.ZapSession(capabilities=zt.CAP_BASELINE, rtt=0.2, now=clock)
+    responder = zt.ZapSession(capabilities=zt.CAP_BASELINE, now=clock)
+    initiator.process(responder.accept(initiator.connect(session_id=1)))
+
+    initiator.send_data(b"lossy")  # seq 1
+    clock.advance(0.25)  # > rtt
+    due = initiator.due_retransmissions()
+    assert len(due) == 1
+    rt = zt.decode_session_frame(due[0])
+    assert rt.seq == 1
+    assert rt.flags & zt.FLAG_RETRANSMIT
+    assert rt.payload == b"lossy"
+
+
+def test_retransmit_backoff_then_declared_lost():
+    clock = FakeClock()
+    initiator = zt.ZapSession(
+        capabilities=zt.CAP_BASELINE, rtt=0.2, rto_multiplier=2.0, max_retries=2, now=clock
+    )
+    responder = zt.ZapSession(capabilities=zt.CAP_BASELINE, now=clock)
+    initiator.process(responder.accept(initiator.connect(session_id=1)))
+
+    initiator.send_data(b"lossy")  # seq 1
+    # attempt 0 RTO = 0.2; attempt 1 RTO = 0.4
+    clock.advance(0.25)
+    assert len(initiator.due_retransmissions()) == 1  # retransmit #1
+    clock.advance(0.45)
+    assert len(initiator.due_retransmissions()) == 1  # retransmit #2 (== max_retries)
+    clock.advance(1.0)
+    # max_retries exhausted -> frame declared lost
+    with pytest.raises(zt.SessionTimeout):
+        initiator.due_retransmissions()
+
+
+# ─── Idempotent request_id dedup ─────────────────────────────────────────────
+
+
+def test_idempotent_request_deduped_on_retransmit():
+    initiator, responder = _establish_pair()
+    req = initiator.send_data(b"charge", request_id=0xABCD)
+    r1 = responder.process(req)
+    assert r1.delivered == [b"charge"]
+
+    # retransmit of the same request (same seq + request_id)
+    r2 = responder.process(req)
+    assert r2.delivered == []  # NOT re-executed
+    assert r2.duplicate is True
+    assert r2.should_ack is True
+
+
+def test_distinct_request_ids_both_delivered():
+    initiator, responder = _establish_pair()
+    r1 = responder.process(initiator.send_data(b"a", request_id=1))
+    r2 = responder.process(initiator.send_data(b"b", request_id=2))
+    assert r1.delivered == [b"a"]
+    assert r2.delivered == [b"b"]
+
+
+# ─── Clean FIN with in-flight frames ─────────────────────────────────────────
+
+
+def test_clean_fin_with_in_flight_frames():
+    initiator, responder = _establish_pair()
+    data = initiator.send_data(b"last")  # seq 1, in-flight (unacked)
+    fin = initiator.close()  # seq 2 FIN
+    assert zt.decode_session_frame(fin).frame_type == zt.FRAME_FIN
+    assert initiator.state == zt.SessionState.CLOSING
+    # in-flight data is NOT cancelled by FIN
+    assert 1 in initiator.unacked_seqs()
+
+    # responder receives the in-flight data, then the FIN, in order
+    responder.process(data)
+    fin_result = responder.process(fin)
+    assert fin_result.fin is True
+    assert responder.state == zt.SessionState.CLOSING
+
+    # responder half-closes back; its FIN piggybacks an ack covering the
+    # initiator's in-flight DATA + FIN, so the initiator drains and CLOSES.
+    responder_fin = responder.close()
+    initiator.process(responder_fin)
+    assert initiator.unacked_seqs() == []  # in-flight DATA+FIN now acked
+    assert initiator.state == zt.SessionState.CLOSED
+
+
+def test_fin_with_unfillable_gap_is_incomplete():
+    initiator, responder = _establish_pair()
+    initiator.send_data(b"one")          # seq 1 — will be "lost" (never delivered)
+    initiator.send_data(b"two")          # seq 2
+    fin = initiator.close()              # seq 3 FIN
+
+    # responder only ever sees seq 2 and the FIN, never seq 1
+    responder.process(zt.encode_session_frame(
+        zt.SessionFrame(frame_type=zt.FRAME_DATA, seq=2, payload=b"two")
+    ))
+    with pytest.raises(zt.SessionIncomplete):
+        responder.process(fin)
+
+
+# ─── Conformance vectors ─────────────────────────────────────────────────────
+
+
+def test_session_conformance_vectors_decode_to_expected_fields():
+    vectors = json.loads(
+        Path("tests/protocol_vectors/zap_session.v1.json").read_text(encoding="utf-8")
+    )
+    assert vectors["schema"] == "switchboard/zap-session/v1"
+    cases = {c["name"]: c for c in vectors["cases"]}
+    assert {"hello", "welcome", "data-request", "ack", "fin", "rst"} <= set(cases)
+
+    for case in vectors["cases"]:
+        wire = bytes.fromhex(case["wire_hex"])
+        frame = zt.decode_session_frame(wire)
+        assert frame.frame_type == case["frame_type"]
+        assert frame.seq == case["seq"]
+        assert frame.flags == case["flags"]
+        if "request_id" in case:
+            assert frame.request_id == case["request_id"]
+        if "payload_hex" in case:
+            assert frame.payload == bytes.fromhex(case["payload_hex"])
+        # re-encoding must reproduce the exact bytes (deterministic codec)
+        assert zt.encode_session_frame(frame) == wire
+
+
+def test_session_conformance_capability_vector_matches_negotiation():
+    vectors = json.loads(
+        Path("tests/protocol_vectors/zap_session.v1.json").read_text(encoding="utf-8")
+    )
+    cap = vectors["capability_negotiation"]
+    local = int(cap["local"], 16)
+    remote = int(cap["remote"], 16)
+    expected = int(cap["negotiated"], 16)
+    assert zt.negotiate_capabilities(local, remote) == expected

@@ -1,0 +1,78 @@
+{
+  "schema": "switchboard/zap-session/v1",
+  "version": 1,
+  "description": "Conformance vectors for the ZAP wire v1.0 session layer: frame header byte layout, handshake payloads, flags, and capability negotiation. See docs/zap-wire-spec-v1.0.md.",
+  "magic": "0x5a50",
+  "wire_version": 1,
+  "header_size": 26,
+  "capability_baseline": "0x0100001f",
+  "capability_negotiation": {
+    "local": "0x0200000b",
+    "remote": "0x0100000d",
+    "negotiated": "0x01000009",
+    "note": "min(version)=1, flags = local & remote = CAP_ACK|CAP_FIN"
+  },
+  "cases": [
+    {
+      "name": "hello",
+      "frame_type": 1,
+      "seq": 0,
+      "flags": 1,
+      "wire_hex": "5a5001010100000000000000000000000000000000000000000c0100001f0000000000001234",
+      "payload_hex": "0100001f0000000000001234",
+      "capabilities": "0x0100001f",
+      "session_id": 4660
+    },
+    {
+      "name": "welcome",
+      "frame_type": 2,
+      "seq": 0,
+      "flags": 1,
+      "wire_hex": "5a5001020100000000000000000000000000000000000000000c0100001f0000000000001234",
+      "payload_hex": "0100001f0000000000001234",
+      "capabilities": "0x0100001f",
+      "session_id": 4660
+    },
+    {
+      "name": "data-request",
+      "frame_type": 3,
+      "seq": 1,
+      "flags": 3,
+      "wire_hex": "5a500103030000000001000000000000deadbeefcafe00000006636861726765",
+      "request_id": 244837814094590,
+      "payload_hex": "636861726765"
+    },
+    {
+      "name": "ack",
+      "frame_type": 4,
+      "seq": 2,
+      "flags": 1,
+      "wire_hex": "5a50010401000000000200000002000000000000000000000000"
+    },
+    {
+      "name": "fin",
+      "frame_type": 5,
+      "seq": 2,
+      "flags": 1,
+      "wire_hex": "5a50010501000000000200000001000000000000000000000000"
+    },
+    {
+      "name": "rst",
+      "frame_type": 6,
+      "seq": 0,
+      "flags": 0,
+      "wire_hex": "5a5001060000000000000000000000000000000000000000000400000003",
+      "payload_hex": "00000003",
+      "error_code": 3
+    },
+    {
+      "name": "data-retransmit",
+      "frame_type": 3,
+      "seq": 1,
+      "flags": 7,
+      "wire_hex": "5a500103070000000001000000000000deadbeefcafe00000006636861726765",
+      "request_id": 244837814094590,
+      "payload_hex": "636861726765"
+    }
+  ]
+}
