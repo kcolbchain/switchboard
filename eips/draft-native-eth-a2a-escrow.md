@@ -1,15 +1,27 @@
 ---
-eip: <TBD — request from EIP editors>
+eip: <to be assigned by an EIP editor on PR>
 title: Native-ETH Agent-to-Agent Escrow
 description: A minimal payable escrow primitive for autonomous agent-to-agent payments using native ETH, with timeout-based refund and explicit challenge period.
 author: Abhishek Krishna (@abhicris), Pattermesh (@Pattermesh), kcolbchain (@kcolbchain)
-discussions-to: https://ethereum-magicians.org/<TBD>
+discussions-to: <ethereum-magicians.org thread URL — to be filled before opening the ethereum/EIPs PR>
 status: Draft
 type: Standards Track
 category: ERC
 created: 2026-05-24
 requires: 165
 ---
+
+<!--
+  EDITOR NOTE (remove before submitting to ethereum/EIPs):
+  Two frontmatter fields are intentionally placeholders because the EIP process
+  forbids self-assigning them:
+    - `eip:` is assigned by an EIP editor when the submission PR is opened
+      (file is named `eip-XXXX.md`); ethereum/EIPs CI normally fills it.
+    - `discussions-to:` MUST be a live ethereum-magicians.org thread. Open the
+      thread first (see eips/magicians-post-draft.md), then paste the URL here.
+  Everything else in this document is final and editor-ready.
+-->
+
 
 ## Abstract
 
@@ -98,7 +110,10 @@ interface IAgentEscrow {
     ///         by the original payer. Returns the funds to the payer.
     function cancelPayment(string calldata requestId) external;
 
-    /// @notice Read the payment record.
+    /// @notice Read the payment record. The return shape is illustrative;
+    ///         the ERC-165 selector depends only on the argument types
+    ///         (`string`), so a `returns (Payment)` struct form is
+    ///         equally conformant.
     function getPayment(string calldata requestId) external view returns (
         address payer,
         address payee,
@@ -114,9 +129,13 @@ interface IAgentEscrow {
 }
 ```
 
-The ERC-165 interface identifier is **`0x5c3738e9`**, computed as the XOR of the six selectors in `IAgentEscrow`:
+### ERC-165 interface identifier
 
-| Function | Selector |
+The interface identifier of `IAgentEscrow` is **`0x5c3738e9`**.
+
+It is the XOR of the [Solidity ABI](https://docs.soliditylang.org/en/latest/abi-spec.html#function-selector) function selectors of the six member functions, per [ERC-165](./eip-165.md). A function selector is the first four bytes of `keccak256` of the canonical signature — the function name and the parenthesized argument types only. Return types, the `payable`/`view`/`external` modifiers, and `address` vs `address payable` do **not** affect the selector. The six signatures and selectors are:
+
+| Function (canonical signature) | Selector |
 |---|---|
 | `createPayment(string,address,uint256,uint256)` | `0x8a5d6ff0` |
 | `confirmPayment(string)` | `0x912db0fb` |
@@ -125,7 +144,30 @@ The ERC-165 interface identifier is **`0x5c3738e9`**, computed as the XOR of the
 | `getPayment(string)` | `0xc69207a3` |
 | `isExpired(string)` | `0xc64fafbc` |
 
-A compliant contract MUST return `true` from `supportsInterface(0x5c3738e9)`.
+Running XOR (left to right):
+
+```
+  0x8a5d6ff0
+^ 0x912db0fb  = 0x1b70df0b
+^ 0xc38821fc  = 0xd8f8fef7
+^ 0x84126e01  = 0x5cea90f6
+^ 0xc69207a3  = 0x9a789755
+^ 0xc64fafbc  = 0x5c3738e9   ← interface id
+```
+
+The computation is reproducible with Foundry:
+
+```bash
+cast sig "createPayment(string,address,uint256,uint256)"  # 0x8a5d6ff0
+cast sig "confirmPayment(string)"                         # 0x912db0fb
+cast sig "requestRefund(string)"                          # 0xc38821fc
+cast sig "cancelPayment(string)"                          # 0x84126e01
+cast sig "getPayment(string)"                             # 0xc69207a3
+cast sig "isExpired(string)"                              # 0xc64fafbc
+# XOR of all six = 0x5c3738e9
+```
+
+A compliant contract MUST implement [ERC-165](./eip-165.md) and MUST return `true` from `supportsInterface(0x5c3738e9)` and from `supportsInterface(0x01ffc9a7)` (the ERC-165 identifier itself).
 
 ### Required events
 
@@ -144,6 +186,35 @@ event PaymentCancelled(string indexed requestId, address indexed payer, uint256 
 A compliant contract MUST emit `PaymentCreated` from `createPayment`, and exactly one of `PaymentReleased`, `PaymentRefunded`, or `PaymentCancelled` per request id when reaching the terminal state.
 
 The `requestId` field is `indexed` even though it is a `string`; per the ABI specification, the topic is `keccak256(requestId)`. Off-chain indexers SHOULD hash off-chain request ids to query the log.
+
+### Errors
+
+A compliant contract MUST revert (it MUST NOT silently no-op or return `false`) when a precondition is violated. The normative revert conditions are:
+
+| Function | MUST revert when |
+|---|---|
+| `createPayment` | `bytes(requestId).length == 0`; `payee == address(0)`; `timeoutBlocks == 0`; `msg.value == 0`; or `requestId` is already in use in this contract instance |
+| `confirmPayment` | caller is not the payer; `state != Locked`; or `block.number >= createdAt + timeoutBlocks` (window closed) |
+| `requestRefund` | caller is not the payer; `state != Locked`; or `block.number < createdAt + timeoutBlocks + challengePeriod` (challenge window not elapsed) |
+| `cancelPayment` | caller is not the payer; or `state != Locked` |
+| any terminal transition | the ETH transfer to the recipient fails (the state change MUST be rolled back with the revert) |
+
+The reason strings or [custom errors](https://docs.soliditylang.org/en/latest/contracts.html#errors-and-the-revert-statement) used are NOT normative — only the *fact* of reverting is. Implementations are RECOMMENDED to use named custom errors for cheaper reverts and machine-readable cause codes, for example:
+
+```solidity
+error RequestIdInUse(string requestId);
+error EmptyRequestId();
+error ZeroPayee();
+error ZeroTimeout();
+error ZeroValue();
+error NotPayer(address caller);
+error NotLocked(string requestId);
+error WindowClosed(string requestId);      // confirm after timeout
+error ChallengeNotElapsed(string requestId); // refund before challenge end
+error TransferFailed(address recipient, uint256 amount);
+```
+
+The reference implementation currently uses `require` reason strings; the migration to custom errors is editorial and does not change the interface id.
 
 ### Checks, effects, interactions
 
@@ -199,33 +270,37 @@ Implementations MUST NOT silently accept ERC-20 token transfers (`ERC-20::transf
 
 ## Reference Implementation
 
-The reference implementation is [`contracts/AgentEscrow.sol`](../contracts/AgentEscrow.sol) in the `kcolbchain/switchboard` repository. The contract is ~180 lines of Solidity ^0.8.20, MIT-licensed, dependency-free. It has been running on Base Sepolia and Lux testnet since April 2026.
+The reference implementation is [`contracts/AgentEscrow.sol`](../contracts/AgentEscrow.sol) in the `kcolbchain/switchboard` repository. It is Solidity ^0.8.20, MIT-licensed, and has been running on Base Sepolia and Lux testnet since April 2026.
 
-Foundry test coverage is in [`tests/`](../tests/) and covers:
+The reference contract is a *superset* of `IAgentEscrow`: it implements the full required interface (with `createPayment`/`confirmPayment`/`requestRefund`/`cancelPayment` returning `bool` and `getPayment` returning a `Payment` struct — neither return-shape difference changes the selectors, hence the interface id is unchanged), plus three non-normative extensions that are out of scope for this base standard:
 
-- `createPayment` success path, value lock, event emission
-- All `createPayment` revert cases (duplicate request id, zero payee, zero timeout, zero value, empty id)
-- `confirmPayment` happy path, only-payer enforcement, expired-window revert
-- `requestRefund` happy path, only-payer, pre-challenge-period revert
-- `cancelPayment` happy path, only-payer, only-locked revert
-- Smart-contract payee receiving via `.call{value:}` + `receive()`
-- Reentrancy via checks-effects-interactions ordering
+- An owner-curated agent allowlist (`registerAgent` / `deregisterAgent`), and
+- An optional oracle-release path (`createPaymentWithPolicy`, `releaseByAttestation`) that consults an external [`IOracleAggregator`](../contracts/IOracleAggregator.sol). This is the concrete shape of the layered extension described in the Rationale; it composes onto the base state machine without altering it.
+
+Two known gaps between the reference contract and this specification, to be closed before the contract is declared conformant (they do not affect the interface id):
+
+1. The reference contract does not yet inherit ERC-165 / expose `supportsInterface`. A conformant deployment MUST add it and return `true` for `0x5c3738e9` and `0x01ffc9a7`.
+2. The reference enum is `{Created, Locked, Confirmed, Released, Refunded, Cancelled}`; the canonical `IAgentEscrow` enum is `{None, Locked, Released, Refunded, Cancelled}`. The on-chain observable state machine is identical (only `Locked` and the three terminals are reachable post-`createPayment`); the extra enum members are implementation detail.
+
+Foundry tests live in [`test/AgentEscrow.t.sol`](../test/AgentEscrow.t.sol) (base primitive) and [`contracts/test/AgentEscrowOracle.t.sol`](../contracts/test/AgentEscrowOracle.t.sol) (allowlist + oracle extension), with a mock aggregator at [`contracts/mocks/MockOracleAggregator.sol`](../contracts/mocks/MockOracleAggregator.sol).
 
 ## Test Cases
 
-The reference implementation's test suite is the canonical test set. Selected cases:
+The reference implementation's Foundry suite is the canonical test set. Selected cases (names as they appear in the suite):
 
 | Test | What it asserts |
 |---|---|
-| `test_createPayment_locksValue` | `address(escrow).balance` increases by `msg.value`; `getPayment(id).state == Locked` |
-| `test_createPayment_revertsOnDuplicateId` | A second `createPayment` with the same `requestId` reverts |
-| `test_confirmPayment_onlyPayer` | `confirmPayment` called by non-payer reverts |
-| `test_confirmPayment_revertsAfterTimeout` | `confirmPayment` at `block.number == createdAt + timeoutBlocks` reverts |
-| `test_requestRefund_revertsBeforeChallenge` | `requestRefund` at `block.number == createdAt + timeoutBlocks + challengePeriod - 1` reverts |
-| `test_requestRefund_succeedsAfterChallenge` | At exactly `createdAt + timeoutBlocks + challengePeriod`, `requestRefund` returns funds |
-| `test_cancelPayment_onlyLocked` | `cancelPayment` on a terminal state reverts |
-| `test_smartContractPayee_receivesValue` | A payee with a `receive()` function receives ETH and emits its own event |
-| `test_supportsInterface` | `supportsInterface(0x5c3738e9) == true`; `supportsInterface(0x12345678) == false` |
+| `test_happyPath_createConfirmReleased` | After `createPayment`, state is `Locked`; after payer `confirmPayment`, state is `Released` and the payee balance increases by `amount` |
+| `test_timeoutRefund_path` | `requestRefund` reverts before `createdAt + timeoutBlocks + challengePeriod`; `isExpired` is true once `block.number >= createdAt + timeoutBlocks`; refund succeeds after the challenge window and state becomes `Refunded` |
+| `test_doubleConfirm_reverts` | A second `confirmPayment` on an already-`Released` request reverts |
+| `test_cancel_returnsFunds` | `cancelPayment` while `Locked` returns funds to the payer and sets state `Cancelled` |
+| `test_onlyPayerCanConfirm` | `confirmPayment` from a non-payer reverts |
+| `test_reentrancy_confirmPayment_reverts` | A malicious payee re-entering `confirmPayment` cannot trigger a second release (state already terminal + guard) |
+| `test_registerAgent_onlyOwner_strangerReverts` | The allowlist extension's `registerAgent` is owner-gated |
+| `test_releaseByAttestation_success` | Oracle-extension release succeeds when the aggregator verifies the attestation; permissionless submitter |
+| `test_releaseByAttestation_revertsAfterTimeout` | Oracle release reverts once the timeout window has closed (use refund instead) |
+
+A `supportsInterface(0x5c3738e9) == true` test MUST be added alongside the ERC-165 implementation noted above; it does not yet exist in the reference suite.
 
 ## Security Considerations
 
