@@ -2,7 +2,7 @@
 
 **Programmable payments for AI agents.** One Python library, one contract suite, and one binary wire format that lets agents pay each other for work — over HTTP/402, on-chain escrow, multi-party micropayments, or stablecoin rails — without a human in the loop.
 
-[![tests](https://img.shields.io/badge/tests-passing-brightgreen)](#test-results) [![python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/) [![status](https://img.shields.io/badge/status-active-success)](https://github.com/kcolbchain/switchboard) [![org](https://img.shields.io/badge/org-kcolbchain-7c3aed)](https://kcolbchain.com)
+[![CI](https://github.com/kcolbchain/switchboard/actions/workflows/ci.yml/badge.svg)](https://github.com/kcolbchain/switchboard/actions/workflows/ci.yml) [![python](https://img.shields.io/badge/python-3.11+-blue)](https://www.python.org/) [![status](https://img.shields.io/badge/status-active-success)](https://github.com/kcolbchain/switchboard) [![org](https://img.shields.io/badge/org-kcolbchain-7c3aed)](https://kcolbchain.com)
 
 ---
 
@@ -39,7 +39,7 @@ Built and maintained by [kcolbchain](https://kcolbchain.com). Aligned with [Lux 
 |---|---|---|
 | `switchboard/x402_middleware.py` | ✅ shipped (PR [#19](https://github.com/kcolbchain/switchboard/pull/19)) | Server-side **HTTP 402** middleware. Drop into FastAPI/Flask; gates routes behind on-chain payment. Verifies `X-PAYMENT` signatures and emits the standard `accepts[]` envelope. |
 | `switchboard/zap_transport.py` | 🔄 in PR [#21](https://github.com/kcolbchain/switchboard/pull/21) | **Binary wire** for `PaymentOffer`/`PaymentProof` over [luxfi/zap](https://github.com/luxfi/zap). Zero-allocation, ~10× smaller than JSON. First production consumer of `zap_py`. |
-| `switchboard/gas_tracker.py` + `gas_budget.py` | ✅ shipped (PR [#14](https://github.com/kcolbchain/switchboard/pull/14)) | **Hard gas budgets** (per-hour, per-day) so an agent can't get rugged by its own runaway loop. Closes the #1 footgun of autonomous on-chain agents. |
+| `switchboard/gas_tracker.py` + `switchboard/gas_budget.py` | ✅ shipped (PR [#14](https://github.com/kcolbchain/switchboard/pull/14)) | **Hard gas budgets** (per-hour, per-day) so an agent can't get rugged by its own runaway loop. Closes the #1 footgun of autonomous on-chain agents. |
 | `switchboard/nonce_manager.py` | ✅ shipped (PR [#11](https://github.com/kcolbchain/switchboard/pull/11)) | Client-side **nonce manager** with reorg protection. The thing every shipping agent eventually has to write. |
 | `contracts/AgentEscrow.sol` + `src/payment_protocol.py` | ✅ shipped (PR [#8](https://github.com/kcolbchain/switchboard/pull/8)) | **Trustless escrow** with timeout, challenge period, and mutual cancel. Solidity contract + Python client + CLI. |
 | `web/` | ✅ shipped (PR [#15](https://github.com/kcolbchain/switchboard/pull/15)) | Side-by-side **explorer** for x402 / MPP / AP2 / Circle / on-chain escrow. The clearest public comparison of agent-payment rails today. |
