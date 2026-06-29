@@ -39,3 +39,5 @@ env/
 .idea/
 .DS_Store
 *.swp
+# switchboard devserver sessions (run.py)
+.session/
