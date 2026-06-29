@@ -45,6 +45,7 @@ const SIDEBAR = `
       <a class="nav-item" href="escrow.html"><span class="nav-num">02</span><span class="nav-label">Escrow &amp; Refund</span><span class="nav-chip live">live</span></a>
       <a class="nav-item" href="streaming.html"><span class="nav-num">03</span><span class="nav-label">Streaming MPP</span><span class="nav-chip live">live</span></a>
       <a class="nav-item" href="auction.html"><span class="nav-num">04</span><span class="nav-label">Compute Auction</span><span class="nav-chip live">live</span></a>
+      <a class="nav-item" href="swap.html"><span class="nav-num">05</span><span class="nav-label">Agentic Pay + Swap</span><span class="nav-chip new">new</span></a>
     </div>
     <div class="nav-group">
       <div class="nav-group-label">Real-World Scenes</div>
