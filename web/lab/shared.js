@@ -83,4 +83,32 @@
     }, 2200);
   });
 
+  /* ── PWA: manifest link + service worker registration ──────── */
+  /* The lab is installable + offline-capable. Pages under web/lab/ reach the
+     manifest + service worker at the web/ root (one level up). Both are injected
+     here so every lab page participates without per-page edits. */
+  (function pwa() {
+    // Ensure a manifest <link> exists (some pages declare it statically).
+    if (!document.querySelector('link[rel="manifest"]')) {
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = '../manifest.json';
+      document.head.appendChild(link);
+    }
+    if (!document.querySelector('meta[name="theme-color"]')) {
+      const meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      meta.content = '#06060b';
+      document.head.appendChild(meta);
+    }
+    // Register the service worker with scope at the web/ root.
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker
+          .register('../sw.js', { scope: '../' })
+          .catch(() => { /* offline support is progressive; ignore failures */ });
+      });
+    }
+  })();
+
 })();
