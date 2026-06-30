@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Live Agentic Escrow — switchboard (MOCK CHAIN)</title>
+<meta name="description" content="Watch two AI agents transact over a mock-Ethereum AgentEscrow: x402 offer → validate → escrow LOCK → deliver → confirm → RELEASE → SafeSwap. SIMULATED mock chain — no real ETH, RPC or funds. Demo by Pattermesh on kcolbchain/switchboard." />
+<meta name="theme-color" content="#06060b" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="demo.css" />
+</head>
+<body>
+<!-- ===================================================================== -->
+<!-- LOUD SANDBOX BANNER — this is a simulation, not a live network.        -->
+<!-- ===================================================================== -->
+<div class="sandbox-banner" role="note" aria-label="sandbox notice">
+  <span class="tag">Simulated · Mock Chain</span>
+  <span class="msg"><b>Not a live network.</b> In-memory <code>MockChain</code> AgentEscrow — no real ETH, no RPC, no funds. Synthetic agents &amp; keys.</span>
+  <span class="credit">demo by Pattermesh · on <a href="https://github.com/kcolbchain/switchboard" target="_blank" rel="noopener">kcolbchain/switchboard</a></span>
+</div>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow"><span class="live-dot"></span> Live A2A Escrow · agentic_demo</div>
+    <h1>Two agents, one <em>escrow</em>, settled on a mock chain</h1>
+    <p class="lead">
+      <strong>Agent&nbsp;A</strong> hires <strong>Agent&nbsp;B</strong> for an inference job. B answers
+      <code>402 Payment Required</code> with an x402 escrow offer. A&rsquo;s real
+      <code>X402Middleware</code> checks it against a <strong>cap, allowlist &amp; gas budget</strong>, locks the
+      fee in <code>AgentEscrow</code>, B delivers, A confirms, and the escrow <strong>releases</strong> to B —
+      which then routes the proceeds through <strong>SafeSwap</strong>. Every number below is the real
+      orchestration&rsquo;s output, replayed step by step.
+    </p>
+  </header>
+
+  <!-- run / step / replay controls -->
+  <div class="controls">
+    <span class="ctl-label">job price</span>
+    <select id="selPrice" aria-label="job price">
+      <option value="5000000">5 USDC</option>
+      <option value="8000000">8 USDC</option>
+      <option value="12000000">12 USDC</option>
+    </select>
+    <span class="ctl-label">B swaps into</span>
+    <select id="selSwap" aria-label="swap target asset">
+      <option value="ETH">ETH — gas rebalance</option>
+      <option value="LUX">LUX — settlement asset</option>
+      <option value="USDC">USDC — hold</option>
+    </select>
+    <span class="spacer"></span>
+    <button class="btn btn-gold" id="btnRun">&#9654;&nbsp; Run demo</button>
+    <button class="btn btn-ghost" id="btnStep">Step &rsaquo;</button>
+    <button class="btn btn-ghost" id="btnReplay">&#8635; Replay</button>
+    <span class="status-pill" id="statusPill">idle</span>
+  </div>
+
+  <div class="err-toast" id="errToast"></div>
+
+  <!-- stage: canvas (agents + escrow + safeswap) | side (balances/escrow/ledger) -->
+  <section class="stage">
+    <div class="canvas-wrap">
+      <canvas id="stage" aria-label="agent escrow flow animation"></canvas>
+      <div class="stage-caption" id="stageCaption">
+        Press <b>Run demo</b> to watch Agent&nbsp;A pay Agent&nbsp;B through the mock-chain escrow.
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="balances">
+        <div class="bal">
+          <div class="who"><span class="dot a"></span>Agent A · payer</div>
+          <div class="amt"><span id="balA">100.00</span><span class="unit" id="balAUnit">USDC</span></div>
+          <div class="delta" id="deltaA"></div>
+        </div>
+        <div class="bal">
+          <div class="who"><span class="dot b"></span>Agent B · payee</div>
+          <div class="amt"><span id="balB">0.00</span><span class="unit" id="balBUnit">USDC</span></div>
+          <div class="delta" id="deltaB"></div>
+        </div>
+      </div>
+
+      <div class="escrow-card" id="escrowCard">
+        <div class="ec-icon">&#9670;</div>
+        <div class="ec-body">
+          <div class="ec-title">AgentEscrow · mock chain</div>
+          <div class="ec-state" id="escrowState"><span class="st empty">no escrow yet</span></div>
+          <div class="ec-meta" id="escrowMeta">AgentEscrow vault — lock → confirm → release</div>
+        </div>
+      </div>
+
+      <div class="ledger">
+        <div class="ledger-head">
+          <span class="title">flow ledger · click a row to scrub</span>
+          <span class="clock" id="ledgerClock">block #0</span>
+        </div>
+        <div class="ledger-body" id="ledgerBody"></div>
+      </div>
+    </aside>
+  </section>
+
+  <!-- summary: genuine library output -->
+  <section class="summary">
+    <h2>What the <em>library</em> returned</h2>
+    <p class="sub">
+      Straight from the real <code>ScenarioResult</code> — <code>X402Middleware.get_spend_summary()</code>,
+      the escrow state machine, and the <code>SafeSwap</code> receipt. Not recomputed in JavaScript.
+    </p>
+    <div class="facts" id="summaryFacts"></div>
+    <details class="raw">
+      <summary>raw run summary (JSON)</summary>
+      <pre id="rawJson">// press Run demo to populate</pre>
+    </details>
+  </section>
+
+  <footer class="foot">
+    <div class="brand"><em>kcolb</em>chain / switchboard · live agentic-escrow demo</div>
+    <div class="links">
+      <a href="https://github.com/kcolbchain/switchboard/tree/main/examples/agentic_demo" target="_blank" rel="noopener">source &amp; tests</a>
+      <a href="/healthz" target="_blank">healthz</a>
+      <a href="/api/demo/run">/api/demo/run</a>
+    </div>
+  </footer>
+</div>
+
+<script src="view.js"></script>
+<script src="demo.js"></script>
+</body>
+</html>
