@@ -158,6 +158,12 @@ Sliced for parallel work with minimal merge conflict. Dependencies noted.
 | ⑫ | `FleetBalancer` (reuse nonce_manager) | ⑧ |
 | ⑬ | `Rebalancer` (uses swap adapter) | ⑧ ② |
 | ⑭ | Multi-token 2-agent demo + `web/` explorer update | most of the above |
+| ⑮ | **MCP server** — exposes wallet + escrow ops as agent tools ("connect your agent" surface) | ⑧ ⑨ |
+| ⑯ | **CLI** — `switchboard wallet` / `escrow` commands over the same core | ⑧ |
+| ⑰ | **Tool registry + wiring** — register/discover the tools agents may call | ⑮ |
+| ⑱ | **Frontend onboarding** — login, connect API key, connect agent, "operate the wallet in 3 steps" | ⑮ ⑯ |
+| ⑲ | **Fairness + agent access policy engine** — extends `SpendPolicy` with per-agent access tiers, rate fairness, and contract-compliance rules | ⑨ |
+| ⑳ | **Escrow-fulfilment metrics + polling dashboard** — fill rate, timeouts, refunds, latency, ops health | ⑧ + contract events |
 
 Units ④⑤⑥⑧ have no blockers and can start immediately in parallel.
 
@@ -192,3 +198,25 @@ Units ④⑤⑥⑧ have no blockers and can start immediately in parallel.
 1. **§3.3 contract-generalization strategy (A / B / C)** — routed to @abhicris. Blocks units ①–③ only.
 2. Default `max_slippage_bps` for the swap adapter — propose 50 bps (0.5%), payee-overridable.
 3. Whether `Rebalancer` ships in the first wave or a follow-up (it depends on ② and is the least agent-facing).
+
+---
+
+## 10. Product & UX layer (units ⑮–⑳)
+
+The goal of the first wave is a build a person can *see working* and abhicris can review. The agent-facing product surface:
+
+- **Onboarding / login** — a user signs in, lands on a dashboard. Auth kept simple (email/session or API key); no custody of user keys beyond the MPC model.
+- **Connect an API key** — the user pastes an LLM/provider API key so an agent can act; stored per-user, scoped, never logged.
+- **Connect an agent** — via the **MCP server** (⑮): the agent gets wallet + escrow tools. "Operate the wallet in 3 steps" onboarding shows the minimal instructions to point any MCP-capable agent at switchboard.
+- **Let any agent operate the wallet** — the agent receives a scoped session key (§4.2); every action is bounded by the **fairness + access policy** (⑲) and must **comply with the escrow contract** terms before the wallet co-signs.
+- **Fairness & agent access policy** — per-agent access tiers, rate fairness (no single agent starves others), and contract-compliance checks; this is the "how the wallet is transacted" rulebook, layered on `SpendPolicy`.
+- **Metrics** — the dashboard polls **escrow fulfilment** (fill rate, time-to-release, timeouts, refunds, challenge rate) and wallet ops (spend by token/rail, policy denials, fleet health).
+
+Frontend work follows the repo's `web/` conventions and the `frontend-design` skill when built.
+
+## 11. Delivery & scope boundaries
+
+- **Review-first:** every unit ships as a **tested PR into `main`**, staged for abhicris review — not blind-merged. Tests must pass before a PR is recommended for merge.
+- **Contract (§3.3):** built as **approach A** (sibling `MultiTokenAgentEscrow`, reversible) and opened as a **draft PR** so abhicris reviews concrete code and makes the final A/B/C call. Not merged until he signs off.
+- **Solana:** **out of this wave.** Agentic payments on Solana are a genuinely separate, non-EVM design (own program, Ed25519 signing, SPL-token settlement) — a follow-up spec/track, not a flag on the EVM build.
+- **Featured tokens:** LUX, ZOO, and other kcolbchain-partner tokens are showcased as first-class options in the multi-token allowlist, demo, and dashboard.
