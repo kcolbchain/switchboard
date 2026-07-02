@@ -1,9 +1,10 @@
 # Agent-to-Agent Payment Protocol — switchboard
 
-**Status:** Draft v1.1
+**Status:** Draft v1.2
 **Reference impl:** [`src/payment_protocol.py`](../src/payment_protocol.py)
 **On-chain side:** [`contracts/AgentEscrow.sol`](../contracts/AgentEscrow.sol)
 **Tracks issue:** [#2 — Add agent-to-agent payment protocol](https://github.com/kcolbchain/switchboard/issues/2)
+**Multi-token extension:** [`docs/agent-wallet-multitoken-settlement.md`](./agent-wallet-multitoken-settlement.md) §3.4
 
 ---
 
@@ -23,13 +24,13 @@ Canonical structure (all fields lowercase snake_case):
 
 | field                       | type    | required | notes                                                      |
 | --------------------------- | ------- | -------- | ---------------------------------------------------------- |
-| `version`                   | string  | yes      | Protocol version. Current = `"1.1"`.                       |
+| `version`                   | string  | yes      | Protocol version. Current = `"1.2"`.                       |
 | `request_id`                | string  | yes      | UUIDv4 chosen by payer. Used as on-chain key.              |
 | `payer`                     | string  | yes      | Checksummed EVM address.                                   |
 | `payee`                     | string  | yes      | Checksummed EVM address.                                   |
 | `amount_wei`                | int     | yes      | Amount in smallest denomination of `currency`.             |
 | `amount_usd`                | string  | no       | Optional USD equivalent at request time, decimal as string.|
-| `currency`                  | string  | yes      | `"ETH"`, `"USDC"`, `"USDT"`, etc.                          |
+| `currency`                  | string  | yes      | `"ETH"`, `"USDC"`, `"USDT"`, etc. — v1.1-compatible alias for the ETH profile; kept for back-compat. |
 | `chain_id`                  | int     | yes      | EIP-155 chain ID. `1` = mainnet, `8453` = Base, etc.       |
 | `timeout_blocks`            | int     | yes      | Blocks after `created_at` before payee can no longer claim.|
 | `challenge_period_blocks`   | int     | yes      | Blocks after `timeout_blocks` before payer can refund.     |
@@ -37,6 +38,7 @@ Canonical structure (all fields lowercase snake_case):
 | `metadata`                  | object  | no       | Arbitrary JSON object — protocol-opaque.                   |
 | `created_at`                | float   | yes      | Unix epoch seconds, set by payer at request time.          |
 | `status`                    | string  | yes      | Local mirror of on-chain state. See §4.                    |
+| `settlement_token`          | object  | no       | **v1.2.** Negotiated settlement token. `null`/absent = ETH profile (v1.1 compat). See §2.3. |
 | `signature_alg`             | string  | no       | Signature registry name. Default = `"none"`.              |
 | `signature`                 | string  | no       | Signature bytes. Base64 in JSON; omitted/empty when unsigned. |
 
@@ -54,9 +56,30 @@ json.dumps(d, sort_keys=True, separators=(',', ':'))
 content_hash = "0x" + sha256(canonical_json).hexdigest()
 ```
 
-`content_hash` is computed over **all fields except `created_at`, `status`, `signature_alg`, and `signature`**. Rationale: `created_at` and `status` are instance-time / mutable; `signature_alg` and `signature` are derived envelope fields and must not self-cover. Two `PaymentRequest` objects representing the same payment intent (same `request_id`, payer, payee, amount, terms, metadata) MUST produce the same `content_hash` regardless of when they were instantiated, what their current local status is, or whether they have already been signed.
+`content_hash` is computed over **all fields except `created_at`, `status`, `settlement_token`, `signature_alg`, and `signature`**. Rationale: `created_at` and `status` are instance-time / mutable; `settlement_token` is a negotiated result set after both parties agree (like `status`); `signature_alg` and `signature` are derived envelope fields and must not self-cover. Two `PaymentRequest` objects representing the same payment intent (same `request_id`, payer, payee, amount, terms, metadata) MUST produce the same `content_hash` regardless of when they were instantiated, what their current local status is, what settlement token was negotiated, or whether they have already been signed.
 
 For replay protection, agents SHOULD use `request_id` (UUID), not `content_hash`.
+
+### 2.3 Settlement token (v1.2) — `SettlementToken`
+
+`settlement_token` carries the outcome of multi-token negotiation (see §3.4 of the multi-token settlement design). Its sub-fields:
+
+| sub-field    | type   | notes                                                                   |
+| ------------ | ------ | ----------------------------------------------------------------------- |
+| `chain_id`   | int    | EIP-155 chain ID the token lives on.                                    |
+| `token`      | string | ERC-20 contract address, or the zero address for native ETH.            |
+| `min_amount` | int    | Minimum acceptable amount in the token's smallest denomination.         |
+| `rank`       | int    | Preference rank from the advertising party (higher = more preferred).   |
+
+**Negotiation algorithm** (`negotiate_settlement_token(payer_offer, payee_accepts)`):
+
+1. Intersect payer and payee token lists on `(chain_id, token)`.
+2. For each common pair: `combined_rank = payer.rank + payee.rank`.
+3. Return the token with the highest combined rank.
+4. Tie-break: lexicographically smallest `token` address string (deterministic).
+5. No intersection → return `None` (`NoCommonSettlementToken`).
+
+**Wire back-compat:** when `settlement_token` is `None`/absent the wire payload is byte-for-byte identical to a v1.1 payload. v1.1 parsers MUST ignore unknown fields, so they are safe with a v1.2 payload that carries `settlement_token`.
 
 ## 3. Escrow contract — `AgentEscrow.sol`
 
@@ -264,5 +287,11 @@ The following remain intentionally unresolved here so PQ implementation work can
 ## 12. Version notes
 
 - v1.1 is a non-breaking extension of v1.0.
+- v1.2 is a non-breaking extension of v1.1:
+  - Adds `settlement_token` (Optional, defaults absent/null → ETH profile).
+  - Adds `negotiate_settlement_token()` pure function in `src/payment_protocol.py`.
+  - `currency` is retained as a v1.1-compatible alias for the ETH profile.
+  - `content_hash` excludes `settlement_token` (same as `status`) — hashes are stable across negotiation.
+  - Wire encoding unchanged when `settlement_token` is null/absent: v1.0/v1.1 payloads remain byte-for-byte identical.
 - Unsigned payloads remain valid by default.
 - Any future change to transcript construction, canonicalization, or the algorithm registry MUST bump the protocol version.
