@@ -63,12 +63,17 @@ const SIDEBAR = `
       <div class="nav-group-label">Utilities</div>
       <a class="nav-item" href="tools.html"><span class="nav-label">Dev Tools</span></a>
     </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Agent Wallet</div>
+      <a class="nav-item" href="../onboarding.html"><span class="nav-label">Onboarding &#8599;</span><span class="nav-chip new">new</span></a>
+    </div>
   </div>
   <div class="sidebar-footer">
     <a href="../index.html">explorer</a>
     <a href="../agents-demo.html">canvas</a>
     <a href="../simulator.html">sim</a>
     <a href="../docs.html">docs</a>
+    <a href="../onboarding.html">onboard</a>
     <a href="https://github.com/kcolbchain/switchboard" target="_blank">src</a>
   </div>
 </nav>`;

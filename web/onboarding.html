@@ -1,0 +1,1774 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>switchboard — agent onboarding</title>
+<meta name="description" content="Connect an API key, plug your agent into the MCP endpoint, and operate a multi-token wallet in three steps." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   SWITCHBOARD — AGENT ONBOARDING
+   Design language: Luxury Observatory. Obsidian + warm gold.
+   Fonts: Cormorant Garamond (display) + DM Sans (body) + JetBrains Mono
+   ============================================================ */
+
+:root {
+  --bg-deep:    #06060b;
+  --bg:         #0a0a0f;
+  --bg-elev:    #101018;
+  --bg-elev-2:  #16161f;
+  --bg-surface: #1a1a26;
+
+  --gold:       #d4a853;
+  --gold-soft:  rgba(212,168,83,0.12);
+  --gold-glow:  rgba(212,168,83,0.06);
+  --gold-line:  rgba(212,168,83,0.25);
+  --ivory:      #f0ebe0;
+
+  --emerald:    #4ecb71;
+  --emerald-soft: rgba(78,203,113,0.12);
+  --blue:       #5b9cf5;
+  --blue-soft:  rgba(91,156,245,0.10);
+  --rose:       #e0637c;
+  --rose-soft:  rgba(224,99,124,0.10);
+  --violet:     #a78bfa;
+  --violet-soft:rgba(167,139,250,0.10);
+  --cyan:       #67d4e0;
+
+  --fg:         #eae6df;
+  --fg-muted:   #9a9590;
+  --fg-faint:   #5c5854;
+  --line:       rgba(255,255,255,0.06);
+  --line-gold:  rgba(212,168,83,0.15);
+
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body:    'DM Sans', -apple-system, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  --sidebar-w: 280px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
+}
+
+/* ── RESET ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+body {
+  font-family: var(--font-body);
+  font-size: 15px; line-height: 1.65;
+  color: var(--fg-muted);
+  background: var(--bg);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+a { color: var(--gold); text-decoration: none; transition: color .2s; }
+a:hover { color: var(--ivory); }
+button { cursor: pointer; font: inherit; }
+input, textarea, select { font: inherit; }
+code, .mono { font-family: var(--font-mono); }
+
+/* ── ATMOSPHERE ─────────────────────────────────────────── */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 1200px 700px at 15% 0%, rgba(212,168,83,0.04), transparent 60%),
+    radial-gradient(ellipse 800px 500px at 85% 100%, rgba(78,203,113,0.025), transparent 50%),
+    radial-gradient(ellipse 600px 600px at 50% 50%, rgba(167,139,250,0.015), transparent 50%);
+}
+body::after {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.015) 2px, rgba(0,0,0,.015) 4px);
+}
+
+/* ── SCROLLBAR ──────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(212,168,83,0.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(212,168,83,0.4); }
+
+/* ── LAYOUT ─────────────────────────────────────────────── */
+.app { display: flex; min-height: 100vh; position: relative; z-index: 1; }
+
+/* ── SIDEBAR ────────────────────────────────────────────── */
+.sidebar {
+  position: fixed; top: 0; left: 0; bottom: 0;
+  width: var(--sidebar-w); z-index: 50;
+  background: var(--bg-deep);
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; overflow: hidden;
+  transition: transform .35s cubic-bezier(.22,1,.36,1);
+}
+.sidebar-header { padding: 28px 24px 20px; border-bottom: 1px solid var(--line); }
+.sidebar-logo { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--fg); letter-spacing: -.01em; }
+.sidebar-logo em { color: var(--gold); font-style: normal; }
+.sidebar-sub { font-size: 11px; color: var(--fg-faint); font-family: var(--font-mono); letter-spacing: .04em; text-transform: uppercase; margin-top: 4px; }
+
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 20px 0 24px; }
+.nav-section-label { padding: 8px 24px 4px; font-size: 9.5px; font-weight: 600; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .1em; font-family: var(--font-mono); }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 24px; cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all .2s; color: var(--fg-muted);
+  font-size: 14px;
+}
+.nav-item:hover { background: var(--gold-glow); color: var(--fg); border-left-color: rgba(212,168,83,0.3); }
+.nav-item.active { background: var(--gold-soft); color: var(--gold); border-left-color: var(--gold); }
+.nav-item .nav-num { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); min-width: 22px; flex-shrink: 0; }
+.nav-item.active .nav-num { color: var(--gold); }
+.nav-item .nav-chip { margin-left: auto; font-size: 9px; font-family: var(--font-mono); padding: 2px 7px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+.nav-chip.done { background: var(--emerald-soft); color: var(--emerald); }
+.nav-chip.current { background: var(--gold-soft); color: var(--gold); border: 1px solid var(--gold-line); }
+.nav-chip.locked { background: var(--bg-elev); color: var(--fg-faint); border: 1px solid var(--line); }
+
+.nav-user {
+  margin: 0 16px 8px;
+  padding: 12px 16px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: none;
+  align-items: center;
+  gap: 10px;
+}
+.nav-user.visible { display: flex; }
+.nav-user .avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--gold-soft); border: 1.5px solid var(--gold-line);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--gold);
+  flex-shrink: 0;
+}
+.nav-user .user-info { flex: 1; min-width: 0; }
+.nav-user .user-name { font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-user .user-role { font-family: var(--font-mono); font-size: 9px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .04em; }
+.btn-signout { background: transparent; border: none; color: var(--fg-faint); font-size: 11px; padding: 2px 4px; transition: color .2s; }
+.btn-signout:hover { color: var(--rose); }
+
+.sidebar-footer { padding: 16px 24px; border-top: 1px solid var(--line); display: flex; gap: 16px; font-size: 11px; flex-wrap: wrap; }
+.sidebar-footer a { color: var(--fg-faint); }
+.sidebar-footer a:hover { color: var(--gold); }
+
+/* ── MAIN ───────────────────────────────────────────────── */
+.main { margin-left: var(--sidebar-w); flex: 1; min-width: 0; }
+
+/* ── VIEWS (SPA) ────────────────────────────────────────── */
+.view { display: none; }
+.view.active { display: block; }
+
+/* ── LOGIN VIEW ─────────────────────────────────────────── */
+.login-wrap {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  position: relative; z-index: 1;
+}
+@media (max-width: 800px) { .login-wrap { grid-template-columns: 1fr; } }
+
+.login-art {
+  position: relative; overflow: hidden;
+  background: var(--bg-deep);
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  justify-content: space-between;
+  padding: 48px;
+}
+@media (max-width: 800px) { .login-art { display: none; } }
+
+.login-art-bg {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 600px 800px at -10% 50%, rgba(212,168,83,0.08), transparent 60%),
+    radial-gradient(ellipse 400px 400px at 110% 80%, rgba(78,203,113,0.05), transparent 60%);
+}
+.login-art canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.login-art-brand {
+  position: relative; z-index: 2;
+  font-family: var(--font-mono); font-size: 15px; color: var(--fg); font-weight: 700;
+}
+.login-art-brand em { color: var(--gold); font-style: normal; }
+.login-art-tagline {
+  position: relative; z-index: 2;
+}
+.login-art-tagline h2 {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4vw, 52px);
+  font-weight: 400; color: var(--fg);
+  letter-spacing: -.02em; line-height: 1.1;
+  margin-bottom: 16px;
+}
+.login-art-tagline h2 em { color: var(--gold); font-style: italic; }
+.login-art-tagline p { font-size: 14px; color: var(--fg-faint); max-width: 36ch; line-height: 1.6; }
+
+.login-form-wrap {
+  display: flex; align-items: center; justify-content: center;
+  padding: 48px 40px;
+  background: var(--bg);
+}
+.login-form-inner { width: 100%; max-width: 400px; }
+
+.login-eyebrow {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--gold); letter-spacing: .12em;
+  text-transform: uppercase; margin-bottom: 24px;
+  display: flex; align-items: center; gap: 12px;
+}
+.login-eyebrow::before { content: ''; width: 32px; height: 1px; background: var(--gold); }
+
+.login-form-inner h1 {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 400; color: var(--fg);
+  letter-spacing: -.02em; line-height: 1.1;
+  margin-bottom: 8px;
+}
+.login-form-inner .login-sub {
+  font-size: 14px; color: var(--fg-faint); margin-bottom: 40px; line-height: 1.5;
+}
+
+.field { margin-bottom: 20px; }
+.field label {
+  display: block; font-family: var(--font-mono); font-size: 10px;
+  color: var(--fg-faint); text-transform: uppercase; letter-spacing: .08em;
+  margin-bottom: 8px;
+}
+.field input {
+  width: 100%; padding: 13px 16px;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); color: var(--fg);
+  font-size: 14px; outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+.field input::placeholder { color: var(--fg-faint); }
+.field input:focus { border-color: var(--gold-line); box-shadow: 0 0 0 3px rgba(212,168,83,0.07); }
+
+.btn-primary {
+  width: 100%; padding: 14px 24px;
+  background: var(--gold); color: var(--bg-deep);
+  border: none; border-radius: var(--radius-sm);
+  font-weight: 600; font-size: 14px; letter-spacing: .01em;
+  transition: background .2s, transform .15s, box-shadow .2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-primary:hover { background: #e0b75f; transform: translateY(-1px); box-shadow: 0 8px 32px rgba(212,168,83,0.25); }
+.btn-primary:active { transform: none; }
+.btn-primary.loading { opacity: .7; pointer-events: none; }
+
+.login-divider { text-align: center; margin: 24px 0; position: relative; }
+.login-divider::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line); }
+.login-divider span { position: relative; background: var(--bg); padding: 0 12px; font-size: 11px; color: var(--fg-faint); font-family: var(--font-mono); }
+
+.login-api-key-field {
+  padding: 14px 16px;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 10px;
+}
+.login-api-key-field input { flex: 1; background: transparent; border: none; color: var(--fg); font-size: 13px; font-family: var(--font-mono); outline: none; }
+.login-api-key-field input::placeholder { color: var(--fg-faint); }
+.login-api-key-submit {
+  background: var(--bg-surface); border: 1px solid var(--gold-line); color: var(--gold);
+  border-radius: var(--radius-xs); padding: 6px 12px;
+  font-family: var(--font-mono); font-size: 11px; transition: all .2s;
+}
+.login-api-key-submit:hover { background: var(--gold-soft); }
+
+.form-error { color: var(--rose); font-size: 12px; margin-top: 8px; font-family: var(--font-mono); display: none; }
+.form-error.visible { display: block; }
+
+/* ── PAGE HERO ──────────────────────────────────────────── */
+.page-hero {
+  position: relative; padding: 64px 80px 52px;
+  border-bottom: 1px solid var(--line); overflow: hidden;
+}
+.page-hero::before {
+  content: ''; position: absolute; top: -200px; right: -100px;
+  width: 600px; height: 600px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,168,83,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.page-eyebrow {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--gold); letter-spacing: .12em;
+  text-transform: uppercase; margin-bottom: 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.page-eyebrow::before { content: ''; width: 32px; height: 1px; background: var(--gold); }
+.page-hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 4.5vw, 56px);
+  font-weight: 400; color: var(--fg);
+  letter-spacing: -.02em; line-height: 1.08; margin-bottom: 16px;
+}
+.page-hero h1 em { color: var(--gold); font-style: italic; }
+.page-hero .lead { font-size: 16px; color: var(--fg-muted); max-width: 54ch; line-height: 1.6; margin-bottom: 28px; }
+.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* ── CONTENT SECTION ────────────────────────────────────── */
+.content-section { padding: 56px 80px; border-bottom: 1px solid var(--line); }
+.content-section:last-of-type { border-bottom: none; }
+.section-label { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 14px; }
+.content-section h2 { font-family: var(--font-display); font-size: clamp(26px, 3vw, 38px); font-weight: 400; color: var(--fg); letter-spacing: -.015em; line-height: 1.1; margin-bottom: 12px; }
+.content-section h2 em { color: var(--gold); font-style: italic; }
+.section-desc { font-size: 14px; color: var(--fg-muted); max-width: 58ch; line-height: 1.6; margin-bottom: 36px; }
+
+/* ── BUTTONS ────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 22px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; border: none;
+}
+.btn-gold { background: var(--gold); color: var(--bg-deep); }
+.btn-gold:hover { background: #e0b75f; transform: translateY(-1px); box-shadow: 0 8px 32px rgba(212,168,83,0.25); }
+.btn-ghost { background: transparent; color: var(--fg-muted); border: 1px solid var(--line); }
+.btn-ghost:hover { border-color: var(--gold-line); color: var(--fg); }
+.btn-danger { background: transparent; color: var(--rose); border: 1px solid var(--rose-soft); }
+.btn-danger:hover { background: var(--rose-soft); }
+.btn.loading { opacity: .6; pointer-events: none; }
+
+/* ── GLASS CARD ─────────────────────────────────────────── */
+.glass-card {
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 28px;
+  position: relative; overflow: hidden;
+  transition: border-color .3s, transform .2s, box-shadow .3s;
+}
+.glass-card:hover { border-color: var(--gold-line); transform: translateY(-2px); box-shadow: 0 12px 48px rgba(0,0,0,0.3), 0 0 0 1px var(--gold-line); }
+.glass-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0; transition: opacity .3s; }
+.glass-card:hover::before { opacity: .6; }
+.glass-card .card-label { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+.glass-card h3 { font-family: var(--font-display); font-size: 22px; font-weight: 600; color: var(--fg); margin-bottom: 10px; }
+.glass-card p { font-size: 14px; color: var(--fg-muted); line-height: 1.6; }
+
+/* ── CHIP ───────────────────────────────────────────────── */
+.chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 10px; font-family: var(--font-mono); letter-spacing: .03em; }
+.chip-gold { background: var(--gold-soft); color: var(--gold); border: 1px solid var(--gold-line); }
+.chip-emerald { background: var(--emerald-soft); color: var(--emerald); }
+.chip-blue { background: var(--blue-soft); color: var(--blue); }
+.chip-rose { background: var(--rose-soft); color: var(--rose); }
+.chip-muted { background: var(--bg-elev); color: var(--fg-faint); border: 1px solid var(--line); }
+
+/* ── LIVE DOT ───────────────────────────────────────────── */
+.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); margin-right: 6px; vertical-align: 1px; animation: livePulse 2s ease-in-out infinite; }
+@keyframes livePulse { 0%,100%{opacity:.5;box-shadow:0 0 0 0 rgba(78,203,113,.4)}50%{opacity:1;box-shadow:0 0 0 6px rgba(78,203,113,0)} }
+
+/* ── GRIDS ──────────────────────────────────────────────── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+
+/* ── CODE BLOCK ─────────────────────────────────────────── */
+pre.code-block {
+  background: var(--bg-deep); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 22px 26px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--fg);
+  line-height: 1.7; overflow-x: auto; position: relative;
+  margin-top: 16px;
+}
+pre.code-block::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--gold), transparent); border-radius: var(--radius) 0 0 var(--radius); }
+pre.code-block .kw { color: #c4b5fd; }
+pre.code-block .str { color: #86efac; }
+pre.code-block .com { color: var(--fg-faint); font-style: italic; }
+pre.code-block .fn { color: var(--gold); }
+pre.code-block .typ { color: var(--cyan); }
+pre.code-block .url { color: var(--blue); text-decoration: underline; cursor: pointer; }
+
+/* ── COPY BUTTON ────────────────────────────────────────── */
+.code-wrap { position: relative; }
+.copy-btn {
+  position: absolute; top: 12px; right: 12px;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  color: var(--fg-faint); border-radius: var(--radius-xs);
+  padding: 4px 10px; font-family: var(--font-mono); font-size: 10px;
+  cursor: pointer; transition: all .2s;
+}
+.copy-btn:hover { border-color: var(--gold-line); color: var(--gold); }
+.copy-btn.copied { color: var(--emerald); border-color: var(--emerald-soft); }
+
+/* ── API KEY INPUT ──────────────────────────────────────── */
+.key-input-row {
+  display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+.provider-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+.provider-tab {
+  padding: 6px 14px; border-radius: 999px;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  color: var(--fg-faint); font-size: 12px; font-family: var(--font-mono);
+  cursor: pointer; transition: all .2s;
+}
+.provider-tab:hover { border-color: var(--gold-line); color: var(--fg); }
+.provider-tab.active { background: var(--gold-soft); color: var(--gold); border-color: var(--gold-line); }
+
+.key-paste-area {
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.key-paste-area label { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .08em; }
+.key-paste-area input {
+  background: var(--bg-deep); border: 1px solid var(--line);
+  border-radius: var(--radius-xs); padding: 10px 14px;
+  color: var(--fg); font-family: var(--font-mono); font-size: 13px;
+  width: 100%; outline: none; transition: border-color .2s;
+}
+.key-paste-area input:focus { border-color: var(--gold-line); }
+.key-paste-area .key-hint { font-size: 11px; color: var(--fg-faint); display: flex; align-items: center; gap: 6px; }
+.key-paste-area .key-hint .lock-icon { color: var(--emerald); }
+
+.keys-list { display: flex; flex-direction: column; gap: 8px; margin-top: 24px; }
+.key-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-elev); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  transition: border-color .2s;
+}
+.key-row:hover { border-color: var(--line-gold); }
+.key-row .provider-badge { font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--gold); background: var(--gold-soft); padding: 3px 9px; border-radius: 999px; flex-shrink: 0; }
+.key-row .key-masked { font-family: var(--font-mono); font-size: 13px; color: var(--fg); flex: 1; }
+.key-row .key-date { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); }
+.key-delete { background: transparent; border: none; color: var(--fg-faint); padding: 4px 8px; font-size: 14px; border-radius: 4px; transition: all .2s; }
+.key-delete:hover { color: var(--rose); background: var(--rose-soft); }
+
+/* ── MCP CONNECT VIEW ───────────────────────────────────── */
+.mcp-endpoint-box {
+  background: var(--bg-deep); border: 1px solid var(--gold-line);
+  border-radius: var(--radius); padding: 24px 28px;
+  margin-bottom: 28px; position: relative;
+}
+.mcp-endpoint-box .ep-label { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+.mcp-endpoint-box .ep-url { font-family: var(--font-mono); font-size: 15px; color: var(--gold); word-break: break-all; margin-bottom: 12px; }
+.mcp-endpoint-box .ep-key-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mcp-endpoint-box .ep-key { font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted); flex: 1; word-break: break-all; }
+.ep-badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; padding: 4px 10px; border-radius: 999px; }
+.ep-badge.active { background: var(--emerald-soft); color: var(--emerald); border: 1px solid rgba(78,203,113,0.2); }
+.ep-badge.expiry { background: var(--gold-soft); color: var(--gold); border: 1px solid var(--gold-line); }
+
+/* ── 3-STEP WALKTHROUGH ─────────────────────────────────── */
+.steps { display: flex; flex-direction: column; gap: 0; margin-bottom: 40px; }
+.step-item {
+  display: flex; gap: 24px; padding: 28px 0;
+  border-bottom: 1px solid var(--line);
+  transition: background .2s;
+}
+.step-item:last-child { border-bottom: none; }
+.step-num {
+  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+  background: var(--gold-soft); border: 1.5px solid var(--gold-line);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--gold);
+}
+.step-body { flex: 1; min-width: 0; }
+.step-body h4 { font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--fg); margin-bottom: 8px; }
+.step-body p { font-size: 14px; color: var(--fg-muted); line-height: 1.6; max-width: 54ch; margin-bottom: 12px; }
+
+/* ── POLICY CARD ────────────────────────────────────────── */
+.policy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 24px; }
+.policy-item { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 16px; }
+.policy-item .pi-label { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+.policy-item .pi-val { font-family: var(--font-mono); font-size: 15px; color: var(--fg); font-weight: 500; }
+.policy-item .pi-sub { font-size: 11px; color: var(--fg-faint); margin-top: 4px; }
+
+/* ── TOKEN PILLS ROW ────────────────────────────────────── */
+.token-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.token-pill {
+  padding: 4px 12px; border-radius: 999px;
+  font-family: var(--font-mono); font-size: 11px;
+  border: 1px solid var(--gold-line);
+  background: var(--gold-soft); color: var(--gold);
+  transition: all .2s;
+}
+.token-pill:hover { background: rgba(212,168,83,0.22); }
+
+/* ── METRICS DASHBOARD ──────────────────────────────────── */
+.dash-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-bottom: 1px solid var(--line); }
+.dash-stat { background: var(--bg); padding: 32px 36px; position: relative; overflow: hidden; transition: background .3s; }
+.dash-stat:hover { background: var(--bg-elev); }
+.dash-stat::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: 0; transition: opacity .3s; }
+.dash-stat:hover::after { opacity: 1; }
+.dash-stat .ds-label { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
+.dash-stat .ds-value { font-family: var(--font-display); font-size: 44px; font-weight: 600; color: var(--fg); letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.dash-stat .ds-sub { font-size: 12px; color: var(--fg-faint); margin-top: 8px; }
+.ds-value.good { color: var(--emerald); }
+.ds-value.warn { color: var(--gold); }
+.ds-value.bad { color: var(--rose); }
+
+.metrics-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding: 40px 80px; }
+@media (max-width: 1100px) { .metrics-row { grid-template-columns: 1fr; padding: 32px 40px; } }
+
+.metrics-panel { background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; }
+.metrics-panel .mp-title { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+
+.bar-chart { display: flex; flex-direction: column; gap: 12px; }
+.bar-row { display: flex; flex-direction: column; gap: 4px; }
+.bar-row-head { display: flex; justify-content: space-between; font-size: 12px; }
+.bar-row-head .bar-label { color: var(--fg-muted); }
+.bar-row-head .bar-val { font-family: var(--font-mono); color: var(--fg); font-size: 11px; }
+.bar-track { height: 6px; background: var(--bg-deep); border-radius: 99px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 99px; transition: width 1s ease; }
+.bar-fill.gold { background: linear-gradient(90deg, var(--gold), rgba(212,168,83,0.6)); }
+.bar-fill.emerald { background: linear-gradient(90deg, var(--emerald), rgba(78,203,113,0.5)); }
+.bar-fill.blue { background: linear-gradient(90deg, var(--blue), rgba(91,156,245,0.5)); }
+.bar-fill.rose { background: linear-gradient(90deg, var(--rose), rgba(224,99,124,0.5)); }
+.bar-fill.violet { background: linear-gradient(90deg, var(--violet), rgba(167,139,250,0.5)); }
+
+.escrow-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.escrow-table th { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .06em; font-weight: 500; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
+.escrow-table td { padding: 12px 12px; border-bottom: 1px solid var(--line); transition: background .15s; }
+.escrow-table tr:hover td { background: var(--gold-glow); }
+.escrow-table tr:last-child td { border-bottom: none; }
+.escrow-table .val-good { color: var(--emerald); font-family: var(--font-mono); }
+.escrow-table .val-warn { color: var(--gold); font-family: var(--font-mono); }
+.escrow-table .val-bad { color: var(--rose); font-family: var(--font-mono); }
+.escrow-table .metric-label { color: var(--fg); font-weight: 500; }
+
+.fleet-bar { height: 12px; background: var(--bg-deep); border-radius: 99px; overflow: hidden; margin: 16px 0 4px; }
+.fleet-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--emerald), rgba(78,203,113,0.4)); transition: width 1.2s cubic-bezier(.22,1,.36,1); }
+.fleet-label { display: flex; justify-content: space-between; font-size: 11px; }
+.fleet-label span { color: var(--fg-faint); font-family: var(--font-mono); }
+.fleet-label strong { color: var(--emerald); font-family: var(--font-mono); }
+
+.balance-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.balance-row:last-child { border-bottom: none; }
+.balance-row .bal-token { display: flex; align-items: center; gap: 10px; }
+.balance-row .token-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 9px; font-weight: 700; flex-shrink: 0; }
+.token-icon.lux { background: var(--gold-soft); color: var(--gold); border: 1px solid var(--gold-line); }
+.token-icon.usdc { background: var(--blue-soft); color: var(--blue); border: 1px solid rgba(91,156,245,0.2); }
+.token-icon.zoo { background: var(--violet-soft); color: var(--violet); border: 1px solid rgba(167,139,250,0.2); }
+.token-icon.eth { background: var(--bg-surface); color: var(--fg-muted); border: 1px solid var(--line); }
+.balance-row .bal-name { font-size: 14px; color: var(--fg); font-weight: 500; }
+.balance-row .bal-chain { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); }
+.balance-row .bal-amount { text-align: right; }
+.balance-row .bal-usd { font-family: var(--font-display); font-size: 20px; color: var(--fg); }
+.balance-row .bal-raw { font-family: var(--font-mono); font-size: 11px; color: var(--fg-faint); }
+
+/* ── NOTICE / ALERT ─────────────────────────────────────── */
+.notice {
+  display: flex; gap: 12px; padding: 14px 16px;
+  border-radius: var(--radius-sm); margin-bottom: 24px; align-items: flex-start;
+}
+.notice.info { background: var(--blue-soft); border: 1px solid rgba(91,156,245,0.2); }
+.notice.warn { background: var(--gold-soft); border: 1px solid var(--gold-line); }
+.notice.success { background: var(--emerald-soft); border: 1px solid rgba(78,203,113,0.2); }
+.notice .n-icon { font-size: 16px; line-height: 1.4; flex-shrink: 0; }
+.notice .n-text { font-size: 13px; line-height: 1.5; }
+.notice.info .n-text { color: var(--blue); }
+.notice.warn .n-text { color: var(--gold); }
+.notice.success .n-text { color: var(--emerald); }
+
+/* ── LOADING STATE ──────────────────────────────────────── */
+.spinner {
+  display: inline-block; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(212,168,83,0.2); border-top-color: var(--gold);
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── REVEAL ─────────────────────────────────────────────── */
+.reveal { opacity: 0; transform: translateY(20px); transition: opacity .65s ease, transform .65s ease; }
+.reveal.visible { opacity: 1; transform: none; }
+
+/* ── FOOTER ─────────────────────────────────────────────── */
+.lab-footer { padding: 40px 80px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 24px; }
+.lab-footer .brand { font-family: var(--font-mono); font-size: 13px; color: var(--fg-faint); }
+.lab-footer .brand em { color: var(--gold); font-style: normal; font-weight: 700; }
+.lab-footer .links { display: flex; gap: 20px; font-size: 12px; }
+.lab-footer .links a { color: var(--fg-faint); }
+.lab-footer .links a:hover { color: var(--gold); }
+
+/* ── MOBILE TOGGLE ──────────────────────────────────────── */
+.sidebar-toggle { display: none; position: fixed; top: 16px; left: 16px; z-index: 60; background: var(--bg-elev); border: 1px solid var(--line); color: var(--fg); border-radius: var(--radius-sm); width: 40px; height: 40px; cursor: pointer; font-size: 18px; align-items: center; justify-content: center; }
+
+/* ── RESPONSIVE ─────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .dash-grid { grid-template-columns: repeat(2, 1fr); }
+  .content-section { padding: 48px 48px; }
+  .page-hero { padding: 56px 48px 44px; }
+  .lab-footer { padding: 32px 48px; }
+}
+@media (max-width: 900px) {
+  .sidebar { transform: translateX(-100%); z-index: 100; }
+  .sidebar.open { transform: translateX(0); box-shadow: 12px 0 48px rgba(0,0,0,0.5); }
+  .sidebar-toggle { display: inline-flex; }
+  .main { margin-left: 0; }
+  .content-section { padding: 36px 24px; }
+  .page-hero { padding: 44px 24px 36px; }
+  .metrics-row { padding: 24px; }
+  .lab-footer { padding: 28px 24px; }
+}
+@media (max-width: 600px) {
+  .dash-grid { grid-template-columns: 1fr; }
+  .page-hero h1 { font-size: 30px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .login-form-wrap { padding: 32px 24px; }
+}
+
+/* ── ONBOARDING PROGRESS BAR ────────────────────────────── */
+.onboarding-progress {
+  display: flex; align-items: center; gap: 0;
+  padding: 0 80px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  position: sticky; top: 0; z-index: 20;
+  backdrop-filter: blur(10px);
+}
+@media (max-width: 900px) { .onboarding-progress { padding: 0 24px; } }
+.progress-step {
+  display: flex; align-items: center; padding: 16px 20px 16px 0;
+  cursor: pointer; position: relative; gap: 10px;
+  font-size: 12px; color: var(--fg-faint);
+  transition: color .2s; white-space: nowrap;
+}
+.progress-step .ps-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--bg-elev); border: 1.5px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint);
+  flex-shrink: 0; transition: all .3s;
+}
+.progress-step.done .ps-num { background: var(--emerald-soft); border-color: rgba(78,203,113,0.3); color: var(--emerald); }
+.progress-step.current .ps-num { background: var(--gold-soft); border-color: var(--gold-line); color: var(--gold); }
+.progress-step.done { color: var(--fg-muted); }
+.progress-step.current { color: var(--gold); }
+.progress-step:hover:not(.current) { color: var(--fg-muted); }
+.progress-step .ps-label { font-weight: 500; }
+@media (max-width: 640px) { .progress-step .ps-label { display: none; } }
+.progress-divider { width: 24px; height: 1px; background: var(--line); flex-shrink: 0; margin: 0 4px; }
+.progress-step.done ~ .progress-divider { background: var(--emerald-soft); }
+</style>
+</head>
+<body>
+
+<!-- MOCK API loaded first -->
+<script>
+/**
+ * switchboard — Agent Onboarding Mock API
+ * =========================================
+ * Endpoint contract (see also: web/mock-api.js for the full spec & shapes).
+ *
+ * POST /api/auth/session         { email } -> { session_token, user_id, display_name }
+ * DELETE /api/auth/session       (bearer)  -> 204
+ * POST /api/keys                 { provider, key, label? } -> { key_id, masked, created_at }
+ * GET  /api/keys                 -> [ { key_id, provider, label, masked, created_at } ]
+ * DELETE /api/keys/:key_id       -> 204
+ * GET  /api/agent/mcp-endpoint   -> { endpoint, session_key, expires_at, policy }
+ * GET  /api/wallet/balances      -> [ { chain_id, token, balance, balance_usd } ]
+ * POST /api/escrow/create        { payee, token, amount, chain_id } -> { request_id, tx_hash }
+ * GET  /api/policy/status        -> { daily_spent_usd, daily_cap_usd, ... }
+ * GET  /api/metrics              -> { escrow: {...}, wallet: {...} }
+ */
+
+const MockAPI = (() => {
+  const DELAY = () => new Promise(r => setTimeout(r, 300 + Math.random() * 200));
+  let _keys = [];
+
+  async function auth({ email }) {
+    await DELAY();
+    if (!email || !email.includes('@')) return { ok: false, error: 'invalid_credentials' };
+    return { ok: true, data: {
+      session_token: 'sb_sess_' + Math.random().toString(36).slice(2),
+      user_id: 'usr_' + Math.random().toString(36).slice(2, 10),
+      display_name: email.split('@')[0],
+    }};
+  }
+
+  async function addKey({ provider, key, label }) {
+    await DELAY();
+    if (!key || key.length < 8) return { ok: false, error: 'invalid_key', detail: 'Key too short' };
+    const entry = {
+      key_id: 'key_' + Math.random().toString(36).slice(2, 10),
+      provider, label: label || provider,
+      masked: key.slice(0, 4) + '…' + key.slice(-4),
+      created_at: new Date().toISOString(),
+    };
+    _keys.push(entry);
+    return { ok: true, data: entry };
+  }
+
+  async function listKeys() { await DELAY(); return { ok: true, data: [..._keys] }; }
+
+  async function deleteKey(key_id) {
+    await DELAY(); _keys = _keys.filter(k => k.key_id !== key_id); return { ok: true };
+  }
+
+  async function getMcpEndpoint() {
+    await DELAY();
+    return { ok: true, data: {
+      endpoint: 'wss://switchboard.kcolbchain.io/mcp',
+      session_key: 'sb_sk_' + Math.random().toString(36).slice(2, 18),
+      expires_at: new Date(Date.now() + 86400000).toISOString(),
+      policy: {
+        token_allowlist: ['LUX', 'USDC', 'ZOO', 'ETH', 'DAI'],
+        per_tx_cap_usd: 50, daily_cap_usd: 500,
+        allowed_counterparties: null,
+      },
+    }};
+  }
+
+  async function getBalances() {
+    await DELAY();
+    return { ok: true, data: [
+      { chain_id: 7777777, chain_name: 'LUX C-chain', token: 'LUX',  balance: '14820.50', balance_usd: 2442.38 },
+      { chain_id: 8453,    chain_name: 'Base',         token: 'USDC', balance: '1024.00',  balance_usd: 1024.00 },
+      { chain_id: 8453,    chain_name: 'Base',         token: 'ZOO',  balance: '50000.00', balance_usd: 410.00  },
+      { chain_id: 1,       chain_name: 'Ethereum',     token: 'ETH',  balance: '0.31',     balance_usd: 992.00  },
+    ]};
+  }
+
+  async function getPolicyStatus() {
+    await DELAY();
+    return { ok: true, data: {
+      session_key: 'sb_sk_demo_preview…',
+      expires_at: new Date(Date.now() + 82800000).toISOString(),
+      daily_cap_usd: 500, daily_spent_usd: 127.40,
+      per_tx_cap_usd: 50,
+      token_allowlist: ['LUX', 'USDC', 'ZOO', 'ETH', 'DAI'],
+      allowed_counterparties: null, policy_denials_24h: 2,
+    }};
+  }
+
+  async function getMetrics() {
+    await DELAY();
+    return { ok: true, data: {
+      escrow: { fill_rate: 0.94, avg_release_ms: 1840, timeout_rate: 0.03, refund_rate: 0.03, challenge_rate: 0.01, open_count: 7 },
+      wallet: { spend_by_token: { USDC: 88.20, LUX: 24.10, ETH: 15.10 }, spend_by_rail: { x402: 62.40, escrow: 52.00, mpp: 13.00 }, policy_denials_24h: 2, fleet_health: 1.0 },
+    }};
+  }
+
+  return { auth, addKey, listKeys, deleteKey, getMcpEndpoint, getBalances, getPolicyStatus, getMetrics };
+})();
+</script>
+
+<button class="sidebar-toggle" id="sidebarToggle" aria-label="toggle sidebar">&#9776;</button>
+
+<!-- ================================================================ -->
+<!--  LOGIN VIEW (shown before auth; no sidebar)                       -->
+<!-- ================================================================ -->
+<div id="viewLogin" class="view active" style="position:relative;z-index:1">
+  <div class="login-wrap">
+    <!-- Art panel -->
+    <div class="login-art">
+      <div class="login-art-bg"></div>
+      <canvas id="loginCanvas"></canvas>
+      <div class="login-art-brand"><em>kcolb</em>chain / switchboard</div>
+      <div class="login-art-tagline">
+        <h2>Let any <em>agent</em> operate the wallet.</h2>
+        <p>Scoped session keys. Multi-token treasury. MPC signing. No single key on any machine.</p>
+      </div>
+    </div>
+    <!-- Form panel -->
+    <div class="login-form-wrap">
+      <div class="login-form-inner">
+        <div class="login-eyebrow">agent onboarding</div>
+        <h1>Sign in to<br>switchboard.</h1>
+        <p class="login-sub">Enter your email to receive a magic link, or paste a switchboard API key below.</p>
+
+        <div class="field">
+          <label>Email address</label>
+          <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div id="loginError" class="form-error">Invalid email address. Please try again.</div>
+        <button class="btn-primary" id="loginBtn" onclick="handleEmailLogin()">
+          <span id="loginBtnText">Continue with email</span>
+          <span id="loginBtnSpinner" class="spinner" style="display:none"></span>
+        </button>
+
+        <div class="login-divider"><span>or</span></div>
+
+        <div class="login-api-key-field">
+          <input type="text" id="loginApiKey" placeholder="sb_live_…  (switchboard API key)" autocomplete="off" spellcheck="false" />
+          <button class="login-api-key-submit" onclick="handleApiKeyLogin()">Sign in</button>
+        </div>
+        <div id="apiKeyError" class="form-error">Invalid API key format.</div>
+
+        <p style="font-size:12px;color:var(--fg-faint);margin-top:28px;line-height:1.6">
+          No custody of user keys beyond the MPC model. Your provider API keys are encrypted at rest and never logged.
+          <a href="../docs.html" style="color:var(--gold)">Read the security model →</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!--  MAIN APP (visible after auth)                                    -->
+<!-- ================================================================ -->
+<div id="viewApp" class="view" style="display:none">
+  <div class="app">
+
+    <!-- ── SIDEBAR ── -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo"><em>kcolb</em>chain / switchboard</div>
+        <div class="sidebar-sub">agent onboarding</div>
+      </div>
+
+      <div id="navUser" class="nav-user">
+        <div class="avatar" id="navAvatar">?</div>
+        <div class="user-info">
+          <div class="user-name" id="navDisplayName">—</div>
+          <div class="user-role">agent operator</div>
+        </div>
+        <button class="btn-signout" title="Sign out" onclick="handleSignOut()">✕</button>
+      </div>
+
+      <div class="sidebar-nav">
+        <div class="nav-section-label">Setup</div>
+        <div class="nav-item" data-view="connect-key" onclick="showView('connect-key')">
+          <span class="nav-num">01</span>
+          <span>Connect API Key</span>
+          <span class="nav-chip locked" id="keyChip">—</span>
+        </div>
+        <div class="nav-item" data-view="connect-agent" onclick="showView('connect-agent')">
+          <span class="nav-num">02</span>
+          <span>Connect Agent</span>
+          <span class="nav-chip locked" id="agentChip">—</span>
+        </div>
+        <div class="nav-item" data-view="walkthrough" onclick="showView('walkthrough')">
+          <span class="nav-num">03</span>
+          <span>Operate Wallet</span>
+          <span class="nav-chip locked" id="walkChip">—</span>
+        </div>
+        <div class="nav-section-label" style="margin-top:12px">Dashboard</div>
+        <div class="nav-item" data-view="metrics" onclick="showView('metrics')">
+          <span>Metrics</span>
+          <span class="nav-chip done">live</span>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <a href="./index.html">explorer</a>
+        <a href="./lab/index.html">lab</a>
+        <a href="./docs.html">docs</a>
+        <a href="https://github.com/kcolbchain/switchboard" target="_blank">src</a>
+      </div>
+    </nav>
+
+    <!-- ── MAIN CONTENT ── -->
+    <div class="main">
+
+      <!-- ── VIEW: Connect API Key ── -->
+      <section id="viewConnectKey" class="view-section" style="display:none">
+        <div class="onboarding-progress">
+          <div class="progress-step current" id="prog1">
+            <div class="ps-num">1</div>
+            <span class="ps-label">API Key</span>
+          </div>
+          <div class="progress-divider"></div>
+          <div class="progress-step" id="prog2">
+            <div class="ps-num">2</div>
+            <span class="ps-label">Agent</span>
+          </div>
+          <div class="progress-divider"></div>
+          <div class="progress-step" id="prog3">
+            <div class="ps-num">3</div>
+            <span class="ps-label">Operate</span>
+          </div>
+        </div>
+
+        <div class="page-hero reveal">
+          <div class="page-eyebrow">step 01</div>
+          <h1>Connect an <em>API key.</em></h1>
+          <p class="lead">Paste a provider API key so your agent can call LLMs through switchboard. Keys are encrypted immediately — the plaintext is never persisted or logged.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <span class="chip chip-gold">encrypted at rest</span>
+            <span class="chip chip-emerald">never logged</span>
+            <span class="chip chip-muted">scoped per session</span>
+          </div>
+        </div>
+
+        <div class="content-section reveal">
+          <div class="section-label">Provider</div>
+          <h2>Choose your <em>LLM provider.</em></h2>
+          <p class="section-desc">The key is stored per-account, scoped to your session key policy, and forwarded only to the selected provider endpoint.</p>
+
+          <div class="provider-tabs" id="providerTabs">
+            <button class="provider-tab active" data-provider="anthropic" onclick="setProvider('anthropic')">Anthropic</button>
+            <button class="provider-tab" data-provider="openai" onclick="setProvider('openai')">OpenAI</button>
+            <button class="provider-tab" data-provider="google" onclick="setProvider('google')">Google</button>
+            <button class="provider-tab" data-provider="cohere" onclick="setProvider('cohere')">Cohere</button>
+            <button class="provider-tab" data-provider="custom" onclick="setProvider('custom')">Custom</button>
+          </div>
+
+          <div class="key-paste-area">
+            <label>Provider API Key</label>
+            <input type="password" id="keyInput" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"
+              oninput="validateKeyInput()" />
+            <div class="key-hint">
+              <span class="lock-icon">&#128274;</span>
+              <span>Your key is encrypted with AES-256-GCM before leaving your browser. The switchboard server never sees the plaintext.</span>
+            </div>
+            <div id="keyInputError" class="form-error">Key looks too short. Paste the full key.</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn btn-gold" id="addKeyBtn" onclick="handleAddKey()">
+                <span id="addKeyBtnText">Save key</span>
+                <span id="addKeyBtnSpinner" class="spinner" style="display:none"></span>
+              </button>
+              <button class="btn btn-ghost" onclick="document.getElementById('keyInput').value=''">Clear</button>
+            </div>
+          </div>
+
+          <div id="keySuccessNotice" class="notice success" style="display:none;margin-top:16px">
+            <span class="n-icon">&#10003;</span>
+            <span class="n-text">Key saved. It will never be shown again — only the masked suffix is stored in the UI.</span>
+          </div>
+
+          <div class="notice info" style="margin-top:16px">
+            <span class="n-icon">&#8505;</span>
+            <span class="n-text">For production deployments, rotate keys via <code style="color:var(--blue)">POST /api/keys</code> and revoke old ones via <code style="color:var(--blue)">DELETE /api/keys/:key_id</code>. See <a href="../docs.html">docs</a>.</span>
+          </div>
+
+          <!-- Saved keys list -->
+          <div id="savedKeysList" class="keys-list"></div>
+
+          <div style="margin-top:36px">
+            <button class="btn btn-gold" onclick="showView('connect-agent')">
+              Continue to Connect Agent &rarr;
+            </button>
+          </div>
+        </div>
+
+        <footer class="lab-footer">
+          <div class="brand"><em>kcolb</em>chain / switchboard</div>
+          <div class="links"><a href="./index.html">explorer</a><a href="./docs.html">docs</a><a href="https://github.com/kcolbchain/switchboard" target="_blank">source</a></div>
+        </footer>
+      </section>
+
+      <!-- ── VIEW: Connect Agent ── -->
+      <section id="viewConnectAgent" class="view-section" style="display:none">
+        <div class="onboarding-progress">
+          <div class="progress-step done" onclick="showView('connect-key')">
+            <div class="ps-num">&#10003;</div>
+            <span class="ps-label">API Key</span>
+          </div>
+          <div class="progress-divider"></div>
+          <div class="progress-step current">
+            <div class="ps-num">2</div>
+            <span class="ps-label">Agent</span>
+          </div>
+          <div class="progress-divider"></div>
+          <div class="progress-step">
+            <div class="ps-num">3</div>
+            <span class="ps-label">Operate</span>
+          </div>
+        </div>
+
+        <div class="page-hero reveal">
+          <div class="page-eyebrow">step 02</div>
+          <h1>Connect your <em>agent.</em></h1>
+          <p class="lead">Point any MCP-capable agent at the switchboard endpoint. It receives a scoped, revocable session key — never the root wallet key. The wallet co-signs only within your policy.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <span class="chip chip-gold">MCP over WebSocket</span>
+            <span class="chip chip-emerald">scoped session key</span>
+            <span class="chip chip-muted">revocable anytime</span>
+          </div>
+        </div>
+
+        <div class="content-section reveal">
+          <div class="section-label">MCP Endpoint</div>
+          <h2>Your <em>connection details.</em></h2>
+          <p class="section-desc">The session key grants the agent access to wallet + escrow tools, bounded by your spend policy. Revoke it from this dashboard at any time.</p>
+
+          <div id="mcpLoading" style="display:flex;align-items:center;gap:12px;color:var(--fg-faint);margin-bottom:28px">
+            <div class="spinner"></div> <span style="font-family:var(--font-mono);font-size:12px">Generating session key…</span>
+          </div>
+
+          <div id="mcpEndpointBox" class="mcp-endpoint-box" style="display:none">
+            <div class="ep-label">MCP WebSocket Endpoint</div>
+            <div class="ep-url" id="mcpUrl">wss://switchboard.kcolbchain.io/mcp</div>
+            <div class="ep-key-row">
+              <div class="ep-badge active"><span class="live-dot"></span> active</div>
+              <div class="ep-badge expiry" id="mcpExpiry">expires in 24h</div>
+            </div>
+            <div style="margin-top:16px">
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Session Key</div>
+              <div class="ep-key-row">
+                <div class="ep-key" id="mcpKey">sb_sk_…</div>
+                <button class="copy-btn" onclick="copyToClipboard('mcpKey', this)">copy</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="policyBox" style="display:none">
+            <div class="section-label" style="margin-top:32px">Spend Policy</div>
+            <div class="policy-grid" id="policyGrid">
+              <!-- populated by JS -->
+            </div>
+            <div style="margin-top:20px">
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Allowed Tokens</div>
+              <div class="token-pills" id="tokenPills"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-section reveal" id="agentToolsSection" style="display:none">
+          <div class="section-label">MCP Tools</div>
+          <h2>Tools your agent <em>can call.</em></h2>
+          <p class="section-desc">The MCP server exposes these tools. Each is gated by your session key and bounded by the spend policy before the wallet co-signs.</p>
+
+          <div class="grid-2" style="margin-bottom:24px">
+            <div class="glass-card">
+              <div class="card-label">wallet tools</div>
+              <h3>wallet_balance</h3>
+              <p>Returns balances per <code>(chain_id, token)</code> from the treasury, with spendable amounts after reserves.</p>
+            </div>
+            <div class="glass-card">
+              <div class="card-label">wallet tools</div>
+              <h3>pay</h3>
+              <p>Drives token negotiation, picks the optimal rail (x402/escrow/MPP), and executes within the spend policy.</p>
+            </div>
+            <div class="glass-card">
+              <div class="card-label">escrow tools</div>
+              <h3>create_escrow</h3>
+              <p>Locks funds in <code>MultiTokenAgentEscrow</code> — any token, any chain. Timeout + challenge period enforced on-chain.</p>
+            </div>
+            <div class="glass-card">
+              <div class="card-label">escrow tools</div>
+              <h3>confirm_payment · request_refund</h3>
+              <p>Confirm delivery or trigger a refund with optional oracle attestation. All on-chain, all auditable.</p>
+            </div>
+            <div class="glass-card">
+              <div class="card-label">policy tools</div>
+              <h3>policy_status</h3>
+              <p>Returns live spend vs. cap, daily remaining, policy denials, and session-key expiry in one call.</p>
+            </div>
+            <div class="glass-card">
+              <div class="card-label">metrics tools</div>
+              <h3>escrow_metrics</h3>
+              <p>Polls fill rate, average release time, timeout and refund rates — live from contract events.</p>
+            </div>
+          </div>
+
+          <div class="code-wrap">
+            <pre class="code-block"><span class="com"># Example: list tools via MCP client</span>
+<span class="kw">import</span> switchboard_mcp
+
+client = <span class="fn">switchboard_mcp</span>.<span class="fn">connect</span>(
+    endpoint=<span class="str">"wss://switchboard.kcolbchain.io/mcp"</span>,
+    session_key=<span class="str">"sb_sk_your_key_here"</span>,
+)
+
+<span class="com"># List available tools (returns schema for each)</span>
+tools = <span class="kw">await</span> client.<span class="fn">list_tools</span>()
+
+<span class="com"># Check your wallet balance</span>
+bal = <span class="kw">await</span> client.<span class="fn">call</span>(<span class="str">"wallet_balance"</span>)
+<span class="com"># -> [{ chain_id: 8453, token: "USDC", balance: "1024.00", ... }]</span></pre>
+            <button class="copy-btn" onclick="copyCodeBlock(this)" style="top:28px">copy</button>
+          </div>
+        </div>
+
+        <div class="content-section" style="border-bottom:none">
+          <button class="btn btn-gold" onclick="showView('walkthrough')">Continue to Operate Wallet &rarr;</button>
+        </div>
+
+        <footer class="lab-footer">
+          <div class="brand"><em>kcolb</em>chain / switchboard</div>
+          <div class="links"><a href="./index.html">explorer</a><a href="./docs.html">docs</a><a href="https://github.com/kcolbchain/switchboard" target="_blank">source</a></div>
+        </footer>
+      </section>
+
+      <!-- ── VIEW: Operate Wallet Walkthrough ── -->
+      <section id="viewWalkthrough" class="view-section" style="display:none">
+        <div class="onboarding-progress">
+          <div class="progress-step done" onclick="showView('connect-key')">
+            <div class="ps-num">&#10003;</div>
+            <span class="ps-label">API Key</span>
+          </div>
+          <div class="progress-divider"></div>
+          <div class="progress-step done" onclick="showView('connect-agent')">
+            <div class="ps-num">&#10003;</div>
+            <span class="ps-label">Agent</span>
+          </div>
+          <div class="progress-divider"></div>
+          <div class="progress-step current">
+            <div class="ps-num">3</div>
+            <span class="ps-label">Operate</span>
+          </div>
+        </div>
+
+        <div class="page-hero reveal">
+          <div class="page-eyebrow">step 03</div>
+          <h1>Operate the wallet<br>in <em>3 steps.</em></h1>
+          <p class="lead">Your agent is connected. Here's the exact sequence it uses to pay another agent — from token negotiation through trustless on-chain settlement, without a human in the loop.</p>
+          <div class="hero-actions">
+            <button class="btn btn-gold" onclick="showView('metrics')">Open metrics dashboard &rarr;</button>
+            <a class="btn btn-ghost" href="./docs.html">Read the full docs</a>
+          </div>
+        </div>
+
+        <!-- 3-step walkthrough -->
+        <div class="content-section reveal">
+          <div class="section-label">The 3-step payment loop</div>
+          <h2>How the agent <em>pays.</em></h2>
+          <p class="section-desc">Every agent payment follows this sequence. The wallet handles routing, negotiation, and signing — your agent just calls <code>pay()</code>.</p>
+
+          <div class="steps" data-timeline>
+            <div class="tl-step" style="display:flex;gap:24px;padding:28px 0;border-bottom:1px solid var(--line)">
+              <div class="step-num">1</div>
+              <div class="step-body">
+                <h4>Token negotiation</h4>
+                <p>The agent calls <code>pay(payee, amount_usd)</code>. The wallet's <code>TokenSelector</code> reads your treasury balances per <code>(chain, token)</code> and intersects them with the payee's <code>accepts_tokens[]</code> list. The highest-ranked common token is chosen — no swap needed for the happy path.</p>
+                <div class="code-wrap" style="margin-top:12px">
+                  <pre class="code-block" style="margin-top:0"><span class="com"># Step 1: agent calls pay — wallet handles the rest</span>
+receipt = <span class="kw">await</span> client.<span class="fn">call</span>(<span class="str">"pay"</span>, {
+    <span class="str">"payee"</span>: <span class="str">"0xPayeeAddress…"</span>,
+    <span class="str">"amount_usd"</span>: <span class="str">"10.00"</span>,
+    <span class="com"># wallet negotiates token + rail automatically</span>
+})
+<span class="com"># -> { settlement_token: "USDC", rail: "escrow", tx_hash: "0x…" }</span></pre>
+                  <button class="copy-btn" onclick="copyCodeBlock(this)" style="top:24px">copy</button>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                  <span class="chip chip-gold">TokenSelector</span>
+                  <span class="chip chip-muted">protocol v1.2 accepts[]</span>
+                  <span class="chip chip-muted">LUX · USDC · ZOO · ETH · DAI</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="tl-step" style="display:flex;gap:24px;padding:28px 0;border-bottom:1px solid var(--line)">
+              <div class="step-num">2</div>
+              <div class="step-body">
+                <h4>Rail selection &amp; signing</h4>
+                <p>The <code>RailSelector</code> picks the cheapest suitable rail based on amount and trustless requirements. <code>FleetBalancer</code> spreads the nonce load across your wallet fleet. The <code>SpendPolicy</code> is enforced before the MPC wallet co-signs — if the transaction would exceed your daily cap or per-tx limit, it's refused with a typed error.</p>
+                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                  <span class="chip chip-blue">x402 — micropayments</span>
+                  <span class="chip chip-gold">escrow — trustless / large</span>
+                  <span class="chip chip-muted">MPP — streaming</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="tl-step" style="display:flex;gap:24px;padding:28px 0">
+              <div class="step-num">3</div>
+              <div class="step-body">
+                <h4>Settlement &amp; receipt</h4>
+                <p>The chosen token is locked in <code>MultiTokenAgentEscrow</code> (or sent via x402 / MPP). The payee confirms delivery; the escrow releases on-chain. A ZAP-wire receipt is anchored on LUX C-chain. The agent receives the tx hash and can poll <code>escrow_metrics</code> for fill-rate telemetry.</p>
+                <div class="code-wrap" style="margin-top:12px">
+                  <pre class="code-block" style="margin-top:0"><span class="com"># Step 3: confirm delivery (payee side) → escrow releases</span>
+result = <span class="kw">await</span> client.<span class="fn">call</span>(<span class="str">"confirm_payment"</span>, {
+    <span class="str">"request_id"</span>: receipt[<span class="str">"request_id"</span>],
+})
+<span class="com"># Escrow releases, LUX receipt anchored, done.</span>
+
+<span class="com"># Query metrics any time</span>
+m = <span class="kw">await</span> client.<span class="fn">call</span>(<span class="str">"escrow_metrics"</span>)
+<span class="com"># -> { fill_rate: 0.94, avg_release_ms: 1840, open_count: 7 }</span></pre>
+                  <button class="copy-btn" onclick="copyCodeBlock(this)" style="top:24px">copy</button>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                  <span class="chip chip-emerald">MultiTokenAgentEscrow</span>
+                  <span class="chip chip-gold">LUX receipt anchor</span>
+                  <span class="chip chip-muted">ZAP wire</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Security callout -->
+        <div class="content-section reveal">
+          <div class="section-label">Security model</div>
+          <h2>The agent <em>never</em> holds the root key.</h2>
+          <p class="section-desc">Session keys are scoped, revocable, and expiring. A compromised agent is bounded by its <code>SpendPolicy</code>. The MPC root key is never on a single machine.</p>
+          <div class="grid-3" style="margin-top:8px">
+            <div class="glass-card">
+              <div class="card-label">MPC wallet</div>
+              <h3>Threshold signing</h3>
+              <p>Shamir SSS across the signer fleet. No single machine holds the full key — coordinated by <code>MPCWallet</code>.</p>
+            </div>
+            <div class="glass-card">
+              <div class="card-label">SpendPolicy</div>
+              <h3>Per-agent caps</h3>
+              <p><code>per_tx_cap</code>, <code>daily_cap</code>, <code>token_allowlist</code>, <code>expires_at</code>. Every action checked before co-sign.</p>
+            </div>
+            <div class="glass-card">
+              <div class="card-label">Fairness engine</div>
+              <h3>Token-bucket fairness</h3>
+              <p>No single agent starves others. Rate fairness and contract-compliance checks layered on top of <code>SpendPolicy</code>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-section" style="border-bottom:none">
+          <button class="btn btn-gold" onclick="showView('metrics')">Open metrics dashboard &rarr;</button>
+        </div>
+
+        <footer class="lab-footer">
+          <div class="brand"><em>kcolb</em>chain / switchboard</div>
+          <div class="links"><a href="./index.html">explorer</a><a href="./docs.html">docs</a><a href="https://github.com/kcolbchain/switchboard" target="_blank">source</a></div>
+        </footer>
+      </section>
+
+      <!-- ── VIEW: Metrics Dashboard ── -->
+      <section id="viewMetrics" class="view-section" style="display:none">
+        <div class="page-hero reveal" style="padding-bottom:40px">
+          <div class="page-eyebrow"><span class="live-dot"></span> live</div>
+          <h1><em>Metrics</em> dashboard.</h1>
+          <p class="lead">Escrow fulfilment health, wallet spend by token and rail, fleet status, and policy activity — polled from contract events every 30 s.</p>
+        </div>
+
+        <!-- KPI strip -->
+        <div class="dash-grid" id="dashGrid">
+          <div class="dash-stat">
+            <div class="ds-label">Fill rate</div>
+            <div class="ds-value good" id="metFillRate">—</div>
+            <div class="ds-sub">escrow fulfilled</div>
+          </div>
+          <div class="dash-stat">
+            <div class="ds-label">Avg release</div>
+            <div class="ds-value" id="metRelease">—</div>
+            <div class="ds-sub">escrow → confirmed</div>
+          </div>
+          <div class="dash-stat">
+            <div class="ds-label">Open escrows</div>
+            <div class="ds-value" id="metOpen">—</div>
+            <div class="ds-sub">pending confirmation</div>
+          </div>
+          <div class="dash-stat">
+            <div class="ds-label">Fleet health</div>
+            <div class="ds-value good" id="metFleet">—</div>
+            <div class="ds-sub">wallets reachable</div>
+          </div>
+        </div>
+
+        <!-- Balances + spend breakdown -->
+        <div class="metrics-row">
+          <div class="metrics-panel reveal">
+            <div class="mp-title">Treasury Balances</div>
+            <div id="balancesList">
+              <div style="color:var(--fg-faint);font-size:13px;display:flex;align-items:center;gap:8px">
+                <div class="spinner"></div> Loading…
+              </div>
+            </div>
+          </div>
+
+          <div class="metrics-panel reveal" style="transition-delay:.1s">
+            <div class="mp-title">Spend by token (24h, USD)</div>
+            <div class="bar-chart" id="spendByToken"></div>
+          </div>
+
+          <div class="metrics-panel reveal" style="transition-delay:.15s">
+            <div class="mp-title">Spend by rail (24h, USD)</div>
+            <div class="bar-chart" id="spendByRail"></div>
+          </div>
+
+          <div class="metrics-panel reveal" style="transition-delay:.2s">
+            <div class="mp-title">Escrow health</div>
+            <table class="escrow-table" id="escrowTable">
+              <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+              <tbody id="escrowBody"></tbody>
+            </table>
+            <div style="margin-top:24px">
+              <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Fleet Health</div>
+              <div class="fleet-bar"><div class="fleet-fill" id="fleetFill" style="width:0%"></div></div>
+              <div class="fleet-label"><span>wallets reachable</span><strong id="fleetPct">—</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-section" style="border-bottom:none">
+          <div class="notice info">
+            <span class="n-icon">&#8505;</span>
+            <span class="n-text">This dashboard polls <code>GET /api/metrics</code> every 30 s. Wire it to your backend's contract-event indexer for live data. Stub contract: <code>GET /api/wallet/balances</code> for treasury. See <a href="./mock-api.js" style="color:var(--blue)">mock-api.js</a> for the full endpoint contract.</span>
+          </div>
+        </div>
+
+        <footer class="lab-footer">
+          <div class="brand"><em>kcolb</em>chain / switchboard</div>
+          <div class="links"><a href="./index.html">explorer</a><a href="./lab/index.html">lab</a><a href="./docs.html">docs</a><a href="https://github.com/kcolbchain/switchboard" target="_blank">source</a></div>
+        </footer>
+      </section>
+
+    </div><!-- .main -->
+  </div><!-- .app -->
+</div><!-- #viewApp -->
+
+<script>
+/* ================================================================
+   APP STATE
+================================================================ */
+const state = {
+  session: null,
+  currentView: null,
+  keys: [],
+  mcpData: null,
+  metricsTimer: null,
+};
+
+/* ================================================================
+   LOGIN
+================================================================ */
+async function handleEmailLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const err = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  const txt = document.getElementById('loginBtnText');
+  const spin = document.getElementById('loginBtnSpinner');
+
+  err.classList.remove('visible');
+  if (!email || !email.includes('@')) { err.classList.add('visible'); return; }
+
+  btn.classList.add('loading');
+  txt.textContent = 'Sending…';
+  spin.style.display = 'inline-block';
+
+  const res = await MockAPI.auth({ email });
+
+  btn.classList.remove('loading');
+  txt.textContent = 'Continue with email';
+  spin.style.display = 'none';
+
+  if (!res.ok) { err.classList.add('visible'); return; }
+  completeLogin(res.data);
+}
+
+async function handleApiKeyLogin() {
+  const key = document.getElementById('loginApiKey').value.trim();
+  const err = document.getElementById('apiKeyError');
+  err.classList.remove('visible');
+  if (!key || key.length < 6) { err.classList.add('visible'); return; }
+  // For API-key login, synthesize a session using the key as the "email"
+  const res = await MockAPI.auth({ email: 'api-key@switchboard.local' });
+  if (!res.ok) { err.classList.add('visible'); return; }
+  completeLogin(res.data);
+}
+
+function completeLogin(sessionData) {
+  state.session = sessionData;
+
+  // Show app, hide login
+  document.getElementById('viewLogin').style.display = 'none';
+  document.getElementById('viewApp').style.display = 'flex';
+  document.getElementById('viewApp').className = '';
+
+  // Populate user UI
+  const name = sessionData.display_name;
+  document.getElementById('navDisplayName').textContent = name;
+  document.getElementById('navAvatar').textContent = name.slice(0, 2).toUpperCase();
+  document.getElementById('navUser').classList.add('visible');
+
+  showView('connect-key');
+}
+
+function handleSignOut() {
+  state.session = null;
+  if (state.metricsTimer) clearInterval(state.metricsTimer);
+  document.getElementById('viewApp').style.display = 'none';
+  document.getElementById('viewLogin').style.display = 'block';
+  document.getElementById('loginEmail').value = '';
+}
+
+/* ================================================================
+   VIEW ROUTING
+================================================================ */
+function showView(view) {
+  state.currentView = view;
+
+  // Hide all sections
+  document.querySelectorAll('.view-section').forEach(s => s.style.display = 'none');
+
+  // Update sidebar active
+  document.querySelectorAll('.nav-item[data-view]').forEach(n => {
+    n.classList.toggle('active', n.dataset.view === view);
+  });
+
+  const map = {
+    'connect-key':   'viewConnectKey',
+    'connect-agent': 'viewConnectAgent',
+    'walkthrough':   'viewWalkthrough',
+    'metrics':       'viewMetrics',
+  };
+  const el = document.getElementById(map[view]);
+  if (el) {
+    el.style.display = 'block';
+    runReveal(el);
+  }
+
+  if (view === 'connect-agent') initConnectAgent();
+  if (view === 'metrics') initMetrics();
+
+  // Close sidebar on mobile
+  if (window.innerWidth <= 900) {
+    document.getElementById('sidebar').classList.remove('open');
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/* ================================================================
+   REVEAL ANIMATION
+================================================================ */
+function runReveal(container) {
+  const els = container.querySelectorAll('.reveal');
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+    });
+  }, { threshold: 0.06, rootMargin: '0px 0px -30px 0px' });
+  els.forEach((el, i) => {
+    if (!el.classList.contains('visible')) {
+      el.style.transitionDelay = (i * 0.08) + 's';
+      obs.observe(el);
+    }
+  });
+}
+
+/* ================================================================
+   CONNECT KEY VIEW
+================================================================ */
+let selectedProvider = 'anthropic';
+const providerPlaceholders = {
+  anthropic: 'sk-ant-api03-…',
+  openai: 'sk-…',
+  google: 'AIza…',
+  cohere: 'co-…',
+  custom: 'your-api-key',
+};
+
+function setProvider(p) {
+  selectedProvider = p;
+  document.querySelectorAll('.provider-tab').forEach(t => t.classList.toggle('active', t.dataset.provider === p));
+  document.getElementById('keyInput').placeholder = providerPlaceholders[p] || 'your-api-key';
+}
+
+function validateKeyInput() {
+  const val = document.getElementById('keyInput').value.trim();
+  document.getElementById('keyInputError').classList.toggle('visible', val.length > 0 && val.length < 8);
+}
+
+async function handleAddKey() {
+  const key = document.getElementById('keyInput').value.trim();
+  const btn = document.getElementById('addKeyBtn');
+  const txt = document.getElementById('addKeyBtnText');
+  const spin = document.getElementById('addKeyBtnSpinner');
+  const errEl = document.getElementById('keyInputError');
+  const successEl = document.getElementById('keySuccessNotice');
+
+  errEl.classList.remove('visible');
+  successEl.style.display = 'none';
+  if (!key || key.length < 8) { errEl.classList.add('visible'); return; }
+
+  btn.classList.add('loading');
+  txt.textContent = 'Saving…';
+  spin.style.display = 'inline-block';
+
+  const res = await MockAPI.addKey({ provider: selectedProvider, key, label: selectedProvider });
+
+  btn.classList.remove('loading');
+  txt.textContent = 'Save key';
+  spin.style.display = 'none';
+
+  if (!res.ok) {
+    errEl.textContent = res.detail || 'Invalid key.';
+    errEl.classList.add('visible');
+    return;
+  }
+
+  state.keys.push(res.data);
+  document.getElementById('keyInput').value = '';
+  successEl.style.display = 'flex';
+
+  // Update chip
+  document.getElementById('keyChip').textContent = state.keys.length + ' key' + (state.keys.length > 1 ? 's' : '');
+  document.getElementById('keyChip').className = 'nav-chip done';
+
+  renderKeysList();
+}
+
+function renderKeysList() {
+  const list = document.getElementById('savedKeysList');
+  if (state.keys.length === 0) { list.innerHTML = ''; return; }
+  list.innerHTML = `
+    <div style="font-family:var(--font-mono);font-size:10px;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">Saved keys</div>
+    ${state.keys.map(k => `
+      <div class="key-row" id="kr-${k.key_id}">
+        <span class="provider-badge">${k.provider}</span>
+        <span class="key-masked">${k.masked}</span>
+        <span class="key-date">${new Date(k.created_at).toLocaleDateString()}</span>
+        <button class="key-delete" title="Delete key" onclick="handleDeleteKey('${k.key_id}')">&#10007;</button>
+      </div>`).join('')}
+  `;
+}
+
+async function handleDeleteKey(key_id) {
+  const row = document.getElementById('kr-' + key_id);
+  if (row) row.style.opacity = '0.4';
+  await MockAPI.deleteKey(key_id);
+  state.keys = state.keys.filter(k => k.key_id !== key_id);
+  renderKeysList();
+  if (state.keys.length === 0) {
+    document.getElementById('keyChip').textContent = '—';
+    document.getElementById('keyChip').className = 'nav-chip locked';
+  }
+}
+
+/* ================================================================
+   CONNECT AGENT VIEW
+================================================================ */
+async function initConnectAgent() {
+  if (state.mcpData) return; // already loaded
+
+  document.getElementById('mcpLoading').style.display = 'flex';
+  document.getElementById('mcpEndpointBox').style.display = 'none';
+  document.getElementById('policyBox').style.display = 'none';
+  document.getElementById('agentToolsSection').style.display = 'none';
+
+  const res = await MockAPI.getMcpEndpoint();
+  if (!res.ok) return;
+
+  state.mcpData = res.data;
+  document.getElementById('mcpLoading').style.display = 'none';
+  document.getElementById('mcpEndpointBox').style.display = 'block';
+  document.getElementById('policyBox').style.display = 'block';
+  document.getElementById('agentToolsSection').style.display = 'block';
+
+  document.getElementById('mcpUrl').textContent = res.data.endpoint;
+  document.getElementById('mcpKey').textContent = res.data.session_key;
+
+  const exp = new Date(res.data.expires_at);
+  const diffH = Math.round((exp - Date.now()) / 3600000);
+  document.getElementById('mcpExpiry').textContent = 'expires in ' + diffH + 'h';
+
+  // Update agent chip
+  document.getElementById('agentChip').textContent = 'ready';
+  document.getElementById('agentChip').className = 'nav-chip done';
+
+  // Policy grid
+  const pol = res.data.policy;
+  document.getElementById('policyGrid').innerHTML = `
+    <div class="policy-item"><div class="pi-label">Per-tx cap</div><div class="pi-val">$${pol.per_tx_cap_usd}</div><div class="pi-sub">max per transaction</div></div>
+    <div class="policy-item"><div class="pi-label">Daily cap</div><div class="pi-val">$${pol.daily_cap_usd}</div><div class="pi-sub">rolling 24h window</div></div>
+    <div class="policy-item"><div class="pi-label">Expires</div><div class="pi-val">${diffH}h</div><div class="pi-sub">session key TTL</div></div>
+    <div class="policy-item"><div class="pi-label">Counterparties</div><div class="pi-val">${pol.allowed_counterparties ? pol.allowed_counterparties.length : 'any'}</div><div class="pi-sub">${pol.allowed_counterparties ? 'allowlisted' : 'no restriction'}</div></div>
+  `;
+
+  document.getElementById('tokenPills').innerHTML = pol.token_allowlist.map(t =>
+    `<span class="token-pill">${t}</span>`
+  ).join('');
+
+  // Update walkthrough chip
+  document.getElementById('walkChip').textContent = 'ready';
+  document.getElementById('walkChip').className = 'nav-chip done';
+}
+
+/* ================================================================
+   METRICS VIEW
+================================================================ */
+async function initMetrics() {
+  await Promise.all([loadBalances(), loadMetrics()]);
+
+  if (!state.metricsTimer) {
+    state.metricsTimer = setInterval(loadMetrics, 30000);
+  }
+}
+
+async function loadBalances() {
+  const res = await MockAPI.getBalances();
+  if (!res.ok) return;
+
+  const tokenClass = { LUX: 'lux', USDC: 'usdc', ZOO: 'zoo', ETH: 'eth' };
+  document.getElementById('balancesList').innerHTML = res.data.map(b => `
+    <div class="balance-row">
+      <div class="bal-token">
+        <div class="token-icon ${tokenClass[b.token] || 'eth'}">${b.token}</div>
+        <div>
+          <div class="bal-name">${b.token}</div>
+          <div class="bal-chain">${b.chain_name}</div>
+        </div>
+      </div>
+      <div class="bal-amount">
+        <div class="bal-usd">$${b.balance_usd.toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        <div class="bal-raw">${parseFloat(b.balance).toLocaleString()} ${b.token}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadMetrics() {
+  const res = await MockAPI.getMetrics();
+  if (!res.ok) return;
+  const m = res.data;
+
+  // KPI strip
+  document.getElementById('metFillRate').textContent = Math.round(m.escrow.fill_rate * 100) + '%';
+  document.getElementById('metRelease').textContent = (m.escrow.avg_release_ms / 1000).toFixed(1) + 's';
+  document.getElementById('metOpen').textContent = m.escrow.open_count;
+  document.getElementById('metFleet').textContent = Math.round(m.wallet.fleet_health * 100) + '%';
+
+  // Spend by token
+  const stTotal = Object.values(m.wallet.spend_by_token).reduce((a, b) => a + b, 0) || 1;
+  const stColors = { USDC: 'blue', LUX: 'gold', ETH: 'emerald', ZOO: 'violet', DAI: 'emerald' };
+  document.getElementById('spendByToken').innerHTML = Object.entries(m.wallet.spend_by_token).map(([token, val]) => `
+    <div class="bar-row">
+      <div class="bar-row-head"><span class="bar-label">${token}</span><span class="bar-val">$${val.toFixed(2)}</span></div>
+      <div class="bar-track"><div class="bar-fill ${stColors[token] || 'gold'}" style="width:${Math.round(val/stTotal*100)}%"></div></div>
+    </div>
+  `).join('');
+
+  // Spend by rail
+  const srTotal = Object.values(m.wallet.spend_by_rail).reduce((a, b) => a + b, 0) || 1;
+  const srColors = { x402: 'blue', escrow: 'gold', mpp: 'emerald' };
+  document.getElementById('spendByRail').innerHTML = Object.entries(m.wallet.spend_by_rail).map(([rail, val]) => `
+    <div class="bar-row">
+      <div class="bar-row-head"><span class="bar-label">${rail}</span><span class="bar-val">$${val.toFixed(2)}</span></div>
+      <div class="bar-track"><div class="bar-fill ${srColors[rail] || 'gold'}" style="width:${Math.round(val/srTotal*100)}%"></div></div>
+    </div>
+  `).join('');
+
+  // Escrow table
+  const esc = m.escrow;
+  document.getElementById('escrowBody').innerHTML = `
+    <tr><td class="metric-label">Fill rate</td><td class="val-good">${Math.round(esc.fill_rate*100)}%</td></tr>
+    <tr><td class="metric-label">Avg release</td><td class="val-good">${(esc.avg_release_ms/1000).toFixed(2)}s</td></tr>
+    <tr><td class="metric-label">Timeout rate</td><td class="val-${esc.timeout_rate<0.05?'good':'warn'}">${Math.round(esc.timeout_rate*100)}%</td></tr>
+    <tr><td class="metric-label">Refund rate</td><td class="val-${esc.refund_rate<0.05?'good':'warn'}">${Math.round(esc.refund_rate*100)}%</td></tr>
+    <tr><td class="metric-label">Challenge rate</td><td class="val-${esc.challenge_rate<0.02?'good':'bad'}">${Math.round(esc.challenge_rate*100)}%</td></tr>
+    <tr><td class="metric-label">Policy denials (24h)</td><td class="val-${m.wallet.policy_denials_24h<5?'good':'warn'}">${m.wallet.policy_denials_24h}</td></tr>
+  `;
+
+  // Fleet bar
+  const fleetPct = Math.round(m.wallet.fleet_health * 100);
+  document.getElementById('fleetFill').style.width = fleetPct + '%';
+  document.getElementById('fleetPct').textContent = fleetPct + '%';
+}
+
+/* ================================================================
+   COPY HELPERS
+================================================================ */
+function copyToClipboard(elId, btn) {
+  const text = document.getElementById(elId).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+function copyCodeBlock(btn) {
+  const pre = btn.previousElementSibling || btn.parentElement.querySelector('pre');
+  navigator.clipboard.writeText(pre.textContent).then(() => {
+    btn.textContent = 'copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+/* ================================================================
+   SIDEBAR TOGGLE (MOBILE)
+================================================================ */
+document.getElementById('sidebarToggle').addEventListener('click', () => {
+  document.getElementById('sidebar').classList.toggle('open');
+});
+
+/* ================================================================
+   LOGIN CANVAS — animated payment flow
+================================================================ */
+(function() {
+  const canvas = document.getElementById('loginCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const GOLD = '#d4a853';
+  const OK = '#4ecb71';
+  const FAINT = '#2a2430';
+  const BG = '#06060b';
+  let W, H, dpr;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    const r = canvas.parentElement.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const nodes = [
+    { x:.15, y:.2, label:'agent A', r:14 },
+    { x:.85, y:.2, label:'agent B', r:14 },
+    { x:.5,  y:.12, label:'x402', r:10 },
+    { x:.5,  y:.48, label:'escrow', r:17, hex:true },
+    { x:.5,  y:.8, label:'LUX', r:12, gold:true },
+    { x:.2,  y:.65, label:'MPC', r:10 },
+    { x:.8,  y:.65, label:'oracle', r:10 },
+  ];
+  const flows = [
+    {f:0,t:2,c:GOLD},{f:2,t:1,c:OK},{f:0,t:3,c:GOLD},{f:3,t:6,c:FAINT},
+    {f:6,t:3,c:OK},{f:3,t:4,c:GOLD},{f:0,t:5,c:FAINT},{f:5,t:3,c:GOLD},
+  ];
+  const packets = [];
+  let lastSpawn = 0;
+
+  function drawNode(n) {
+    const x = n.x*W, y = n.y*H;
+    if (n.gold) {
+      ctx.beginPath(); ctx.arc(x, y, n.r+6, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(212,168,83,.07)'; ctx.fill();
+    }
+    ctx.beginPath();
+    if (n.hex) {
+      for (let i=0;i<6;i++) {
+        const a = Math.PI/3*i-Math.PI/6;
+        const px = x+n.r*Math.cos(a), py = y+n.r*Math.sin(a);
+        i?ctx.lineTo(px,py):ctx.moveTo(px,py);
+      }
+      ctx.closePath();
+    } else {
+      ctx.arc(x, y, n.r, 0, Math.PI*2);
+    }
+    ctx.fillStyle = n.gold ? 'rgba(212,168,83,.14)' : '#08080e';
+    ctx.strokeStyle = n.gold ? GOLD : '#1a1826';
+    ctx.lineWidth = 1.5;
+    ctx.fill(); ctx.stroke();
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.fillStyle = n.gold ? GOLD : '#3a3650';
+    ctx.textAlign = 'center';
+    ctx.fillText(n.label, x, y + n.r + 13);
+  }
+
+  function draw(t) {
+    ctx.clearRect(0, 0, W, H);
+    if (t - lastSpawn > 700) {
+      const f = flows[Math.floor(Math.random()*flows.length)];
+      packets.push({f:f.f,t:f.t,c:f.c,p:0,sp:.35+Math.random()*.2});
+      lastSpawn = t;
+    }
+    ctx.strokeStyle = '#111120'; ctx.lineWidth = 1;
+    flows.forEach(({f,t}) => {
+      ctx.beginPath();
+      ctx.moveTo(nodes[f].x*W, nodes[f].y*H);
+      ctx.lineTo(nodes[t].x*W, nodes[t].y*H);
+      ctx.stroke();
+    });
+    for (let i=packets.length-1;i>=0;i--) {
+      const p = packets[i];
+      p.p += p.sp * .016;
+      if (p.p >= 1) { packets.splice(i,1); continue; }
+      const a = nodes[p.f], b = nodes[p.t];
+      const x = (a.x+(b.x-a.x)*p.p)*W, y = (a.y+(b.y-a.y)*p.p)*H;
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI*2);
+      ctx.fillStyle = p.c; ctx.fill();
+      const tx = (a.x+(b.x-a.x)*Math.max(0,p.p-.12))*W;
+      const ty = (a.y+(b.y-a.y)*Math.max(0,p.p-.12))*H;
+      const gr = ctx.createLinearGradient(tx,ty,x,y);
+      gr.addColorStop(0,'transparent'); gr.addColorStop(1,p.c);
+      ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(x,y);
+      ctx.strokeStyle = gr; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    nodes.forEach(drawNode);
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+})();
+</script>
+
+</body>
+</html>
