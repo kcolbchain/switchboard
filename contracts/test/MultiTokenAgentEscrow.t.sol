@@ -62,6 +62,33 @@ contract MultiTokenAgentEscrowTest {
         esc.getPayment("nope");
     }
 
+    /// @dev ERC-165: the escrow advertises the multi-token A2A interface so
+    ///      off-chain clients can discover it without a trial call.  The spec
+    ///      pins the interface id to `0x01dc5a49` (XOR of IAgentEscrow's six
+    ///      external selectors).
+    function test_supportsInterface() public view {
+        // The interface id must equal the spec'd constant.
+        require(
+            type(IAgentEscrow).interfaceId == bytes4(0x01dc5a49),
+            "IAgentEscrow interfaceId is 0x01dc5a49"
+        );
+
+        // Advertises IAgentEscrow.
+        require(escrow.supportsInterface(0x01dc5a49), "supports IAgentEscrow");
+        require(
+            escrow.supportsInterface(type(IAgentEscrow).interfaceId),
+            "supports IAgentEscrow (via type())"
+        );
+
+        // Advertises ERC-165 itself (id 0x01ffc9a7).
+        require(escrow.supportsInterface(0x01ffc9a7), "supports ERC-165");
+
+        // Does NOT claim unrelated interfaces (e.g. the invalid 0xffffffff or a
+        // random id).
+        require(!escrow.supportsInterface(0xffffffff), "rejects invalid id");
+        require(!escrow.supportsInterface(0xdeadbeef), "rejects unrelated id");
+    }
+
     // ─── ETH profile parity with AgentEscrow ──────────────────────────────────
 
     function test_eth_createAndConfirm_parity() public {

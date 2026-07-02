@@ -5,6 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IOracleAggregator} from "./IOracleAggregator.sol";
 import {IAgentEscrow} from "./IAgentEscrow.sol";
 
@@ -295,6 +296,20 @@ contract MultiTokenAgentEscrow is IAgentEscrow, Ownable, ReentrancyGuard {
         } else {
             IERC20(token).safeTransfer(to, amount);
         }
+    }
+
+    // ─── ERC-165 ─────────────────────────────────────────────────────────────
+
+    /// @notice ERC-165 introspection.
+    /// @dev Advertises the multi-token A2A escrow interface (`IAgentEscrow`,
+    ///      id `0x01dc5a49` = XOR of its 6 external selectors) and ERC-165
+    ///      itself.  Lets off-chain clients (the Python `EscrowClient`, the
+    ///      swap adapter, block explorers) discover that this contract speaks
+    ///      the standard without a trial call.
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return
+            interfaceId == type(IAgentEscrow).interfaceId ||
+            interfaceId == type(IERC165).interfaceId;
     }
 
     // ─── Views ─────────────────────────────────────────────────────────────────
