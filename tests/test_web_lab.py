@@ -29,7 +29,30 @@ import pytest
 HERE = Path(__file__).resolve().parent
 WEB = HERE.parent / "web"
 LAB = WEB / "agents-demo.html"
+MULTIPAGE_LAB = WEB / "lab"
 HOME = WEB / "index.html"
+SIMULATOR = WEB / "simulator.html"
+
+LAB_PAGES = [
+    "index.html",
+    "x402.html",
+    "escrow.html",
+    "streaming.html",
+    "auction.html",
+    "taxi.html",
+    "cafe.html",
+    "delivery.html",
+    "trip.html",
+    "multichain.html",
+    "pq.html",
+    "rails.html",
+    "tools.html",
+]
+
+
+@pytest.fixture(scope="module")
+def simulator_html() -> str:
+    return SIMULATOR.read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
@@ -54,6 +77,8 @@ def lab_script(lab_html: str) -> str:
 def test_files_exist() -> None:
     assert LAB.is_file(), f"missing {LAB}"
     assert HOME.is_file(), f"missing {HOME}"
+    for page in LAB_PAGES:
+        assert (MULTIPAGE_LAB / page).is_file(), f"missing {MULTIPAGE_LAB / page}"
 
 
 def test_html_parses(lab_html: str) -> None:
@@ -157,7 +182,13 @@ def test_no_stale_old_names_in_captions(lab_script: str) -> None:
 # ─── home page link ───────────────────────────────────────────────────────
 
 def test_home_links_to_lab(home_html: str) -> None:
-    assert 'href="./agents-demo.html"' in home_html, "home page missing lab link"
+    assert 'href="./lab/index.html"' in home_html, "home page missing multi-page lab link"
+    assert 'href="./agents-demo.html"' in home_html, "home page missing canvas lab link"
+
+
+def test_simulator_links_to_multipage_lab(simulator_html: str) -> None:
+    assert 'href="./lab/index.html"' in simulator_html, "simulator missing multi-page lab link"
+    assert 'href="./agents-demo.html"' in simulator_html, "simulator missing canvas playground link"
 
 
 def test_lab_links_back_to_home(lab_html: str) -> None:
