@@ -99,3 +99,83 @@ class TestSeam1CanonicalPaymentRequest:
         assert "token" not in bare.to_json()
         # a set token never changes the content hash (it is a wallet-side selection)
         assert bare.content_hash() == with_tok.content_hash()
+
+
+# ===========================================================================
+# Seam 2 — Single WalletOpEvent
+# ===========================================================================
+
+
+class TestSeam2SingleWalletOpEvent:
+    def test_access_policy_reexports_metrics_event(self):
+        """access_policy.WalletOpEvent IS metrics.WalletOpEvent — one canonical type."""
+        from switchboard.access_policy import WalletOpEvent as AP_Event
+        from switchboard.metrics import WalletOpEvent as Metrics_Event
+
+        assert AP_Event is Metrics_Event
+
+    def test_denial_event_has_full_metrics_shape(self):
+        """A denial from AccessPolicy emits an event with every dashboard field."""
+        from switchboard.access_policy import (
+            AccessPolicy,
+            AgentTier,
+            TierConfig,
+            TokenBucketConfig,
+        )
+        from switchboard.delegation import SpendPolicy
+
+        # Force a tier-ceiling denial with amount over the cap.
+        cfg = TierConfig(
+            explorer=TokenBucketConfig(per_tx_cap=10, rate=0, capacity=5),
+            standard=TokenBucketConfig(per_tx_cap=10, rate=0, capacity=5),
+            trusted=TokenBucketConfig(per_tx_cap=10, rate=0, capacity=5),
+        )
+        policy = AccessPolicy(tier_config=cfg)
+        sp = SpendPolicy(expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc))
+        policy.register("agent-x", tier=AgentTier.STANDARD, spend_policy=sp)
+
+        d = policy.check("agent-x", {"type": "pay", "amount": 9999, "token": USDC})
+        assert d.allowed is False
+        evt = d.event
+        # Every canonical field must be present and populated from the action.
+        for fld in (
+            "op_type", "token", "rail", "amount", "agent_id",
+            "wallet_id", "denied", "denial_reason", "timestamp",
+        ):
+            assert hasattr(evt, fld), f"missing metrics field {fld!r}"
+        assert evt.op_type == "pay"
+        assert evt.token == USDC
+        assert evt.amount == 9999.0
+        assert evt.agent_id == "agent-x"
+        assert evt.denied is True
+        assert evt.denial_reason == "tier_ceiling"
+
+    def test_denials_flow_into_dashboard_metrics(self):
+        """Emitted denial events feed compute_wallet_ops_metrics unchanged."""
+        from switchboard.access_policy import (
+            AccessPolicy,
+            AgentTier,
+            TierConfig,
+            TokenBucketConfig,
+        )
+        from switchboard.delegation import SpendPolicy
+        from switchboard.metrics import compute_wallet_ops_metrics
+
+        collected = []
+        cfg = TierConfig(
+            explorer=TokenBucketConfig(per_tx_cap=100, rate=0, capacity=1),
+            standard=TokenBucketConfig(per_tx_cap=100, rate=0, capacity=1),
+            trusted=TokenBucketConfig(per_tx_cap=100, rate=0, capacity=1),
+        )
+        policy = AccessPolicy(tier_config=cfg, event_listener=collected.append)
+        sp = SpendPolicy(expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc))
+        policy.register("dash-agent", tier=AgentTier.STANDARD, spend_policy=sp)
+
+        policy.check("dash-agent", {"type": "pay", "amount": 10, "token": USDC})  # allow
+        policy.check("dash-agent", {"type": "pay", "amount": 10, "token": USDC})  # deny (bucket)
+
+        # The dashboard's own compute function consumes them directly.
+        m = compute_wallet_ops_metrics(collected)
+        assert m.total_ops == 2
+        assert m.policy_denial_count == 1
+        assert m.denials_by_reason.get("rate_limited") == 1

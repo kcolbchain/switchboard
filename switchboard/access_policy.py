@@ -27,7 +27,11 @@ Public API
     and ``event: WalletOpEvent`` for metric emission.
 
 ``WalletOpEvent``
-    Lightweight metric payload: ``denied, denial_reason, agent_id``.
+    The canonical metric payload from :mod:`switchboard.metrics` (re-exported
+    here).  Fields: ``op_type, token, rail, amount, agent_id, wallet_id,
+    denied, denial_reason, timestamp``.  Denials from this engine and routing
+    events from the Router are the *same* event type, so both land in the ⑳
+    dashboard's spend / denial panels.
 
 Reason strings (typed literals)
 --------------------------------
@@ -84,6 +88,13 @@ from typing import Callable, Dict, List, Literal, Optional
 # ---------------------------------------------------------------------------
 
 from switchboard.delegation import SpendPolicy  # noqa: F401 — re-exported
+
+# Single canonical WalletOpEvent.  The Router (switchboard/router/router.py) and
+# the ⑳ metrics dashboard (switchboard/metrics.py) already speak this shape;
+# the access-policy engine emits the SAME event so denials flow straight into
+# the dashboard's denial-rate / denials-by-reason panels — no separate event
+# type, no translation layer.
+from switchboard.metrics import WalletOpEvent  # noqa: F401 — re-exported
 
 
 # ---------------------------------------------------------------------------
@@ -143,31 +154,11 @@ _DEFAULT_TIER_CONFIG = TierConfig(
 
 
 # ---------------------------------------------------------------------------
-# WalletOpEvent — metric payload
+# WalletOpEvent — imported from switchboard.metrics (single canonical event).
+# See the import at the top of this module.  Fields:
+#   op_type, token, rail, amount, agent_id, wallet_id, denied,
+#   denial_reason, timestamp
 # ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class WalletOpEvent:
-    """Lightweight event emitted for every ``check()`` call.
-
-    Designed so a metrics backend (or the ``⑳`` dashboard) can subscribe and
-    track denial rates, tier distribution, and denial reasons without coupling
-    to ``AccessPolicy`` internals.
-
-    Parameters
-    ----------
-    denied:
-        ``True`` if the action was denied.
-    denial_reason:
-        One of ``"noncompliant"``, ``"policy_violation"``, ``"tier_ceiling"``,
-        ``"rate_limited"``; or ``None`` if allowed.
-    agent_id:
-        The agent that attempted the action.
-    """
-    denied: bool
-    denial_reason: Optional[str]
-    agent_id: str
 
 
 # ---------------------------------------------------------------------------
@@ -326,28 +317,28 @@ class AccessPolicy:
             # --- Layer 1: contract compliance ---------------------------------
             compliance_reason = self._check_compliance(action)
             if compliance_reason is not None:
-                return self._deny(agent_id, compliance_reason)
+                return self._deny(agent_id, compliance_reason, action)
 
             # --- Layer 2: SpendPolicy -----------------------------------------
             if spend_policy is not None:
                 policy_reason = self._check_spend_policy(spend_policy, action)
                 if policy_reason is not None:
-                    return self._deny(agent_id, policy_reason)
+                    return self._deny(agent_id, policy_reason, action)
 
             # --- Layer 3: tier ceiling ----------------------------------------
             cfg = self._tier_config.for_tier(tier)
             amount = action.get("amount", 0)
             if amount > cfg.per_tx_cap:
-                return self._deny(agent_id, "tier_ceiling")
+                return self._deny(agent_id, "tier_ceiling", action)
 
             # --- Layer 4: token-bucket rate fairness --------------------------
             bucket = self._buckets[agent_id]
             self._refill_bucket(bucket, cfg)
             if bucket.tokens < 1.0:
-                return self._deny(agent_id, "rate_limited")
+                return self._deny(agent_id, "rate_limited", action)
 
             bucket.tokens -= 1.0
-            return self._allow(agent_id)
+            return self._allow(agent_id, action)
 
     # ------------------------------------------------------------------
     # Internal checkers
@@ -406,15 +397,51 @@ class AccessPolicy:
     # Decision builders
     # ------------------------------------------------------------------
 
-    def _deny(self, agent_id: str, reason: str) -> Decision:
-        evt = WalletOpEvent(denied=True, denial_reason=reason, agent_id=agent_id)
+    def _event(
+        self,
+        agent_id: str,
+        denied: bool,
+        reason: Optional[str],
+        action: object,
+    ) -> WalletOpEvent:
+        """Build the canonical ``metrics.WalletOpEvent`` for a check result.
+
+        ``action`` is normally the ``check()`` action dict, but the MCP-facing
+        Protocol form passes a plain op-name string (see ``check()``); both are
+        handled so the same event shape reaches the ⑳ dashboard either way.
+        The ``rail`` and ``wallet_id`` are unknown at the policy layer (the
+        Router assigns them) so they are left empty here.
+        """
+        if isinstance(action, dict):
+            op_type = str(action.get("type", "policy_check"))
+            token = str(action.get("token", "") or "")
+            amount = float(action.get("amount", 0) or 0)
+        else:
+            # MCP Protocol form: action is the tool op-name string.
+            op_type = str(action) if action else "policy_check"
+            token = ""
+            amount = 0.0
+        return WalletOpEvent(
+            op_type=op_type,
+            token=token,
+            rail="",
+            amount=amount,
+            agent_id=agent_id,
+            wallet_id="",
+            denied=denied,
+            denial_reason=reason,
+            timestamp=time.time(),
+        )
+
+    def _deny(self, agent_id: str, reason: str, action: object = None) -> Decision:
+        evt = self._event(agent_id, True, reason, action)
         d = Decision(agent_id=agent_id, allowed=False, reason=reason, event=evt)
         if self._event_listener is not None:
             self._event_listener(evt)
         return d
 
-    def _allow(self, agent_id: str) -> Decision:
-        evt = WalletOpEvent(denied=False, denial_reason=None, agent_id=agent_id)
+    def _allow(self, agent_id: str, action: object = None) -> Decision:
+        evt = self._event(agent_id, False, None, action)
         d = Decision(agent_id=agent_id, allowed=True, reason=None, event=evt)
         if self._event_listener is not None:
             self._event_listener(evt)

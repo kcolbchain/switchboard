@@ -462,16 +462,31 @@ class TestWalletOpEvents:
 # 7. Decision dataclass
 # ---------------------------------------------------------------------------
 
+def _evt(denied: bool, reason, agent_id: str) -> WalletOpEvent:
+    """Build a canonical metrics.WalletOpEvent for Decision construction tests."""
+    return WalletOpEvent(
+        op_type="pay",
+        token=ETH,
+        rail="",
+        amount=0.0,
+        agent_id=agent_id,
+        wallet_id="",
+        denied=denied,
+        denial_reason=reason,
+        timestamp=0.0,
+    )
+
+
 class TestDecision:
     def test_allow_decision_fields(self):
-        evt = WalletOpEvent(denied=False, denial_reason=None, agent_id="a")
+        evt = _evt(denied=False, reason=None, agent_id="a")
         d = Decision(agent_id="a", allowed=True, reason=None, event=evt)
         assert d.agent_id == "a"
         assert d.allowed is True
         assert d.reason is None
 
     def test_deny_decision_reason_is_string(self):
-        evt = WalletOpEvent(denied=True, denial_reason="tier_ceiling", agent_id="b")
+        evt = _evt(denied=True, reason="tier_ceiling", agent_id="b")
         d = Decision(agent_id="b", allowed=False, reason="tier_ceiling", event=evt)
         assert d.reason == "tier_ceiling"
 
@@ -479,6 +494,6 @@ class TestDecision:
         """Allowed reason values are the typed literals defined in the spec."""
         valid_reasons = {"rate_limited", "tier_ceiling", "noncompliant", "policy_violation"}
         for r in valid_reasons:
-            evt = WalletOpEvent(denied=True, denial_reason=r, agent_id="x")
+            evt = _evt(denied=True, reason=r, agent_id="x")
             d = Decision(agent_id="x", allowed=False, reason=r, event=evt)
             assert d.reason in valid_reasons
