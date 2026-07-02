@@ -36,11 +36,11 @@ contract AgentEscrowGenesisCutoverTest is Test {
         assertEq(CANDIDATE_GENESIS_ADDRESS, address(0x000000000000000000000000000000000000A002));
     }
 
-    function testGenesisOwnerIsCouncilMultisig() public {
+    function testGenesisOwnerIsCouncilMultisig() public view {
         assertEq(genesisEscrow.owner(), council);
     }
 
-    function testGenesisStartsWithNoBalanceOrPayments() public {
+    function testGenesisStartsWithNoBalanceOrPayments() public view {
         assertEq(address(genesisEscrow).balance, 0);
         assertEq(genesisEscrow.chainId(), MAINNET_CHAIN_ID);
         assertEq(address(genesisEscrow.oracleAggregator()), address(0));
