@@ -82,7 +82,7 @@ def _req(
     return PaymentRequest(
         chain_id=CHAIN_1,
         token=token,
-        amount=amount,
+        amount_wei=amount,
         payee=payee,
     )
 

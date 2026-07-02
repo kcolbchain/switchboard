@@ -33,7 +33,7 @@ Usage::
     treasury.credit(chain_id=1, token=USDC, amount=1_000_000_000)
 
     wallet = AgentWallet(mpc=mpc, treasury=treasury, escrow=my_escrow_client)
-    receipt = wallet.pay(PaymentRequest(chain_id=1, token=USDC, amount=100_000_000, payee="0x..."))
+    receipt = wallet.pay(PaymentRequest(chain_id=1, token=USDC, amount_wei=100_000_000, payee="0x..."))
 """
 
 from __future__ import annotations
@@ -43,6 +43,13 @@ from typing import Optional, Protocol, runtime_checkable
 
 from switchboard.mpc_wallet import MPCWallet
 from switchboard.treasury import Treasury, InsufficientBalance
+
+# Canonical payment-request type (protocol v1.2, src/payment_protocol.py).
+# AgentWallet speaks the *same* PaymentRequest as the settlement protocol so
+# there is a single request shape across the wallet, delegation, MCP, and the
+# on-chain negotiation.  It carries a multi-token ``token`` field and an
+# ``amount`` alias for ``amount_wei`` (see src/payment_protocol.py).
+from src.payment_protocol import PaymentRequest  # noqa: F401 — re-exported
 
 
 class WalletError(RuntimeError):
@@ -86,16 +93,11 @@ class EscrowClient(Protocol):
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class PaymentRequest:
-    """Describes a payment an agent wants to make."""
-
-    chain_id: int
-    token: str          # EVM address; address(0) = native ETH
-    amount: int         # in the smallest token unit (wei / USDC base units / …)
-    payee: str          # EVM address of the receiving party
-    metadata: dict = field(default_factory=dict)
+#
+# ``PaymentRequest`` is imported from ``src.payment_protocol`` (the canonical
+# protocol type) at the top of this module — AgentWallet no longer defines its
+# own.  A request must carry ``chain_id``, ``token``, ``amount`` (alias of
+# ``amount_wei``), and ``payee``.
 
 
 @dataclass(frozen=True)

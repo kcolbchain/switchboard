@@ -135,12 +135,34 @@ class PaymentRequest:
     status: str = "pending"   # pending, locked, confirmed, released, refunded, cancelled
     # v1.2 — negotiated settlement token; None = unset (ETH profile / v1.1 compat)
     settlement_token: Optional[SettlementToken] = None
+    # Multi-token settlement asset (spec §3.2): the concrete token the wallet
+    # settles in.  EVM address; "" or address(0) = native ETH (the ETH profile,
+    # semantically identical to ``currency == "ETH"``).  This is the field the
+    # ``AgentWallet`` / ``Router`` read as the source token.  Kept off the v1.0
+    # wire (omitted when default) and out of ``content_hash`` so the frozen
+    # protocol vectors and cross-language hashes are unaffected.
+    token: str = ""
+
+    # ``amount`` is a read/write alias for ``amount_wei`` so the agent-wallet
+    # layer can speak in generic "token base units" (wei / USDC-decimals / …)
+    # while the protocol keeps ``amount_wei`` as the single source of truth.
+    # It is a property, NOT a dataclass field, so it never enters the wire
+    # encoding or the content hash.  Construct with ``amount_wei=`` (the wallet
+    # helpers do); read/write freely via ``req.amount``.
+    @property
+    def amount(self) -> int:
+        return self.amount_wei
+
+    @amount.setter
+    def amount(self, value: int) -> None:
+        self.amount_wei = value
 
     def to_json(self) -> str:
         """Serialize to JSON for signing/transmission.
 
-        Back-compat: ``settlement_token`` is omitted when ``None`` so v1.0/v1.1
-        wire payloads remain byte-for-byte identical after the v1.2 upgrade.
+        Back-compat: ``settlement_token`` and ``token`` are omitted from the
+        wire when at their defaults so v1.0/v1.1 payloads remain byte-for-byte
+        identical after the v1.2 / multi-token upgrade.
         """
         d = asdict(self)
         # Convert Decimal to string for JSON
@@ -149,6 +171,9 @@ class PaymentRequest:
         # v1.2 back-compat: omit settlement_token from wire when not set
         if self.settlement_token is None:
             d.pop('settlement_token', None)
+        # multi-token back-compat: omit token from wire when at default (ETH profile)
+        if not self.token:
+            d.pop('token', None)
         return json.dumps(d, sort_keys=True, separators=(',', ':'))
 
     def to_dict(self) -> dict:
@@ -174,9 +199,10 @@ class PaymentRequest:
         """Content-based hash.
 
         Excludes volatile/negotiated fields (``created_at``, ``status``,
-        ``settlement_token``) so two requests with identical payment intent
-        produce the same hash regardless of when they were instantiated or
-        what settlement token was later negotiated.
+        ``settlement_token``) and the derived multi-token ``token`` field so two
+        requests with identical payment intent produce the same hash regardless
+        of when they were instantiated, what settlement token was negotiated, or
+        which concrete token the wallet later selected.
         """
         d = asdict(self)
         if self.amount_usd is not None:
@@ -184,6 +210,7 @@ class PaymentRequest:
         d.pop('created_at', None)
         d.pop('status', None)
         d.pop('settlement_token', None)  # negotiated result — excluded from hash
+        d.pop('token', None)             # wallet-selected asset — excluded from hash
         canonical = json.dumps(d, sort_keys=True, separators=(',', ':'))
         h = hashlib.sha256()
         h.update(canonical.encode('utf-8'))

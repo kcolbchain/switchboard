@@ -344,7 +344,7 @@ class MCPServer:
         request = PaymentRequest(
             chain_id=args["chain_id"],
             token=args["token"],
-            amount=args["amount"],
+            amount_wei=args["amount"],
             payee=args["payee"],
             metadata=args.get("metadata") or {},
         )
