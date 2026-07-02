@@ -20,13 +20,27 @@ jobs:
 
       - name: Install OZ + forge-std
         run: |
-          forge install foundry-rs/forge-std --shallow
+          # Pin forge-std to the version the suite is developed against so CI
+          # can't drift onto a newer forge-std that changes cheatcode/std behavior.
+          forge install foundry-rs/forge-std@v1.9.4 --shallow
           # OZ v5.0.2 is not reachable via foundry's tag-API window (OZ is at v5.6.x).
-          # Pin by SHA; --shallow excluded because shallow clones can't checkout arbitrary commits.
+          # Pin by SHA (== the v5.0.2 release tag); --shallow excluded because
+          # shallow clones can't checkout arbitrary commits.
           forge install OpenZeppelin/openzeppelin-contracts@dbb6104ce834628e473d2173bbc9d47f81a9eec3
 
+      # `forge build --sizes` / `forge test` auto-discover every suite under
+      # contracts/test + test/, so the multi-token escrow (unit ①) and swap
+      # adapter (unit ②) suites run here without an explicit test list.
       - run: forge build --sizes
       - run: forge test -vv
+
+      # Belt-and-suspenders: fail loudly if the new multi-token / swap suites
+      # ever stop being discovered (e.g. a bad path move), rather than silently
+      # shrinking coverage.
+      - name: Assert multi-token + swap suites are present
+        run: |
+          forge test --match-contract MultiTokenAgentEscrowTest -vv
+          forge test --match-contract SwapSettlementAdapterTest -vv
 
   pytest:
     name: pytest
