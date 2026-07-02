@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>switchboard — escrow metrics</title>
+  <meta name="description" content="Live escrow-fulfilment metrics + wallet-ops health for switchboard agents." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://kcolbchain.github.io/brand/tokens.css" />
+  <style>
+    /* ========== RESET & BASE ========== */
+    *{margin:0;padding:0;box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{
+      font-family:var(--font);
+      font-size:var(--t-3);
+      line-height:1.65;
+      background:var(--bg);
+      color:var(--fg-muted);
+      -webkit-font-smoothing:antialiased;
+      text-rendering:optimizeLegibility;
+      overflow-x:hidden;
+    }
+    a{color:var(--fg);text-decoration:none;border-bottom:1px solid var(--line);transition:border-color .15s,color .15s}
+    a:hover{color:var(--mark);border-bottom-color:var(--mark)}
+    code{font-family:var(--font);color:var(--fg);background:var(--bg-elev);padding:1px 5px;border-radius:2px;font-size:.92em}
+
+    /* ========== ATMOSPHERE ========== */
+    body::before{
+      content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+      background:repeating-linear-gradient(
+        0deg,
+        transparent,transparent 2px,
+        rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px
+      );
+    }
+    body::after{
+      content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
+      background:radial-gradient(ellipse at 50% 0%,rgba(245,224,58,.04) 0%,transparent 60%),
+                 radial-gradient(ellipse at 80% 100%,rgba(110,192,122,.02) 0%,transparent 50%);
+    }
+
+    /* ========== REVEAL ========== */
+    .reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+    .reveal.visible{opacity:1;transform:translateY(0)}
+
+    /* ========== HEADER ========== */
+    header.top{
+      position:sticky;top:0;z-index:50;
+      display:flex;align-items:center;justify-content:space-between;
+      padding:var(--s-3) var(--s-5);
+      background:rgba(11,11,13,.86);backdrop-filter:blur(10px);
+      border-bottom:1px solid var(--line);
+      gap:var(--s-4);flex-wrap:wrap;
+    }
+    header.top .wm{font-size:var(--t-3);font-weight:500;color:var(--fg);letter-spacing:-.01em;border-bottom:none;white-space:nowrap}
+    header.top .wm em{color:var(--mark);font-style:normal;font-weight:700}
+    header.top .wm .sep{color:var(--fg-faint);font-weight:400;margin:0 var(--s-2)}
+    header.top .wm .desc{color:var(--fg-muted);font-weight:400}
+    header.top nav{display:flex;gap:var(--s-4);flex-wrap:wrap;font-size:var(--t-2)}
+    header.top nav a{color:var(--fg-faint);border-bottom:none;position:relative}
+    header.top nav a::after{content:'';position:absolute;bottom:-2px;left:0;width:0;height:1px;background:var(--mark);transition:width .25s ease}
+    header.top nav a:hover{color:var(--mark)}
+    header.top nav a:hover::after{width:100%}
+
+    /* ========== CONTAINER ========== */
+    .container{max-width:var(--col-wide);margin:0 auto;padding:0 var(--s-5)}
+    @media(max-width:720px){.container{padding:0 var(--s-3)}}
+
+    /* ========== PAGE HEADER ========== */
+    .page-head{
+      padding:var(--s-6) 0 var(--s-5);
+      display:flex;justify-content:space-between;align-items:flex-end;
+      flex-wrap:wrap;gap:var(--s-4);
+    }
+    .page-head h1{font-size:var(--t-6);font-weight:500;color:var(--fg);letter-spacing:-.02em;line-height:1.1}
+    .page-head h1 em{color:var(--mark);font-style:normal;font-weight:700}
+    .page-head .lead{font-size:var(--t-2);color:var(--fg-muted);max-width:52ch;margin-top:var(--s-2)}
+    .poll-status{
+      display:flex;align-items:center;gap:var(--s-2);font-size:var(--t-1);color:var(--fg-faint);
+      text-transform:uppercase;letter-spacing:.08em;
+    }
+    .poll-dot{
+      width:6px;height:6px;border-radius:50%;background:var(--ok);
+      animation:blink 2s ease-in-out infinite;
+    }
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+    /* ========== SECTION ========== */
+    section.s{padding:var(--s-5) 0 var(--s-4);border-top:1px solid var(--line)}
+    section.s .head{
+      display:flex;justify-content:space-between;align-items:baseline;
+      gap:var(--s-3);flex-wrap:wrap;margin-bottom:var(--s-4);
+    }
+    section.s .head h2{font-size:var(--t-4);font-weight:500;color:var(--fg);letter-spacing:-.01em}
+    section.s .head .meta{font-size:var(--t-1);color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em}
+
+    /* ========== GRID ========== */
+    .grid{display:grid;gap:var(--s-3);grid-template-columns:1fr}
+    @media(min-width:640px){.grid.cols-2{grid-template-columns:repeat(2,1fr)}.grid.cols-4{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:960px){.grid.cols-3{grid-template-columns:repeat(3,1fr)}.grid.cols-4{grid-template-columns:repeat(4,1fr)}.grid.cols-5{grid-template-columns:repeat(5,1fr)}}
+
+    /* ========== STAT ========== */
+    .stat{
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      padding:var(--s-4);position:relative;overflow:hidden;
+      transition:border-color .3s ease;
+    }
+    .stat:hover{border-color:var(--fg-faint)}
+    .stat::before{
+      content:'';position:absolute;top:0;left:0;right:0;height:2px;
+      background:linear-gradient(90deg,transparent,var(--mark),transparent);
+      opacity:0;transition:opacity .3s ease;
+    }
+    .stat:hover::before{opacity:1}
+    .stat .stat-label{font-size:var(--t-1);color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:var(--s-2)}
+    .stat .stat-value{font-size:var(--t-6);font-weight:500;color:var(--fg);letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+    .stat .stat-sub{font-size:var(--t-2);color:var(--fg-muted);margin-top:var(--s-2)}
+    .stat.ok .stat-value{color:var(--ok)}
+    .stat.warn .stat-value{color:var(--warn)}
+    .stat.hot .stat-value{color:var(--hot)}
+
+    /* ========== CHIP ========== */
+    .chip{
+      display:inline-block;padding:3px 10px;border-radius:999px;
+      background:var(--bg);color:var(--fg-muted);font-size:var(--t-1);border:1px solid var(--line);
+    }
+    .chip.ok{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+    .chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+    .chip.hot{background:var(--hot-soft);color:var(--hot);border-color:transparent}
+    .chip.mark{background:var(--mark-soft);color:var(--mark);border-color:transparent}
+
+    /* ========== BAR CHART ========== */
+    .bar-chart{
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      padding:var(--s-4);
+    }
+    .bar-chart .bc-label{font-size:var(--t-1);color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:var(--s-3)}
+    .bar-row{display:flex;align-items:center;gap:var(--s-3);margin-bottom:var(--s-2)}
+    .bar-row:last-child{margin-bottom:0}
+    .bar-row .br-key{font-size:var(--t-2);color:var(--fg-muted);width:80px;flex-shrink:0;font-variant-numeric:tabular-nums}
+    .bar-row .br-track{flex:1;background:var(--bg);border-radius:2px;height:8px;overflow:hidden}
+    .bar-row .br-fill{height:100%;border-radius:2px;transition:width 0.8s cubic-bezier(.4,0,.2,1);background:var(--mark)}
+    .bar-row .br-fill.ok{background:var(--ok)}
+    .bar-row .br-fill.warn{background:var(--warn)}
+    .bar-row .br-fill.hot{background:var(--hot)}
+    .bar-row .br-val{font-size:var(--t-1);color:var(--fg-faint);width:60px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums}
+
+    /* ========== RATE RING ========== */
+    .rate-ring-wrap{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:var(--s-4);
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+    }
+    .rate-ring-wrap .rr-label{font-size:var(--t-1);color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-top:var(--s-3);text-align:center}
+    .rate-ring-wrap .rr-sub{font-size:var(--t-2);color:var(--fg-muted);text-align:center;margin-top:var(--s-1)}
+    svg.ring{width:100px;height:100px;transform:rotate(-90deg)}
+    svg.ring circle.bg{fill:none;stroke:var(--bg);stroke-width:8}
+    svg.ring circle.fg{fill:none;stroke:var(--mark);stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset .9s cubic-bezier(.4,0,.2,1)}
+    svg.ring circle.fg.ok{stroke:var(--ok)}
+    svg.ring circle.fg.warn{stroke:var(--warn)}
+    svg.ring circle.fg.hot{stroke:var(--hot)}
+    .ring-center{position:relative}
+    .ring-val{
+      position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(90deg);
+      font-size:var(--t-3);font-weight:500;color:var(--fg);letter-spacing:-.02em;
+    }
+
+    /* ========== FLEET TABLE ========== */
+    .fleet-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-elev)}
+    table.fleet{width:100%;border-collapse:collapse;font-size:var(--t-2);min-width:480px}
+    table.fleet th,table.fleet td{padding:var(--s-3) var(--s-4);text-align:left;vertical-align:middle;border-bottom:1px solid var(--line)}
+    table.fleet thead th{color:var(--fg-faint);font-weight:500;font-size:var(--t-1);text-transform:uppercase;letter-spacing:.08em}
+    table.fleet tbody td{color:var(--fg-muted)}
+    table.fleet tbody td.label{color:var(--fg);font-weight:500}
+    table.fleet tbody tr{transition:background .15s ease}
+    table.fleet tbody tr:hover{background:rgba(245,224,58,.03)}
+    table.fleet tbody tr:last-child td{border-bottom:none}
+    .mini-bar{display:inline-block;height:4px;border-radius:2px;background:var(--ok);vertical-align:middle;margin-left:var(--s-2);transition:width 0.8s ease}
+    .mini-bar.warn{background:var(--warn)}
+    .mini-bar.hot{background:var(--hot)}
+
+    /* ========== DENIALS PANEL ========== */
+    .denial-list{
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      padding:var(--s-4);
+    }
+    .denial-list .dl-head{font-size:var(--t-1);color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:var(--s-3)}
+    .denial-row{
+      display:flex;justify-content:space-between;align-items:center;
+      padding:var(--s-2) 0;border-bottom:1px solid var(--line);
+      font-size:var(--t-2);
+    }
+    .denial-row:last-child{border-bottom:none}
+    .denial-row .dr-reason{color:var(--fg)}
+    .denial-row .dr-count{color:var(--hot);font-variant-numeric:tabular-nums;font-weight:500}
+
+    /* ========== LAST-UPDATED BAR ========== */
+    .refresh-bar{
+      display:flex;align-items:center;justify-content:space-between;
+      font-size:var(--t-1);color:var(--fg-faint);
+      padding:var(--s-2) 0;gap:var(--s-3);flex-wrap:wrap;
+    }
+    .refresh-bar .rb-left{display:flex;align-items:center;gap:var(--s-2)}
+    .refresh-bar button{
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      color:var(--fg-muted);font-family:var(--font);font-size:var(--t-1);
+      padding:4px 12px;cursor:pointer;transition:all .2s ease;
+      text-transform:uppercase;letter-spacing:.06em;
+    }
+    .refresh-bar button:hover{border-color:var(--mark);color:var(--mark)}
+
+    /* ========== TIMELINE SPARK ========== */
+    .spark-wrap{
+      background:var(--bg-elev);border:1px solid var(--line);border-radius:var(--radius);
+      padding:var(--s-4);overflow:hidden;
+    }
+    .spark-label{font-size:var(--t-1);color:var(--fg-faint);text-transform:uppercase;letter-spacing:.08em;margin-bottom:var(--s-3)}
+    canvas.spark{width:100%;height:60px;display:block}
+
+    /* ========== FOOTER ========== */
+    footer.bottom{padding:var(--s-5) 0 var(--s-6);border-top:1px solid var(--line);margin-top:var(--s-5)}
+    footer.bottom .row{display:flex;justify-content:space-between;gap:var(--s-4);flex-wrap:wrap;font-size:var(--t-2)}
+    footer.bottom .row .links{display:flex;gap:var(--s-4);flex-wrap:wrap}
+    footer.bottom .row .links a{color:var(--fg-faint);border-bottom:none}
+    footer.bottom .row .links a:hover{color:var(--mark)}
+    footer.bottom .legal{margin-top:var(--s-3);font-size:var(--t-1);color:var(--fg-faint)}
+
+    @media(max-width:480px){
+      body{font-size:var(--t-2)}
+      section.s{padding:var(--s-4) 0 var(--s-3)}
+    }
+  </style>
+</head>
+<body>
+
+<header class="top">
+  <a class="wm" href="./">
+    <em>kcolb</em>chain<span class="sep">/</span><span class="desc">switchboard</span>
+  </a>
+  <nav>
+    <a href="./">home</a>
+    <a href="./docs.html">docs</a>
+    <a href="./simulator.html">simulator</a>
+    <a href="./lab/index.html">lab ↗</a>
+    <a href="https://github.com/kcolbchain/switchboard">source ↗</a>
+  </nav>
+</header>
+
+<div class="container">
+
+  <!-- ============== PAGE HEADER ============== -->
+  <div class="page-head reveal">
+    <div>
+      <h1>escrow <em>metrics</em></h1>
+      <p class="lead">
+        Fill rate, time-to-release, timeouts, refunds, challenge rate,
+        spend by token/rail, policy denials, and fleet health — refreshed
+        every 30 s from contract events.
+      </p>
+    </div>
+    <div class="poll-status">
+      <div class="poll-dot" id="pollDot"></div>
+      <span id="pollLabel">polling · 30 s</span>
+    </div>
+  </div>
+
+  <!-- ============== REFRESH BAR ============== -->
+  <div class="refresh-bar reveal">
+    <div class="rb-left">
+      <span>Last updated: <span id="lastUpdated">—</span></span>
+      <span>·</span>
+      <span>Interval: <span id="intervalLabel">30 s</span></span>
+    </div>
+    <div style="display:flex;gap:var(--s-2)">
+      <button onclick="setInterval_btn(10)">10 s</button>
+      <button onclick="setInterval_btn(30)">30 s</button>
+      <button onclick="setInterval_btn(60)">60 s</button>
+      <button onclick="refreshNow()">refresh now</button>
+    </div>
+  </div>
+
+  <!-- ============== ESCROW FULFILMENT STATS ============== -->
+  <section class="s reveal" id="escrow">
+    <div class="head">
+      <h2>escrow fulfilment</h2>
+      <span class="meta" id="escrowCountMeta">— events</span>
+    </div>
+
+    <div class="grid cols-4" style="margin-bottom:var(--s-4)">
+      <div class="stat ok">
+        <div class="stat-label">fill rate</div>
+        <div class="stat-value" id="fillRate">—</div>
+        <div class="stat-sub">released / total</div>
+      </div>
+      <div class="stat warn">
+        <div class="stat-label">timeout rate</div>
+        <div class="stat-value" id="timeoutRate">—</div>
+        <div class="stat-sub">timed-out / total</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">refund rate</div>
+        <div class="stat-value" id="refundRate">—</div>
+        <div class="stat-sub">refunded / total</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">challenge rate</div>
+        <div class="stat-value" id="challengeRate">—</div>
+        <div class="stat-sub">challenged / total</div>
+      </div>
+    </div>
+
+    <!-- Ring charts + time-to-release + pending -->
+    <div class="grid cols-4">
+      <!-- Fill ring -->
+      <div class="rate-ring-wrap">
+        <div class="ring-center">
+          <svg class="ring" viewBox="0 0 100 100">
+            <circle class="bg" cx="50" cy="50" r="40"/>
+            <circle class="fg ok" id="fillRing" cx="50" cy="50" r="40"
+              stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+          </svg>
+          <div class="ring-val" id="fillRingVal">—</div>
+        </div>
+        <div class="rr-label">fill rate</div>
+        <div class="rr-sub" id="fillRingCounts">— / — events</div>
+      </div>
+      <!-- TTR stat -->
+      <div class="stat">
+        <div class="stat-label">avg time-to-release</div>
+        <div class="stat-value" id="avgTTR" style="font-size:var(--t-5)">—</div>
+        <div class="stat-sub">seconds (released events)</div>
+      </div>
+      <!-- Pending -->
+      <div class="stat">
+        <div class="stat-label">pending escrows</div>
+        <div class="stat-value" id="pendingCount">—</div>
+        <div class="stat-sub">currently locked</div>
+      </div>
+      <!-- Total events -->
+      <div class="stat">
+        <div class="stat-label">total events</div>
+        <div class="stat-value" id="totalEvents">—</div>
+        <div class="stat-sub">all terminal events</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== FILL RATE TIMELINE ============== -->
+  <section class="s reveal" id="timeline">
+    <div class="head">
+      <h2>fill rate over time</h2>
+      <span class="meta">rolling 24 h window</span>
+    </div>
+    <div class="spark-wrap">
+      <div class="spark-label">hourly fill rate %</div>
+      <canvas class="spark" id="sparkCanvas" height="60"></canvas>
+    </div>
+  </section>
+
+  <!-- ============== WALLET OPS ============== -->
+  <section class="s reveal" id="wallet-ops">
+    <div class="head">
+      <h2>wallet ops</h2>
+      <span class="meta" id="opsMeta">— ops total</span>
+    </div>
+    <div class="grid cols-3">
+      <!-- Spend by token -->
+      <div class="bar-chart">
+        <div class="bc-label">spend by token</div>
+        <div id="spendByToken"><!-- injected --></div>
+      </div>
+      <!-- Spend by rail -->
+      <div class="bar-chart">
+        <div class="bc-label">spend by rail</div>
+        <div id="spendByRail"><!-- injected --></div>
+      </div>
+      <!-- Policy denials -->
+      <div class="denial-list">
+        <div class="dl-head">policy denials <span class="chip hot" id="denialChip">0</span></div>
+        <div id="denialRows"><!-- injected --></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== FLEET HEALTH ============== -->
+  <section class="s reveal" id="fleet">
+    <div class="head">
+      <h2>fleet health</h2>
+      <span class="meta" id="fleetMeta">— wallets active</span>
+    </div>
+    <div class="fleet-wrap">
+      <table class="fleet">
+        <thead>
+          <tr>
+            <th>wallet</th>
+            <th>ops</th>
+            <th>denial rate</th>
+            <th>health</th>
+          </tr>
+        </thead>
+        <tbody id="fleetBody"><!-- injected --></tbody>
+      </table>
+    </div>
+  </section>
+
+</div><!-- /container -->
+
+<footer class="bottom">
+  <div class="container">
+    <div class="row">
+      <a class="wm" href="./" style="color:var(--fg);border:none">
+        <em style="color:var(--mark);font-style:normal;font-weight:700">kcolb</em>chain
+        <span style="color:var(--fg-faint);margin:0 var(--s-2)">/</span>
+        <span style="color:var(--fg-muted)">switchboard</span>
+      </a>
+      <div class="links">
+        <a href="./">home</a>
+        <a href="./docs.html">docs</a>
+        <a href="./lab/index.html">lab</a>
+        <a href="https://github.com/kcolbchain/switchboard">source</a>
+      </div>
+    </div>
+    <p class="legal">
+      Metrics panel — unit ⑳ · agent-wallet-multitoken-settlement ·
+      mock data shown; replace <code>fetchMetrics()</code> with a live
+      <code>/api/metrics</code> endpoint.
+    </p>
+  </div>
+</footer>
+
+<script>
+/* ==========================================================================
+   Mock metric data
+   Replace fetchMetrics() with a real API call returning the same shape.
+   The shape mirrors switchboard.metrics.AllMetrics (Python dataclass).
+   ========================================================================== */
+
+function mockMetrics() {
+  // Simulate slight variance on each poll so the dashboard looks "live"
+  const jitter = () => 1 + (Math.random() - 0.5) * 0.06;
+
+  const fillRate      = Math.min(0.97 * jitter(), 1);
+  const timeoutRate   = Math.max(0.04 * jitter(), 0);
+  const refundRate    = Math.max(0.03 * jitter(), 0);
+  const challengeRate = Math.max(0.01 * jitter(), 0);
+  const totalCount    = Math.round(3847 * jitter());
+  const releasedCount = Math.round(totalCount * fillRate);
+  const avgTTR        = Math.round(47 * jitter());
+  const pendingCount  = Math.round(12 * jitter());
+
+  return {
+    escrow: {
+      fill_rate:           fillRate,
+      timeout_rate:        timeoutRate,
+      refund_rate:         refundRate,
+      challenge_rate:      challengeRate,
+      total_count:         totalCount,
+      released_count:      releasedCount,
+      refunded_count:      Math.round(totalCount * refundRate),
+      timeout_count:       Math.round(totalCount * timeoutRate),
+      challenged_count:    Math.round(totalCount * challengeRate),
+      pending_count:       pendingCount,
+      avg_time_to_release_s: avgTTR,
+    },
+    wallet_ops: {
+      total_ops: Math.round(11293 * jitter()),
+      spend_by_token: {
+        ETH:  +(1284.7  * jitter()).toFixed(4),
+        USDC: +(82340.0 * jitter()).toFixed(2),
+        LUX:  +(44200.0 * jitter()).toFixed(2),
+        ZOO:  +(3100.0  * jitter()).toFixed(2),
+        DAI:  +(9870.0  * jitter()).toFixed(2),
+      },
+      spend_by_rail: {
+        escrow: +(52000.0 * jitter()).toFixed(2),
+        x402:   +(34000.0 * jitter()).toFixed(2),
+        mpp:    +(8900.0  * jitter()).toFixed(2),
+      },
+      policy_denial_count: Math.round(34 * jitter()),
+      denials_by_reason: {
+        daily_cap_exceeded:       Math.round(18 * jitter()),
+        per_tx_cap_exceeded:      Math.round(9  * jitter()),
+        token_not_allowed:        Math.round(5  * jitter()),
+        counterparty_not_allowed: Math.round(2  * jitter()),
+      },
+    },
+    fleet: {
+      active_wallet_count: 4,
+      wallet_op_counts: {
+        'wallet-A': Math.round(4210 * jitter()),
+        'wallet-B': Math.round(3980 * jitter()),
+        'wallet-C': Math.round(2140 * jitter()),
+        'wallet-D': Math.round(963  * jitter()),
+      },
+      denial_rate_by_wallet: {
+        'wallet-A': +(0.002 * jitter()).toFixed(4),
+        'wallet-B': +(0.003 * jitter()).toFixed(4),
+        'wallet-C': +(0.008 * jitter()).toFixed(4),
+        'wallet-D': +(0.021 * jitter()).toFixed(4),
+      },
+    },
+    // Synthetic sparkline (hourly fill rate, last 24 h)
+    spark: Array.from({length: 24}, (_, i) =>
+      Math.min(+(0.92 + Math.sin(i / 4) * 0.04 + (Math.random() - 0.5) * 0.04).toFixed(3), 1)
+    ),
+  };
+}
+
+/* Replace this function to connect to a real API */
+async function fetchMetrics() {
+  // await fetch('/api/metrics').then(r => r.json())
+  return mockMetrics();
+}
+
+/* ==========================================================================
+   Rendering
+   ========================================================================== */
+
+function pct(v) {
+  if (v == null) return '—';
+  return (v * 100).toFixed(1) + '%';
+}
+
+function fmtNum(v) {
+  if (v == null) return '—';
+  return v.toLocaleString();
+}
+
+function colorClass(v, thresholds) {
+  // thresholds: [warnAbove, hotAbove]
+  if (v >= thresholds[1]) return 'hot';
+  if (v >= thresholds[0]) return 'warn';
+  return 'ok';
+}
+
+/* Ring: r=40, circumference=2πr≈251.2 */
+const CIRC = 2 * Math.PI * 40;
+function setRing(id, fraction, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.strokeDashoffset = CIRC * (1 - (fraction || 0));
+  el.className = 'fg ' + (cls || '');
+}
+
+function renderBarRows(containerId, data, maxVal, barClass) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  const mx = maxVal || (entries[0] ? entries[0][1] : 1);
+  el.innerHTML = entries.map(([k, v]) => `
+    <div class="bar-row">
+      <span class="br-key">${k}</span>
+      <div class="br-track">
+        <div class="br-fill ${barClass || ''}" style="width:${(v/mx*100).toFixed(1)}%"></div>
+      </div>
+      <span class="br-val">${v >= 1000 ? (v/1000).toFixed(1)+'k' : v.toFixed ? v.toFixed(2) : v}</span>
+    </div>
+  `).join('');
+}
+
+function renderDenials(data, totalDenials) {
+  const el = document.getElementById('denialRows');
+  const chip = document.getElementById('denialChip');
+  if (!el) return;
+  if (chip) chip.textContent = fmtNum(totalDenials);
+
+  const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    el.innerHTML = '<div class="denial-row"><span class="dr-reason" style="color:var(--fg-faint)">no denials recorded</span></div>';
+    return;
+  }
+  el.innerHTML = entries.map(([reason, count]) => `
+    <div class="denial-row">
+      <span class="dr-reason"><code>${reason}</code></span>
+      <span class="dr-count">${count}</span>
+    </div>
+  `).join('');
+}
+
+function renderFleet(fleet) {
+  const body = document.getElementById('fleetBody');
+  const meta = document.getElementById('fleetMeta');
+  if (!body) return;
+  if (meta) meta.textContent = `${fleet.active_wallet_count} wallets active`;
+
+  const wallets = Object.keys(fleet.wallet_op_counts);
+  const maxOps = Math.max(...Object.values(fleet.wallet_op_counts));
+
+  body.innerHTML = wallets.map(wid => {
+    const ops = fleet.wallet_op_counts[wid];
+    const dr = fleet.denial_rate_by_wallet[wid] || 0;
+    const barW = Math.round(ops / maxOps * 80);
+    const drPct = (dr * 100).toFixed(1);
+    const drCls = dr > 0.01 ? 'hot' : dr > 0.005 ? 'warn' : 'ok';
+    const healthLabel = dr > 0.01 ? 'degraded' : dr > 0.005 ? 'watch' : 'healthy';
+    const healthCls   = dr > 0.01 ? 'hot' : dr > 0.005 ? 'warn' : 'ok';
+    return `
+      <tr>
+        <td class="label"><code>${wid}</code></td>
+        <td>${fmtNum(ops)}<span class="mini-bar" style="width:${barW}px"></span></td>
+        <td><span class="chip ${drCls}">${drPct}%</span></td>
+        <td><span class="chip ${healthCls}">${healthLabel}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/* Sparkline canvas */
+function drawSpark(data) {
+  const canvas = document.getElementById('sparkCanvas');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.parentElement.clientWidth;
+  const H = 60;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const n = data.length;
+  const pad = 4;
+  const stepX = (W - pad * 2) / (n - 1);
+  const minY = 0.5, maxY = 1.0;
+
+  function yCoord(v) {
+    return pad + (1 - (v - minY) / (maxY - minY)) * (H - pad * 2);
+  }
+
+  // Grid lines at 80%, 90%, 100%
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  [0.8, 0.9, 1.0].forEach(v => {
+    const y = yCoord(v);
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(W - pad, y);
+    ctx.stroke();
+  });
+
+  // Fill gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(110,192,122,0.18)');
+  grad.addColorStop(1, 'rgba(110,192,122,0)');
+  ctx.beginPath();
+  data.forEach((v, i) => {
+    const x = pad + i * stepX;
+    const y = yCoord(v);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo(pad + (n - 1) * stepX, H);
+  ctx.lineTo(pad, H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  data.forEach((v, i) => {
+    const x = pad + i * stepX;
+    const y = yCoord(v);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = 'var(--ok, #6ec07a)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Last point dot
+  const lx = pad + (n - 1) * stepX;
+  const ly = yCoord(data[n - 1]);
+  ctx.beginPath();
+  ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#6ec07a';
+  ctx.fill();
+}
+
+/* Main render */
+function render(m) {
+  const e = m.escrow;
+
+  // Fill rate
+  const fillPct = e.fill_rate != null ? pct(e.fill_rate) : '—';
+  setText('fillRate', fillPct);
+  setText('timeoutRate', pct(e.timeout_rate));
+  setText('refundRate', pct(e.refund_rate));
+  setText('challengeRate', pct(e.challenge_rate));
+  setText('avgTTR', e.avg_time_to_release_s != null ? e.avg_time_to_release_s + ' s' : '—');
+  setText('pendingCount', fmtNum(e.pending_count));
+  setText('totalEvents', fmtNum(e.total_count));
+  setText('escrowCountMeta', `${fmtNum(e.total_count)} events`);
+
+  // Ring
+  setRing('fillRing', e.fill_rate, 'ok');
+  setText('fillRingVal', e.fill_rate != null ? Math.round(e.fill_rate * 100) + '%' : '—');
+  setText('fillRingCounts', `${fmtNum(e.released_count)} / ${fmtNum(e.total_count)} events`);
+
+  // Wallet ops
+  const w = m.wallet_ops;
+  setText('opsMeta', `${fmtNum(w.total_ops)} ops total`);
+  renderBarRows('spendByToken', w.spend_by_token, null, '');
+  renderBarRows('spendByRail', w.spend_by_rail, null, 'ok');
+  renderDenials(w.denials_by_reason, w.policy_denial_count);
+
+  // Fleet
+  renderFleet(m.fleet);
+
+  // Spark
+  if (m.spark) drawSpark(m.spark);
+
+  // Timestamp
+  setText('lastUpdated', new Date().toLocaleTimeString());
+}
+
+function setText(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = v;
+}
+
+/* ==========================================================================
+   Poll loop
+   ========================================================================== */
+let pollInterval = 30_000;
+let pollTimer = null;
+
+async function refreshNow() {
+  try {
+    const dot = document.getElementById('pollDot');
+    if (dot) dot.style.background = 'var(--warn, #f0c040)';
+    const m = await fetchMetrics();
+    render(m);
+    if (dot) dot.style.background = 'var(--ok, #6ec07a)';
+  } catch (err) {
+    console.error('metrics fetch failed', err);
+    const dot = document.getElementById('pollDot');
+    if (dot) dot.style.background = 'var(--hot, #f06060)';
+  }
+}
+
+function setInterval_btn(seconds) {
+  pollInterval = seconds * 1000;
+  setText('intervalLabel', seconds + ' s');
+  clearInterval(pollTimer);
+  pollTimer = setInterval(refreshNow, pollInterval);
+}
+
+/* Boot */
+(function(){
+  // Scroll reveal
+  const els = document.querySelectorAll('.reveal');
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) {
+        e.target.querySelectorAll('.reveal').forEach((c, j) => {
+          c.style.transitionDelay = (j * 0.06) + 's';
+          c.classList.add('visible');
+        });
+        e.target.classList.add('visible');
+        obs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+  els.forEach(el => obs.observe(el));
+
+  // Initial fetch + poll
+  refreshNow();
+  pollTimer = setInterval(refreshNow, pollInterval);
+})();
+</script>
+
+</body>
+</html>
