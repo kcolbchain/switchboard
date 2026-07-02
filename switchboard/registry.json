@@ -13,5 +13,218 @@
     "name": "lux-testnet",
     "escrow": null,
     "usdc": null
-  }
+  },
+  "tools": [
+    {
+      "name": "wallet_balance",
+      "description": "Return the wallet's token balances on a given chain. Reports both gross balance and spendable (net of reserve) for every token the treasury tracks on that chain.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session_key": {
+            "type": "string",
+            "description": "Session key ID issued by grant()."
+          },
+          "chain_id": {
+            "type": "integer",
+            "description": "EVM chain ID (e.g. 1 for mainnet, 84532 for Base Sepolia)."
+          },
+          "token": {
+            "type": "string",
+            "description": "Token EVM address (address(0) = native ETH). If omitted, returns all tokens on the chain."
+          }
+        },
+        "required": [
+          "session_key",
+          "chain_id"
+        ]
+      },
+      "op": "wallet_balance",
+      "policy": {
+        "required_tier": "standard",
+        "rate_class": "read"
+      }
+    },
+    {
+      "name": "pay",
+      "description": "Execute a payment from the agent wallet to a payee. Enforces the active SpendPolicy (token allowlist, per-tx cap, daily cap, counterparty allowlist) before co-signing.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session_key": {
+            "type": "string",
+            "description": "Session key ID authorising the payment."
+          },
+          "chain_id": {
+            "type": "integer",
+            "description": "EVM chain ID."
+          },
+          "token": {
+            "type": "string",
+            "description": "Token address (address(0) = ETH)."
+          },
+          "amount": {
+            "type": "integer",
+            "description": "Amount in token base units (wei / USDC decimals)."
+          },
+          "payee": {
+            "type": "string",
+            "description": "Payee EVM address."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Optional key-value metadata attached to the payment."
+          }
+        },
+        "required": [
+          "session_key",
+          "chain_id",
+          "token",
+          "amount",
+          "payee"
+        ]
+      },
+      "op": "pay",
+      "policy": {
+        "required_tier": "standard",
+        "rate_class": "write"
+      }
+    },
+    {
+      "name": "create_escrow",
+      "description": "Create a new on-chain escrow entry for a payment. Returns an escrow_id the payee uses to confirm or release funds.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session_key": {
+            "type": "string"
+          },
+          "chain_id": {
+            "type": "integer"
+          },
+          "token": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer"
+          },
+          "payee": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "session_key",
+          "chain_id",
+          "token",
+          "amount",
+          "payee"
+        ]
+      },
+      "op": "create_escrow",
+      "policy": {
+        "required_tier": "standard",
+        "rate_class": "write"
+      }
+    },
+    {
+      "name": "confirm_payment",
+      "description": "Confirm and release an in-flight escrow once the payee has delivered the agreed service. The escrow is released to the payee.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session_key": {
+            "type": "string"
+          },
+          "escrow_id": {
+            "type": "string",
+            "description": "The escrow_id returned by create_escrow."
+          }
+        },
+        "required": [
+          "session_key",
+          "escrow_id"
+        ]
+      },
+      "op": "confirm_payment",
+      "policy": {
+        "required_tier": "standard",
+        "rate_class": "write"
+      }
+    },
+    {
+      "name": "request_refund",
+      "description": "Request a refund of an escrowed payment. Valid only when the escrow is in the Locked state and the challenge period has passed, or the payee has agreed to the refund.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session_key": {
+            "type": "string"
+          },
+          "escrow_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Human-readable reason for the refund request."
+          }
+        },
+        "required": [
+          "session_key",
+          "escrow_id"
+        ]
+      },
+      "op": "request_refund",
+      "policy": {
+        "required_tier": "standard",
+        "rate_class": "write"
+      }
+    },
+    {
+      "name": "policy_status",
+      "description": "Return the current spend-policy status for a session key: remaining per-tx cap, remaining daily cap, expiry time, and whether the key is still active.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session_key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_key"
+        ]
+      },
+      "op": "policy_status",
+      "policy": {
+        "required_tier": "standard",
+        "rate_class": "read"
+      }
+    },
+    {
+      "name": "escrow_metrics",
+      "description": "Return aggregated escrow-fulfilment metrics: fill rate, average time-to-release, timeout rate, refund rate, challenge rate, and current pending count.",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "session_key": {
+            "type": "string"
+          },
+          "chain_id": {
+            "type": "integer",
+            "description": "Filter metrics to this chain. Omit for all chains."
+          }
+        },
+        "required": [
+          "session_key"
+        ]
+      },
+      "op": "escrow_metrics",
+      "policy": {
+        "required_tier": "standard",
+        "rate_class": "read"
+      }
+    }
+  ]
 }
