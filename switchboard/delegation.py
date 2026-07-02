@@ -248,8 +248,10 @@ class Delegation:
                     f"daily cap {policy.daily_cap}"
                 )
 
-        # All checks passed — delegate to AgentWallet.
-        receipt = self._wallet.pay(request)
+        # All checks passed — delegate to AgentWallet, forwarding the agent
+        # identity so any wired Router / access-policy engine (Seam 4) attributes
+        # the WalletOpEvent and the pay-path access check to the right agent.
+        receipt = self._wallet.pay(request, agent_id=key.agent_id)
 
         # Record the spend in the GasManager *after* a successful payment.
         if policy.daily_cap is not None:

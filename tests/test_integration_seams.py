@@ -301,3 +301,149 @@ class TestSeam3AccessPolicyProtocol:
         assert "result" in resp, resp
         body = json.loads(resp["result"]["content"][0]["text"])
         assert body["tx_id"] == "0xTxHash"
+
+
+# ===========================================================================
+# Seam 4 — Router in the pay path
+# ===========================================================================
+
+
+def _wallet_with_router(events=None, access_policy=None, extra_tokens=None):
+    """Build an AgentWallet whose pay() runs through a real Router.
+
+    Returns (wallet, treasury, escrow_mock).
+    """
+    from switchboard.agent_wallet import AgentWallet, EscrowClient
+    from switchboard.nonce_manager import NonceManager
+    from switchboard.router import Router
+    from switchboard.router.token_selector import TokenSelector
+    from switchboard.router.rail_selector import RailSelector
+    from switchboard.router.fleet_balancer import FleetBalancer
+    from switchboard.treasury import Treasury
+
+    treasury = Treasury()
+    treasury.credit(CHAIN_1, USDC, 1_000_000_000)
+    for tok, bal in (extra_tokens or {}).items():
+        treasury.credit(CHAIN_1, tok, bal)
+
+    chain_client = MagicMock()
+    chain_client.get_current_onchain_nonce.return_value = 0
+    router = Router(
+        token_selector=TokenSelector(treasury=treasury, chain_id=CHAIN_1),
+        rail_selector=RailSelector(),
+        fleet_balancer=FleetBalancer(
+            wallets=["0xWalletA", "0xWalletB"],
+            nonce_manager=NonceManager(chain_client=chain_client),
+            chain_id=CHAIN_1,
+        ),
+        events=events,
+    )
+    escrow = MagicMock(spec=EscrowClient)
+    escrow.create_payment.return_value = "0xescrow_seam4"
+    escrow.release_payment.return_value = True
+
+    mpc = MagicMock()
+    mpc.address.return_value = "0xRoot"
+    mpc.sign_and_send.return_value = "0xTx4"
+
+    wallet = AgentWallet(
+        mpc=mpc, treasury=treasury, escrow=escrow,
+        router=router, access_policy=access_policy,
+    )
+    return wallet, treasury, escrow, mpc
+
+
+class TestSeam4RouterInPayPath:
+    def test_pay_routes_and_emits_wallet_op_event(self):
+        from switchboard.agent_wallet import PaymentRequest
+        from switchboard.metrics import WalletOpEvent
+
+        events: list = []
+        wallet, _, escrow, _ = _wallet_with_router(events=events.append)
+
+        # 100 USDC -> escrow rail (above x402 micro threshold), a fleet wallet.
+        req = PaymentRequest(chain_id=CHAIN_1, token=USDC, amount_wei=200_000, payee=PAYEE)
+        receipt = wallet.pay(req, agent_id="router-agent")
+
+        # Router picked rail + a signing wallet, recorded on the receipt.
+        assert receipt.token == USDC
+        assert receipt.rail == "escrow"
+        assert receipt.wallet in ("0xWalletA", "0xWalletB")
+        assert receipt.escrow_id == "0xescrow_seam4"
+
+        # Exactly one routing WalletOpEvent, canonical shape, correct agent.
+        routed = [e for e in events if isinstance(e, WalletOpEvent)]
+        assert len(routed) == 1
+        assert routed[0].agent_id == "router-agent"
+        assert routed[0].rail == "escrow"
+        assert routed[0].denied is False
+
+    def test_pay_consults_access_policy_before_signing_and_denies(self):
+        """A denied access-policy decision blocks the pay before MPC signs."""
+        from dataclasses import dataclass
+
+        from switchboard.agent_wallet import PaymentRequest, AccessDenied
+
+        @dataclass
+        class _Decision:
+            denied: bool
+            reason: object
+
+        class DenyEngine:
+            def __init__(self):
+                self.called_with = None
+
+            def check(self, agent_id, action):
+                self.called_with = (agent_id, action)
+                return _Decision(denied=True, reason="tier_ceiling")
+
+        engine = DenyEngine()
+        wallet, treasury, escrow, mpc = _wallet_with_router(access_policy=engine)
+        before = treasury.balance(CHAIN_1, USDC)
+
+        req = PaymentRequest(chain_id=CHAIN_1, token=USDC, amount_wei=200_000, payee=PAYEE)
+        with pytest.raises(AccessDenied) as ei:
+            wallet.pay(req, agent_id="blocked-agent")
+
+        assert ei.value.reason == "tier_ceiling"
+        # Access check ran with the agent + a pay action; nothing signed/debited.
+        assert engine.called_with[0] == "blocked-agent"
+        assert engine.called_with[1]["type"] == "pay"
+        mpc.sign_and_send.assert_not_called()
+        escrow.create_payment.assert_not_called()
+        assert treasury.balance(CHAIN_1, USDC) == before
+
+    def test_pay_allowed_by_access_policy_then_routes(self):
+        """An allowed decision lets the routed pay proceed to a receipt."""
+        from switchboard.agent_wallet import PaymentRequest
+
+        class AllowEngine:
+            def check(self, agent_id, action):
+                from dataclasses import make_dataclass
+                D = make_dataclass("D", [("denied", bool), ("reason", object)])
+                return D(False, None)
+
+        wallet, _, escrow, mpc = _wallet_with_router(access_policy=AllowEngine())
+        req = PaymentRequest(chain_id=CHAIN_1, token=USDC, amount_wei=200_000, payee=PAYEE)
+        receipt = wallet.pay(req, agent_id="ok-agent")
+        assert receipt.rail == "escrow"
+        mpc.sign_and_send.assert_called_once()
+
+    def test_no_router_keeps_direct_path(self):
+        """Without a Router, pay() behaves exactly as before (no rail/wallet)."""
+        from switchboard.agent_wallet import AgentWallet, PaymentRequest, EscrowClient
+        from switchboard.mpc_wallet import MPCWallet
+        from switchboard.treasury import Treasury
+
+        treasury = Treasury()
+        treasury.credit(CHAIN_1, USDC, 1_000_000)
+        escrow = MagicMock(spec=EscrowClient)
+        escrow.create_payment.return_value = "0xdirect"
+        escrow.release_payment.return_value = True
+        wallet = AgentWallet(mpc=MPCWallet(), treasury=treasury, escrow=escrow)
+
+        req = PaymentRequest(chain_id=CHAIN_1, token=USDC, amount_wei=500, payee=PAYEE)
+        receipt = wallet.pay(req)
+        assert receipt.rail is None
+        assert receipt.wallet is None
+        assert receipt.token == USDC
