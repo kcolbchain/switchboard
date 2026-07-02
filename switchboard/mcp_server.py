@@ -43,10 +43,17 @@ Access-policy seam
 See ``switchboard/tools.py`` for the ``AccessPolicy`` / ``Decision`` interface.
 Wire the real engine at construction::
 
-    from switchboard.access_policy import RealAccessPolicy
+    from switchboard.access_policy import AccessPolicy
+    engine = AccessPolicy()
+    engine.register("0xAgent", tier=AgentTier.STANDARD, spend_policy=policy)
     server = MCPServer(wallet=wallet, delegation=delegation,
-                       access_policy=RealAccessPolicy())
+                       access_policy=engine)
     server.serve()
+
+``AccessPolicy.check(agent_id, action)`` returns a ``Decision`` exposing
+``denied`` / ``reason`` (the Protocol this server calls) as well as the native
+``allowed`` view — a single object satisfies both.  ``main()`` below wires the
+real engine by default.
 """
 
 from __future__ import annotations
@@ -452,10 +459,23 @@ class MCPServer:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    """Launch the MCP server against a fresh wallet (CLI / console-script)."""
+    """Launch the MCP server against a fresh wallet (CLI / console-script).
+
+    Wires the REAL fairness + access-policy engine (Unit ⑲,
+    ``switchboard.access_policy.AccessPolicy``) as the gate — not the
+    permissive ``AllowAllPolicy`` stub.  Every ``tools/call`` is checked
+    against the agent's tier + rate-fairness bucket before dispatch, and each
+    decision emits a ``metrics.WalletOpEvent`` for the ⑳ dashboard.
+    """
+    from switchboard.access_policy import AccessPolicy
+
     wallet = AgentWallet()
     delegation = Delegation(wallet=wallet)
-    server = MCPServer(wallet=wallet, delegation=delegation)
+    server = MCPServer(
+        wallet=wallet,
+        delegation=delegation,
+        access_policy=AccessPolicy(),
+    )
     server.serve()
 
 

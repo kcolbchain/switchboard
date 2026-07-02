@@ -170,6 +170,14 @@ _DEFAULT_TIER_CONFIG = TierConfig(
 class Decision:
     """Result of ``AccessPolicy.check()``.
 
+    Satisfies **two** interfaces from one object:
+
+    * the native fairness-engine view — ``allowed`` / ``reason`` / ``event``;
+    * the MCP ``AccessPolicy`` Protocol view (``switchboard/tools.py``) —
+      ``denied`` / ``reason``.  ``denied`` is the boolean complement of
+      ``allowed``, exposed as a property so the MCP server can gate calls with
+      ``if decision.denied: ...`` without a translation shim.
+
     Parameters
     ----------
     agent_id:
@@ -186,6 +194,11 @@ class Decision:
     allowed: bool
     reason: Optional[str]
     event: WalletOpEvent
+
+    @property
+    def denied(self) -> bool:
+        """MCP Protocol view: the complement of ``allowed``."""
+        return not self.allowed
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +292,7 @@ class AccessPolicy:
     # check() — the single public gate
     # ------------------------------------------------------------------
 
-    def check(self, agent_id: str, action: dict) -> Decision:
+    def check(self, agent_id: str, action) -> Decision:
         """Evaluate ``action`` for ``agent_id`` and return a ``Decision``.
 
         Parameters
@@ -287,7 +300,11 @@ class AccessPolicy:
         agent_id:
             The agent attempting the action.
         action:
-            A dict with at minimum:
+            Either a rich action **dict** (native fairness-engine form) or a
+            plain **op-name string** (MCP ``AccessPolicy`` Protocol form, e.g.
+            ``"pay"`` / ``"create_escrow"``).
+
+            Dict form — at minimum:
 
             - ``"type"``   — ``"pay"`` or ``"escrow"``
             - ``"amount"`` — token base units (int)
@@ -297,11 +314,24 @@ class AccessPolicy:
             - ``"escrow_state"`` — one of ``"open"``, ``"confirmed"``,
               ``"released"``, ``"refunded"``, ``"cancelled"``
 
+            String form — the MCP server passes the tool op-name only; there is
+            no amount to check, so the amount-based compliance/ceiling checks are
+            skipped and the call is gated purely by registration + tier rate
+            fairness.  This is what lets the SAME engine satisfy the MCP
+            ``check(agent_id, action) -> Decision`` Protocol.
+
         Returns
         -------
         Decision
-            Always returned (never raises).  Check ``decision.allowed``.
+            Always returned (never raises).  Native callers read
+            ``decision.allowed``; the MCP server reads ``decision.denied``.
         """
+        # Normalise the MCP op-name-string form into the dict shape.  No
+        # ``amount`` key is injected: the amount-based layers only fire when an
+        # amount is actually declared (see _check_compliance / tier ceiling).
+        if isinstance(action, str):
+            action = {"type": action}
+
         with self._lock:
             tier, spend_policy = self._agents.get(
                 agent_id, (AgentTier.EXPLORER, None)
@@ -327,8 +357,7 @@ class AccessPolicy:
 
             # --- Layer 3: tier ceiling ----------------------------------------
             cfg = self._tier_config.for_tier(tier)
-            amount = action.get("amount", 0)
-            if amount > cfg.per_tx_cap:
+            if "amount" in action and action["amount"] > cfg.per_tx_cap:
                 return self._deny(agent_id, "tier_ceiling", action)
 
             # --- Layer 4: token-bucket rate fairness --------------------------
@@ -345,11 +374,15 @@ class AccessPolicy:
     # ------------------------------------------------------------------
 
     def _check_compliance(self, action: dict) -> Optional[str]:
-        """Return a denial reason string or None if compliant."""
-        amount = action.get("amount", 0)
+        """Return a denial reason string or None if compliant.
 
-        # Non-positive amounts are always non-compliant.
-        if amount <= 0:
+        The positive-amount rule only fires when an ``amount`` is *declared*.
+        The MCP op-name form carries no amount (there is nothing to settle yet —
+        the amount is validated later by the SpendPolicy in ``Delegation``), so
+        it is not treated as a zero-amount violation.
+        """
+        if "amount" in action and action["amount"] <= 0:
+            # A declared non-positive amount is always non-compliant.
             return "noncompliant"
 
         # Escrow-specific: refuse interactions with terminal-state escrows.
@@ -361,7 +394,14 @@ class AccessPolicy:
         return None
 
     def _check_spend_policy(self, policy: SpendPolicy, action: dict) -> Optional[str]:
-        """Return ``"policy_violation"`` if any SpendPolicy rule is violated."""
+        """Return ``"policy_violation"`` if any SpendPolicy rule is violated.
+
+        Expiry is always enforced.  The data-dependent rules (token allowlist,
+        counterparty allowlist, per-tx cap) only fire when the corresponding key
+        is present in the action — so the MCP op-name form (which carries no
+        token / payee / amount) passes this gate and is enforced later against
+        the full request inside ``Delegation.pay_with_key``.
+        """
         now_utc = datetime.now(timezone.utc)
         expires = policy.expires_at
         if expires.tzinfo is None:
@@ -369,18 +409,17 @@ class AccessPolicy:
         if now_utc >= expires:
             return "policy_violation"
 
-        token = action.get("token")
-        if policy.token_allowlist is not None and token not in policy.token_allowlist:
-            return "policy_violation"
-
-        if policy.allowed_counterparties is not None:
-            payee = action.get("payee")
-            if payee not in policy.allowed_counterparties:
+        if "token" in action and policy.token_allowlist is not None:
+            if action["token"] not in policy.token_allowlist:
                 return "policy_violation"
 
-        amount = action.get("amount", 0)
-        if policy.per_tx_cap is not None and amount > policy.per_tx_cap:
-            return "policy_violation"
+        if "payee" in action and policy.allowed_counterparties is not None:
+            if action["payee"] not in policy.allowed_counterparties:
+                return "policy_violation"
+
+        if "amount" in action and policy.per_tx_cap is not None:
+            if action["amount"] > policy.per_tx_cap:
+                return "policy_violation"
 
         return None
 

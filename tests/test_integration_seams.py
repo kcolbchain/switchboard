@@ -19,7 +19,8 @@ Seams
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -179,3 +180,124 @@ class TestSeam2SingleWalletOpEvent:
         assert m.total_ops == 2
         assert m.policy_denial_count == 1
         assert m.denials_by_reason.get("rate_limited") == 1
+
+
+# ===========================================================================
+# Seam 3 — AccessPolicy satisfies the MCP Protocol + real engine wired in
+# ===========================================================================
+
+
+def _mcp_bits(balance: int = 1_000_000_000, token: str = USDC):
+    """Build (wallet, delegation) for MCP tests with a mocked escrow/mpc."""
+    from switchboard.agent_wallet import AgentWallet
+    from switchboard.delegation import Delegation
+    from switchboard.treasury import Treasury
+
+    treasury = Treasury()
+    treasury.credit(chain_id=CHAIN_1, token=token, amount=balance)
+    mpc = MagicMock()
+    mpc.address.return_value = "0xWalletAddress"
+    mpc.sign_and_send.return_value = "0xTxHash"
+    escrow = MagicMock()
+    escrow.create_payment.return_value = "escrow-seam3"
+    escrow.release_payment.return_value = True
+    wallet = AgentWallet(mpc=mpc, treasury=treasury, escrow=escrow)
+    return wallet, Delegation(wallet=wallet)
+
+
+def _init(server) -> None:
+    server.handle_message({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {}})
+
+
+class TestSeam3AccessPolicyProtocol:
+    def test_decision_exposes_denied_and_reason(self):
+        """access_policy.Decision satisfies the MCP Protocol: .denied + .reason."""
+        from switchboard.access_policy import AccessPolicy, AgentTier
+        from switchboard.delegation import SpendPolicy
+
+        engine = AccessPolicy()
+        engine.register(
+            "a", tier=AgentTier.STANDARD,
+            spend_policy=SpendPolicy(expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc)),
+        )
+        d = engine.check("a", "pay")  # MCP form: op-name string
+        assert hasattr(d, "denied") and hasattr(d, "reason")
+        assert d.denied is False
+        assert d.reason is None
+
+    def test_check_accepts_op_name_string(self):
+        """The op-name-only form must not false-deny (no amount => no zero-amount trip)."""
+        from switchboard.access_policy import AccessPolicy, AgentTier
+        from switchboard.delegation import SpendPolicy
+
+        engine = AccessPolicy()
+        engine.register(
+            "b", tier=AgentTier.STANDARD,
+            spend_policy=SpendPolicy(
+                expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc),
+                token_allowlist=[USDC],  # would trip if token=None were checked
+            ),
+        )
+        d = engine.check("b", "create_escrow")
+        assert d.denied is False
+
+    def test_real_engine_denies_op_through_mcp(self):
+        """A denied op is refused THROUGH the MCP server by the real engine."""
+        from switchboard.access_policy import AccessPolicy, AgentTier
+        from switchboard.delegation import SpendPolicy
+        from switchboard.mcp_server import MCPServer, _POLICY_DENIED
+
+        wallet, delegation = _mcp_bits()
+        # Valid, live session key so we reach the access-policy gate.
+        live = SpendPolicy(expires_at=datetime.now(timezone.utc) + timedelta(hours=1))
+        key = delegation.grant("agent-denied", live)
+
+        # Register the SAME agent in the real engine with an EXPIRED policy so
+        # the op-name gate denies with policy_violation before dispatch.
+        engine = AccessPolicy()
+        engine.register(
+            "agent-denied", tier=AgentTier.STANDARD,
+            spend_policy=SpendPolicy(expires_at=datetime(2000, 1, 1, tzinfo=timezone.utc)),
+        )
+        server = MCPServer(wallet=wallet, delegation=delegation, access_policy=engine)
+        _init(server)
+
+        resp = server.handle_message({
+            "jsonrpc": "2.0", "id": 5, "method": "tools/call",
+            "params": {"name": "pay", "arguments": {
+                "session_key": key.key_id, "chain_id": CHAIN_1,
+                "token": USDC, "amount": 100, "payee": PAYEE,
+            }},
+        })
+        assert "error" in resp
+        assert resp["error"]["code"] == _POLICY_DENIED
+        assert "policy_violation" in resp["error"]["message"]
+
+    def test_real_engine_allows_op_through_mcp(self):
+        """A compliant agent passes the real engine and the pay executes."""
+        from switchboard.access_policy import AccessPolicy, AgentTier
+        from switchboard.delegation import SpendPolicy
+        from switchboard.mcp_server import MCPServer
+
+        wallet, delegation = _mcp_bits()
+        live = SpendPolicy(expires_at=datetime.now(timezone.utc) + timedelta(hours=1))
+        key = delegation.grant("agent-ok", live)
+
+        engine = AccessPolicy()
+        engine.register(
+            "agent-ok", tier=AgentTier.TRUSTED,
+            spend_policy=SpendPolicy(expires_at=datetime(2099, 1, 1, tzinfo=timezone.utc)),
+        )
+        server = MCPServer(wallet=wallet, delegation=delegation, access_policy=engine)
+        _init(server)
+
+        resp = server.handle_message({
+            "jsonrpc": "2.0", "id": 6, "method": "tools/call",
+            "params": {"name": "pay", "arguments": {
+                "session_key": key.key_id, "chain_id": CHAIN_1,
+                "token": USDC, "amount": 100, "payee": PAYEE,
+            }},
+        })
+        assert "result" in resp, resp
+        body = json.loads(resp["result"]["content"][0]["text"])
+        assert body["tx_id"] == "0xTxHash"
