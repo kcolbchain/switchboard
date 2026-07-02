@@ -6,6 +6,7 @@ Implements the payment protocol for agent-to-agent settlement:
 - Escrow smart contract interaction via Web3.py
 - Confirmation flow with timeout/refund
 - Async/concurrent payment management
+- Multi-token settlement negotiation (v1.2)
 
 Usage:
     client = PaymentClient(wallet_private_key, escrow_address, rpc_url)
@@ -33,18 +34,98 @@ except ImportError:
     Account = None
 
 
+# ─── Settlement Token ───────────────────────────────────────────────────────
+
+@dataclass
+class SettlementToken:
+    """Represents a single accepted settlement token with chain scope and rank.
+
+    Used in multi-token negotiation (protocol v1.2).
+
+    Attributes:
+        chain_id:   EIP-155 chain ID the token lives on.
+        token:      Token contract address (ERC-20) or the zero address for native ETH
+                    (``"0x0000000000000000000000000000000000000000"``).
+        min_amount: Minimum acceptable amount in the token's smallest denomination.
+                    0 means "any amount".
+        rank:       Preference rank — higher is more preferred.  The negotiation
+                    algorithm sums payer_rank + payee_rank and picks the pair with
+                    the highest combined score.
+    """
+    chain_id: int
+    token: str
+    min_amount: int
+    rank: int
+
+
+def negotiate_settlement_token(
+    payer_offer: List[SettlementToken],
+    payee_accepts: List[SettlementToken],
+) -> Optional[SettlementToken]:
+    """Deterministically pick the best mutually-acceptable settlement token.
+
+    Algorithm (spec §3.4):
+    1. Intersect on ``(chain_id, token)`` — the settlement instrument identifier.
+    2. For each common pair, combine their ranks: ``combined = payer.rank + payee.rank``.
+    3. Return the token with the highest combined rank.
+    4. Tie-break by lexicographically smallest ``token`` address string for full
+       determinism (no random, no insertion-order dependency).
+    5. If the intersection is empty, return ``None``.
+
+    Args:
+        payer_offer:   Tokens the payer is willing to pay in (ranked by payer).
+        payee_accepts: Tokens the payee is willing to receive (ranked by payee).
+
+    Returns:
+        The winning ``SettlementToken`` (from the payer's offer list, carrying
+        payer-side metadata) or ``None`` when there is no common token.
+    """
+    if not payer_offer or not payee_accepts:
+        return None
+
+    # Index payee tokens by (chain_id, token) → payee SettlementToken
+    payee_index: Dict[tuple, SettlementToken] = {
+        (t.chain_id, t.token): t for t in payee_accepts
+    }
+
+    candidates: List[tuple] = []  # (combined_rank, token_addr, payer_token)
+    for pt in payer_offer:
+        key = (pt.chain_id, pt.token)
+        if key in payee_index:
+            combined = pt.rank + payee_index[key].rank
+            # Negate combined_rank for sort (highest first); token for tiebreak (lowest first)
+            candidates.append((-combined, pt.token, pt))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: (x[0], x[1]))
+    return candidates[0][2]
+
+
 # ─── Payment Request Format ─────────────────────────────────────────────────
 
 @dataclass
 class PaymentRequest:
-    """RFC-style payment request message"""
+    """RFC-style payment request message — protocol v1.2.
+
+    v1.2 additions (back-compatible with v1.1):
+    - ``settlement_token``: the negotiated settlement token chosen by
+      ``negotiate_settlement_token()``.  Defaults to ``None`` (unsigned/ETH
+      profile, identical semantics to v1.1).
+    - ``currency`` is retained as a v1.1-compatible alias for the ETH profile.
+
+    ``settlement_token`` is treated as a negotiated/volatile field (like
+    ``status``) and is excluded from ``content_hash()`` so both sides agree
+    on the hash before negotiation is finalised.
+    """
     version: str = "1.0"
     request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     payer: str = ""           # Ethereum address (checksummed)
     payee: str = ""           # Ethereum address (checksummed)
     amount_wei: int = 0       # Amount in wei
     amount_usd: Optional[Decimal] = None  # Optional USD equivalent
-    currency: str = "ETH"     # ETH, USDT, USDC, etc.
+    currency: str = "ETH"     # ETH, USDT, USDC, etc. — v1.1 alias; kept for back-compat
     chain_id: int = 1         # Ethereum chain ID
     timeout_blocks: int = 100 # Blocks until payment expires
     challenge_period_blocks: int = 10  # Blocks payer waits before reclaim
@@ -52,13 +133,47 @@ class PaymentRequest:
     metadata: Dict = field(default_factory=dict)  # Arbitrary extra data
     created_at: float = field(default_factory=time.time)
     status: str = "pending"   # pending, locked, confirmed, released, refunded, cancelled
+    # v1.2 — negotiated settlement token; None = unset (ETH profile / v1.1 compat)
+    settlement_token: Optional[SettlementToken] = None
+    # Multi-token settlement asset (spec §3.2): the concrete token the wallet
+    # settles in.  EVM address; "" or address(0) = native ETH (the ETH profile,
+    # semantically identical to ``currency == "ETH"``).  This is the field the
+    # ``AgentWallet`` / ``Router`` read as the source token.  Kept off the v1.0
+    # wire (omitted when default) and out of ``content_hash`` so the frozen
+    # protocol vectors and cross-language hashes are unaffected.
+    token: str = ""
+
+    # ``amount`` is a read/write alias for ``amount_wei`` so the agent-wallet
+    # layer can speak in generic "token base units" (wei / USDC-decimals / …)
+    # while the protocol keeps ``amount_wei`` as the single source of truth.
+    # It is a property, NOT a dataclass field, so it never enters the wire
+    # encoding or the content hash.  Construct with ``amount_wei=`` (the wallet
+    # helpers do); read/write freely via ``req.amount``.
+    @property
+    def amount(self) -> int:
+        return self.amount_wei
+
+    @amount.setter
+    def amount(self, value: int) -> None:
+        self.amount_wei = value
 
     def to_json(self) -> str:
-        """Serialize to JSON for signing/transmission"""
+        """Serialize to JSON for signing/transmission.
+
+        Back-compat: ``settlement_token`` and ``token`` are omitted from the
+        wire when at their defaults so v1.0/v1.1 payloads remain byte-for-byte
+        identical after the v1.2 / multi-token upgrade.
+        """
         d = asdict(self)
         # Convert Decimal to string for JSON
         if self.amount_usd is not None:
             d['amount_usd'] = str(self.amount_usd)
+        # v1.2 back-compat: omit settlement_token from wire when not set
+        if self.settlement_token is None:
+            d.pop('settlement_token', None)
+        # multi-token back-compat: omit token from wire when at default (ETH profile)
+        if not self.token:
+            d.pop('token', None)
         return json.dumps(d, sort_keys=True, separators=(',', ':'))
 
     def to_dict(self) -> dict:
@@ -72,17 +187,30 @@ class PaymentRequest:
         d = dict(d)
         if d.get('amount_usd'):
             d['amount_usd'] = Decimal(d['amount_usd'])
-        return cls(**d)
+        # v1.2 back-compat: settlement_token may be absent in v1.1 payloads
+        st = d.pop('settlement_token', None)
+        if isinstance(st, dict):
+            st = SettlementToken(**st)
+        obj = cls(**d)
+        obj.settlement_token = st
+        return obj
 
     def content_hash(self) -> str:
-        """Content-based hash. Excludes volatile fields (`created_at`, `status`) so two
-        requests with identical content produce the same hash regardless of when they
-        were instantiated."""
+        """Content-based hash.
+
+        Excludes volatile/negotiated fields (``created_at``, ``status``,
+        ``settlement_token``) and the derived multi-token ``token`` field so two
+        requests with identical payment intent produce the same hash regardless
+        of when they were instantiated, what settlement token was negotiated, or
+        which concrete token the wallet later selected.
+        """
         d = asdict(self)
         if self.amount_usd is not None:
             d['amount_usd'] = str(self.amount_usd)
         d.pop('created_at', None)
         d.pop('status', None)
+        d.pop('settlement_token', None)  # negotiated result — excluded from hash
+        d.pop('token', None)             # wallet-selected asset — excluded from hash
         canonical = json.dumps(d, sort_keys=True, separators=(',', ':'))
         h = hashlib.sha256()
         h.update(canonical.encode('utf-8'))

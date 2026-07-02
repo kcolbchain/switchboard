@@ -29,6 +29,7 @@ dependencies = [
     "eth-account",
     "sortedcontainers",
     "cryptography>=42",
+    "click>=8",
 ]
 
 [project.optional-dependencies]
@@ -54,7 +55,8 @@ Issues = "https://github.com/kcolbchain/switchboard/issues"
 Organization = "https://kcolbchain.com"
 
 [project.scripts]
-switchboard = "src.payment_protocol:main"
+switchboard = "switchboard.cli:main"
+switchboard-mcp = "switchboard.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["switchboard", "src"]
