@@ -31,7 +31,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, List, Optional
 
 try:
     import aiohttp
@@ -53,10 +53,15 @@ class PaymentScheme(Enum):
 
 @dataclass
 class PaymentOffer:
-    """Parsed from the 402 response's X-Payment-Required header."""
+    """Parsed from the 402 response's X-Payment-Required header.
+
+    v1.2: ``token`` carries the specific ERC-20 contract address (or zero
+    address for native ETH) when the server uses multi-token accepts[].
+    ``None`` when not specified (v1.1 back-compat).
+    """
     amount_wei: int
-    currency: str                  # "ETH", "USDC", etc.
-    recipient: str                 # Payee address
+    currency: str                      # "ETH", "USDC", etc.
+    recipient: str                     # Payee address
     chain_id: int
     scheme: PaymentScheme = PaymentScheme.EXACT
     signature_alg: str = "none"
@@ -64,7 +69,8 @@ class PaymentOffer:
     description: str = ""
     endpoint: str = ""
     nonce: str = ""
-    expires_at: int | None = None  # Unix timestamp
+    expires_at: int | None = None      # Unix timestamp
+    token: str | None = None           # v1.2: specific token address; None = unset
 
     @classmethod
     def from_header(cls, header_value: str, endpoint: str = "") -> "PaymentOffer":
@@ -82,6 +88,7 @@ class PaymentOffer:
             endpoint=endpoint,
             nonce=data.get("nonce", ""),
             expires_at=data.get("expiresAt"),
+            token=data.get("token"),  # v1.2 — absent in v1.1 payloads
         )
 
     def is_expired(self) -> bool:
@@ -139,6 +146,11 @@ class X402Middleware:
     Integrates with:
     - PaymentClient for on-chain settlement
     - GasTracker for budget enforcement
+
+    v1.2: ``accepted_tokens`` restricts which settlement tokens this middleware
+    will pay in.  When set, ``_validate_offer()`` rejects any offer whose
+    ``token`` field is not on the list.  ``None`` (default) = no restriction
+    (back-compat).  An explicit empty list rejects all token-specific offers.
     """
 
     def __init__(
@@ -149,6 +161,7 @@ class X402Middleware:
         allowed_recipients: set | None = None,
         auto_pay: bool = True,
         on_payment: Callable[[PaymentRecord], None] | None = None,
+        accepted_tokens: List | None = None,  # v1.2: list of AcceptedToken or dicts
     ):
         self.payment_client = payment_client
         self.gas_tracker = gas_tracker
@@ -156,6 +169,7 @@ class X402Middleware:
         self.allowed_recipients = allowed_recipients
         self.auto_pay = auto_pay
         self.on_payment = on_payment
+        self.accepted_tokens = accepted_tokens  # None = no restriction
 
         self.payment_history: list[PaymentRecord] = []
         self.total_spent_wei: int = 0
@@ -171,6 +185,26 @@ class X402Middleware:
     async def close(self):
         if self._session and not self._session.closed:
             await self._session.close()
+
+    def _validate_settlement_token(self, chain_id: int, token: str) -> None:
+        """Raise ValueError if ``(chain_id, token)`` is not on the accepted list.
+
+        When ``accepted_tokens`` is ``None`` (not configured) the check is a
+        no-op for back-compat.  An explicit empty list rejects everything.
+        """
+        if self.accepted_tokens is None:
+            return  # no restriction — back-compat
+        for t in self.accepted_tokens:
+            # Support both AcceptedToken objects and plain dicts
+            if isinstance(t, dict):
+                t_chain, t_token = t.get("chain_id"), t.get("token")
+            else:
+                t_chain, t_token = t.chain_id, t.token
+            if t_chain == chain_id and t_token == token:
+                return
+        raise ValueError(
+            f"Token {token} on chain {chain_id} is not an accepted settlement token"
+        )
 
     def _validate_offer(self, offer: PaymentOffer) -> None:
         """Check offer against policy before paying."""
@@ -189,6 +223,10 @@ class X402Middleware:
             wallet = self.payment_client.wallet_address
             if not self.gas_tracker.can_send_transaction(wallet, offer.amount_wei):
                 raise ValueError("Payment would exceed gas budget")
+
+        # v1.2: validate settlement token if the offer specifies one
+        if offer.token is not None:
+            self._validate_settlement_token(offer.chain_id, offer.token)
 
     def _pay_onchain(self, offer: PaymentOffer) -> PaymentProof:
         """Execute on-chain payment via PaymentClient."""

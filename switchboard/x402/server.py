@@ -4,6 +4,14 @@ Returns HTTP 402 Payment Required with PaymentRequirements when no
 payment header is present. Verifies inbound PaymentPayload signatures
 and provides idempotency via nonce tracking.
 
+v1.2 multi-token extension:
+- ``AcceptedToken`` dataclass carries {chain_id, token, min_amount, rank}.
+- ``PaymentRequirements`` gains an ``accepts`` list; ``to_header()`` includes it
+  when non-empty; ``from_header()`` / ``from_dict()`` deserialise it back.
+- ``X402Server`` accepts an optional ``accepts`` list and advertises it in every
+  402 response; ``validate_settlement_token()`` checks a proposed token against
+  the configured list.
+
 Supports Flask and FastAPI adapters.
 """
 
@@ -13,7 +21,7 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, List, Optional
 
 # Canonical x402 wire headers. The x402 spec (coinbase/x402) and the Hanzo MCP
 # HTTP path (hanzoai/mcp#9) name the inbound proof header ``X-Payment`` and
@@ -26,8 +34,49 @@ WWW_AUTHENTICATE_X402 = "x402"
 
 
 @dataclass
+class AcceptedToken:
+    """A single token entry in the multi-token accepts[] list (v1.2).
+
+    Carried in ``PaymentRequirements.accepts`` and advertised in every 402
+    response when the server supports multi-token settlement.
+
+    Attributes:
+        chain_id:   EIP-155 chain ID the token lives on.
+        token:      ERC-20 contract address, or zero address for native ETH.
+        min_amount: Minimum acceptable amount in the token's smallest unit.
+        rank:       Payee-side preference rank (higher = more preferred).
+    """
+    chain_id: int
+    token: str
+    min_amount: int = 0
+    rank: int = 1
+
+    def to_dict(self) -> dict:
+        return {
+            "chain_id": self.chain_id,
+            "token": self.token,
+            "min_amount": self.min_amount,
+            "rank": self.rank,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> AcceptedToken:
+        return cls(
+            chain_id=int(d["chain_id"]),
+            token=str(d["token"]),
+            min_amount=int(d.get("min_amount", 0)),
+            rank=int(d.get("rank", 1)),
+        )
+
+
+@dataclass
 class PaymentRequirements:
-    """Describes what payment is required to access an endpoint."""
+    """Describes what payment is required to access an endpoint.
+
+    v1.2: ``accepts`` carries the payee's ranked list of acceptable
+    settlement tokens.  When non-empty it is included in ``to_header()``
+    so the payer can run token negotiation before paying.
+    """
     scheme: str = "exact"
     network: str = "base"
     asset: str = "USDC"
@@ -36,6 +85,7 @@ class PaymentRequirements:
     description: str = ""
     nonce: str = ""
     expires_at: int | None = None
+    accepts: List[AcceptedToken] = field(default_factory=list)
 
     def to_header(self) -> str:
         data = {
@@ -51,6 +101,8 @@ class PaymentRequirements:
             data["nonce"] = self.nonce
         if self.expires_at:
             data["expiresAt"] = self.expires_at
+        if self.accepts:
+            data["accepts"] = [t.to_dict() for t in self.accepts]
         return json.dumps(data)
 
     @classmethod
@@ -59,6 +111,8 @@ class PaymentRequirements:
 
     @classmethod
     def from_dict(cls, data: dict) -> PaymentRequirements:
+        accepts_raw = data.get("accepts", [])
+        accepts = [AcceptedToken.from_dict(e) for e in accepts_raw]
         return cls(
             scheme=data.get("scheme", "exact"),
             network=data.get("network", "base"),
@@ -68,6 +122,7 @@ class PaymentRequirements:
             description=data.get("description", ""),
             nonce=data.get("nonce", ""),
             expires_at=data.get("expiresAt", data.get("expires_at")),
+            accepts=accepts,
         )
 
 
@@ -178,7 +233,12 @@ class PaymentVerifier:
 
 
 class X402Server:
-    """Core x402 server logic — usable from any web framework."""
+    """Core x402 server logic — usable from any web framework.
+
+    v1.2: pass ``accepts`` to advertise multi-token settlement options in every
+    402 response and to enable ``validate_settlement_token()`` enforcement.
+    When ``accepts`` is an empty list the server accepts any token (back-compat).
+    """
 
     def __init__(
         self,
@@ -186,11 +246,34 @@ class X402Server:
         amount_usdc: str = "1.00",
         verifier: PaymentVerifier | None = None,
         network: str = "base",
+        accepts: List[AcceptedToken] | None = None,
     ):
         self.pay_to_address = pay_to_address
         self.amount_usdc = amount_usdc
         self.verifier = verifier or PaymentVerifier()
         self.network = network
+        # None means "not configured" (back-compat, open); [] means "explicitly empty"
+        self.accepts: List[AcceptedToken] = accepts if accepts is not None else []
+
+    def validate_settlement_token(
+        self,
+        chain_id: int,
+        token: str,
+    ) -> tuple[bool, str]:
+        """Check whether a proposed settlement token is on the server's accepts list.
+
+        Returns ``(True, "")`` when:
+        - ``self.accepts`` is empty (no restrictions configured).
+        - The ``(chain_id, token)`` pair is present in ``self.accepts``.
+
+        Returns ``(False, reason)`` otherwise.
+        """
+        if not self.accepts:
+            return True, ""
+        for t in self.accepts:
+            if t.chain_id == chain_id and t.token == token:
+                return True, ""
+        return False, f"Token {token} on chain {chain_id} is not accepted"
 
     def build_402_response(self, nonce: str = "") -> tuple[int, dict, str]:
         reqs = PaymentRequirements(
@@ -200,6 +283,7 @@ class X402Server:
             amount=self.amount_usdc,
             pay_to=self.pay_to_address,
             nonce=nonce or hashlib.sha256(str(time.time()).encode()).hexdigest()[:16],
+            accepts=self.accepts,
         )
         headers = {
             "X-Payment-Required": reqs.to_header(),
