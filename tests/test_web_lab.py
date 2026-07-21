@@ -1,6 +1,6 @@
-"""Smoke tests for the agent-payments canvas lab (``web/agents-demo.html``).
+"""Smoke tests for the agent-payments lab (``web/agents-demo.html``).
 
-The canvas lab is intentionally a no-build single-file frontend, so the test
+The lab is intentionally a no-build single-file frontend, so the test
 surface here is correspondingly small but load-bearing:
 
 - the file parses as HTML and contains the structural anchors we depend on
@@ -8,7 +8,7 @@ surface here is correspondingly small but load-bearing:
   definition with a name + caption
 - the named cast (Patty, Abhi, Tridib) is wired through the canonical
   agent registry
-- the home page links to the multi-page lab and canvas lab
+- the home page links to the lab and the lab links back
 - the embedded JavaScript has no syntax errors (run via ``node --check``)
 
 Skip the node check if a ``node`` binary isn't on PATH.
@@ -29,40 +29,17 @@ import pytest
 HERE = Path(__file__).resolve().parent
 WEB = HERE.parent / "web"
 LAB = WEB / "agents-demo.html"
-MULTIPAGE_LAB = WEB / "lab"
 HOME = WEB / "index.html"
-SIMULATOR = WEB / "simulator.html"
-
-LAB_PAGES = [
-    "index.html",
-    "x402.html",
-    "escrow.html",
-    "streaming.html",
-    "auction.html",
-    "taxi.html",
-    "cafe.html",
-    "delivery.html",
-    "trip.html",
-    "multichain.html",
-    "pq.html",
-    "rails.html",
-    "tools.html",
-]
 
 
 @pytest.fixture(scope="module")
 def lab_html() -> str:
-    return LAB.read_text()
+    return LAB.read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
 def home_html() -> str:
-    return HOME.read_text()
-
-
-@pytest.fixture(scope="module")
-def simulator_html() -> str:
-    return SIMULATOR.read_text()
+    return HOME.read_text(encoding="utf-8")
 
 
 @pytest.fixture(scope="module")
@@ -72,24 +49,11 @@ def lab_script(lab_html: str) -> str:
     return m.group(1)
 
 
-def runnable_node() -> str | None:
-    node = shutil.which("node")
-    if node is None:
-        return None
-    try:
-        subprocess.run([node, "--version"], capture_output=True, check=False, timeout=5)
-    except OSError:
-        return None
-    return node
-
-
 # ─── shape ────────────────────────────────────────────────────────────────
 
 def test_files_exist() -> None:
     assert LAB.is_file(), f"missing {LAB}"
     assert HOME.is_file(), f"missing {HOME}"
-    for page in LAB_PAGES:
-        assert (MULTIPAGE_LAB / page).is_file(), f"missing {MULTIPAGE_LAB / page}"
 
 
 def test_html_parses(lab_html: str) -> None:
@@ -193,13 +157,7 @@ def test_no_stale_old_names_in_captions(lab_script: str) -> None:
 # ─── home page link ───────────────────────────────────────────────────────
 
 def test_home_links_to_lab(home_html: str) -> None:
-    assert 'href="./lab/index.html"' in home_html, "home page missing multi-page lab link"
-    assert 'href="./agents-demo.html"' in home_html, "home page missing canvas lab link"
-
-
-def test_simulator_links_to_multipage_lab(simulator_html: str) -> None:
-    assert 'href="./lab/index.html"' in simulator_html, "simulator missing multi-page lab link"
-    assert 'href="./agents-demo.html"' in simulator_html, "simulator missing canvas playground link"
+    assert 'href="./agents-demo.html"' in home_html, "home page missing lab link"
 
 
 def test_lab_links_back_to_home(lab_html: str) -> None:
@@ -208,22 +166,19 @@ def test_lab_links_back_to_home(lab_html: str) -> None:
 
 # ─── JS syntax ────────────────────────────────────────────────────────────
 
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not on PATH")
 def test_js_has_no_syntax_errors(lab_script: str) -> None:
     """Run the embedded script through ``node --check``.
 
     We pass it as ``module`` syntax via a temp ``.mjs`` so top-level returns
     aren't an issue. The script is wrapped in an IIFE so it parses standalone.
     """
-    node = runnable_node()
-    if node is None:
-        pytest.skip("node not runnable on PATH")
-
-    with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as f:
+    with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False, encoding="utf-8") as f:
         f.write(lab_script)
         path = f.name
     try:
         proc = subprocess.run(
-            [node, "--check", path],
+            ["node", "--check", path],
             capture_output=True, text=True, check=False, timeout=15,
         )
     finally:
@@ -285,7 +240,7 @@ def test_add_scene_cta_present(lab_script: str, lab_html: str) -> None:
 def test_scenes_md_file_exists() -> None:
     md = WEB / "SCENES.md"
     assert md.is_file(), "web/SCENES.md missing — scene-template doc is required"
-    body = md.read_text()
+    body = md.read_text(encoding="utf-8")
     # contract checks — these are load-bearing for contributors
     for hook in ("SCENES.myScene", "enter()", "tick(t)", "EXPECTED_SCENES"):
         assert hook in body, f"SCENES.md missing required example: {hook}"
