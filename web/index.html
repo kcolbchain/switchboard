@@ -9,6 +9,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://kcolbchain.github.io/brand/tokens.css" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <meta name="theme-color" content="#06060b" />
   <style>
     /* ========== RESET & BASE ========== */
     *{margin:0;padding:0;box-sizing:border-box}
@@ -876,6 +880,16 @@ app.<span class="fn">add_middleware</span>(
   }
   requestAnimationFrame(draw);
 })();
+</script>
+
+<!-- PWA: register the service worker at the web/ root so the whole lab is
+     installable + offline-capable (scope "./"). -->
+<script>
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(function () {});
+    });
+  }
 </script>
 
 </body>

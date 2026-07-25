@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agentic Pay + Swap — switchboard lab</title>
+<meta name="description" content="Agent A pays Agent B via x402 + on-chain escrow, then Agent B routes the received token through SafeSwap. Interactive visualization of the agentic_demo scenario." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="shared.css" />
+<link rel="manifest" href="../manifest.json" />
+<meta name="theme-color" content="#06060b" />
+<style>
+/* ── swap-demo specific ─────────────────────────────────────── */
+.swap-stage {
+  display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; margin-bottom: 32px;
+}
+@media (max-width: 1100px) { .swap-stage { grid-template-columns: 1fr; } }
+
+.stage-canvas-wrap {
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius);
+  position: relative; overflow: hidden; min-height: 440px;
+}
+.stage-canvas-wrap::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent); opacity: .5;
+}
+#stageCanvas { width: 100%; height: 440px; display: block; }
+
+.stage-side { display: flex; flex-direction: column; gap: 16px; }
+.ledger {
+  background: var(--bg-elev); border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; flex: 1; display: flex; flex-direction: column;
+}
+.ledger-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--bg-elev-2);
+}
+.ledger-head .title { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .1em; }
+.ledger-body { padding: 8px 0; overflow-y: auto; max-height: 360px; }
+.ledger-row {
+  display: grid; grid-template-columns: 18px 92px 1fr; gap: 10px; align-items: start;
+  padding: 9px 20px; font-size: 12.5px; color: var(--fg-muted);
+  border-left: 2px solid transparent; opacity: .35; transition: opacity .35s, background .25s, border-color .25s;
+}
+.ledger-row.done { opacity: 1; }
+.ledger-row.active { opacity: 1; background: var(--gold-glow); border-left-color: var(--gold); }
+.ledger-row .lr-dot {
+  width: 10px; height: 10px; border-radius: 50%; margin-top: 4px;
+  background: var(--bg); border: 1.5px solid var(--fg-faint);
+}
+.ledger-row.done .lr-dot { background: var(--emerald); border-color: var(--emerald); }
+.ledger-row.active .lr-dot { background: var(--gold); border-color: var(--gold); box-shadow: 0 0 10px rgba(212,168,83,.4); }
+.ledger-row.swap.done .lr-dot { background: var(--violet); border-color: var(--violet); }
+.ledger-row .lr-step { font-family: var(--font-mono); font-size: 10px; color: var(--gold); text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+.ledger-row.swap .lr-step { color: var(--violet); }
+.ledger-row .lr-detail strong { color: var(--fg); font-weight: 600; }
+.ledger-row .lr-detail code { font-family: var(--font-mono); font-size: 11px; color: var(--cyan); background: rgba(103,212,224,.08); padding: 1px 5px; border-radius: 4px; }
+
+.balances {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line);
+  border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+}
+.bal { background: var(--bg-elev); padding: 16px 18px; }
+.bal .who { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+.bal .amt { font-family: var(--font-display); font-size: 28px; color: var(--fg); font-variant-numeric: tabular-nums; line-height: 1; }
+.bal .amt .unit { font-size: 13px; color: var(--fg-faint); font-family: var(--font-mono); margin-left: 4px; }
+.bal .delta { font-family: var(--font-mono); font-size: 11px; margin-top: 4px; min-height: 14px; }
+.bal .delta.up { color: var(--emerald); }
+.bal .delta.down { color: var(--rose); }
+.bal .delta.swap { color: var(--violet); }
+
+.transport-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.transport-bar select {
+  background: var(--bg-elev); border: 1px solid var(--line); color: var(--fg);
+  border-radius: var(--radius-sm); padding: 9px 12px; font: inherit; font-size: 12px; font-family: var(--font-mono);
+}
+.transport-bar .status-pill {
+  margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted);
+  padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg-elev);
+}
+.status-pill.ok { color: var(--emerald); border-color: var(--emerald-soft); }
+.status-pill.run { color: var(--gold); border-color: var(--gold-line); }
+</style>
+</head>
+<body>
+<button class="sidebar-toggle" id="sidebarToggle" aria-label="toggle sidebar">&#9776;</button>
+<div class="app">
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo"><em>kcolb</em>chain / switchboard</div>
+    <div class="sidebar-sub">the lab</div>
+  </div>
+  <div class="sidebar-search">
+    <span class="icon">&#8981;</span>
+    <input type="text" id="navSearch" placeholder="Search case studies..." />
+  </div>
+  <div class="sidebar-nav" id="sidebarNav">
+    <div class="nav-group">
+      <div class="nav-group-label">Overview</div>
+      <a class="nav-item" href="index.html"><span class="nav-label">Dashboard</span></a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Protocol Patterns</div>
+      <a class="nav-item" href="x402.html"><span class="nav-num">01</span><span class="nav-label">x402 Paywall</span><span class="nav-chip live">live</span></a>
+      <a class="nav-item" href="escrow.html"><span class="nav-num">02</span><span class="nav-label">Escrow &amp; Refund</span><span class="nav-chip live">live</span></a>
+      <a class="nav-item" href="streaming.html"><span class="nav-num">03</span><span class="nav-label">Streaming MPP</span><span class="nav-chip live">live</span></a>
+      <a class="nav-item" href="auction.html"><span class="nav-num">04</span><span class="nav-label">Compute Auction</span><span class="nav-chip live">live</span></a>
+      <a class="nav-item" href="swap.html"><span class="nav-num">05</span><span class="nav-label">Agentic Pay + Swap</span><span class="nav-chip new">new</span></a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Real-World Scenes</div>
+      <a class="nav-item" href="taxi.html"><span class="nav-num">09</span><span class="nav-label">Taxi Handover</span><span class="nav-chip new">new</span></a>
+      <a class="nav-item" href="cafe.html"><span class="nav-num">10</span><span class="nav-label">Caf&eacute; Walk-by</span><span class="nav-chip new">new</span></a>
+      <a class="nav-item" href="delivery.html"><span class="nav-num">11</span><span class="nav-label">Food Delivery</span></a>
+      <a class="nav-item" href="trip.html"><span class="nav-num">15</span><span class="nav-label">Multi-City Trip</span></a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Infrastructure</div>
+      <a class="nav-item" href="multichain.html"><span class="nav-label">Multi-Chain Map</span></a>
+      <a class="nav-item" href="pq.html"><span class="nav-label">Post-Quantum</span><span class="nav-chip pq">pq</span></a>
+      <a class="nav-item" href="rails.html"><span class="nav-label">Rails Comparison</span></a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Utilities</div>
+      <a class="nav-item" href="tools.html"><span class="nav-label">Dev Tools</span></a>
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <a href="../index.html">explorer</a>
+    <a href="../agents-demo.html">canvas</a>
+    <a href="../simulator.html">sim</a>
+    <a href="../docs.html">docs</a>
+    <a href="https://github.com/kcolbchain/switchboard" target="_blank">src</a>
+  </div>
+</nav>
+<div class="main">
+
+  <section class="page-hero">
+    <a href="index.html" class="back-link">&larr; Back to dashboard</a>
+    <div class="page-eyebrow reveal"><span class="num">05</span> Protocol Pattern</div>
+    <h1 class="reveal">Agentic <em>Pay&nbsp;+&nbsp;Swap</em></h1>
+    <p class="lead reveal">
+      Agent&nbsp;A hires Agent&nbsp;B for an inference job. B replies <code>402 Payment Required</code>
+      with an escrow-scheme offer. A&rsquo;s x402 middleware checks it against a cap, an allowlist and a
+      gas budget, then locks <strong>5&nbsp;USDC</strong> in <code>AgentEscrow</code>. B delivers; A confirms;
+      the escrow releases. Then B does the agentic part &mdash; it routes its freshly-earned USDC
+      through <strong>SafeSwap</strong> to rebalance into ETH for gas. One unattended loop, settled on-chain.
+    </p>
+    <div class="hero-actions reveal" style="transition-delay:.35s">
+      <a class="btn btn-gold" id="btnReplay">&#9654; Run the flow</a>
+      <a href="../agents-demo.html" class="btn btn-ghost">Open Canvas Lab</a>
+      <a href="https://github.com/kcolbchain/switchboard/tree/main/examples/agentic_demo" target="_blank" class="btn btn-ghost">View source &amp; tests</a>
+    </div>
+  </section>
+
+  <section class="content-section">
+    <div class="section-label reveal">Live Visualization</div>
+    <h2 class="reveal">The <em>loop</em>, step by step</h2>
+    <p class="section-desc reveal">
+      This is the exact flow of <code>examples/agentic_demo</code> &mdash; the same seven steps the
+      pytest suite asserts. Watch funds move payer &rarr; escrow &rarr; payee, then route out through SafeSwap.
+    </p>
+
+    <div class="transport-bar reveal" style="margin-bottom:20px">
+      <label class="section-label" style="margin:0">swap into</label>
+      <select id="swapTo">
+        <option value="ETH">ETH &mdash; gas rebalance</option>
+        <option value="LUX">LUX &mdash; settlement asset</option>
+      </select>
+      <label class="section-label" style="margin:0 0 0 8px">job price</label>
+      <select id="price">
+        <option value="5">5 USDC</option>
+        <option value="8">8 USDC</option>
+        <option value="12">12 USDC</option>
+      </select>
+      <span class="status-pill" id="statusPill">idle</span>
+    </div>
+
+    <div class="swap-stage reveal">
+      <div class="stage-canvas-wrap">
+        <canvas id="stageCanvas"></canvas>
+      </div>
+      <div class="stage-side">
+        <div class="balances">
+          <div class="bal">
+            <div class="who">Agent A &middot; payer</div>
+            <div class="amt"><span id="balA">100.00</span><span class="unit">USDC</span></div>
+            <div class="delta" id="deltaA"></div>
+          </div>
+          <div class="bal">
+            <div class="who">Agent B &middot; payee</div>
+            <div class="amt"><span id="balB">0.00</span><span class="unit" id="balBUnit">USDC</span></div>
+            <div class="delta" id="deltaB"></div>
+          </div>
+        </div>
+        <div class="ledger">
+          <div class="ledger-head">
+            <span class="title">flow ledger</span>
+            <span class="title" id="ledgerClock">block #0</span>
+          </div>
+          <div class="ledger-body" id="ledgerBody"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="content-section">
+    <div class="section-label reveal">How it maps to code</div>
+    <h2 class="reveal">From <em>scene</em> to <em>scenario</em></h2>
+    <p class="section-desc reveal">Every step above corresponds to a real call in the Python demo.</p>
+    <div class="grid-2 reveal">
+      <div class="glass-card">
+        <div class="card-label">x402 + escrow</div>
+        <h3>Pay &amp; settle</h3>
+        <p>
+          <code>X402Middleware._validate_offer()</code> enforces cap / allowlist / gas budget, then
+          <code>_pay_onchain()</code> takes the <em>escrow</em> path: <code>create_payment()</code> locks
+          funds, <code>confirm_payment()</code> releases them on delivery.
+        </p>
+      </div>
+      <div class="glass-card">
+        <div class="card-label">SafeSwap orchestrator</div>
+        <h3>Route the proceeds</h3>
+        <p>
+          <code>SafeSwapClient.quote()</code> then <code>.execute()</code> hit the orchestrator API
+          (<code>/v1/quote</code>, <code>/v1/execute</code>). Mockable in-process, so the whole flow runs
+          with no node and no network.
+        </p>
+      </div>
+    </div>
+    <pre class="code-block reveal" style="margin-top:24px"><span class="com"># PYTHONPATH=. python examples/agentic_demo/run.py --swap-to ETH</span>
+<span class="kw">from</span> examples.agentic_demo <span class="kw">import</span> run_scenario
+result = <span class="fn">run_scenario</span>(swap_to=<span class="str">"ETH"</span>)
+<span class="kw">assert</span> result.settled           <span class="com"># escrow Released</span>
+<span class="kw">assert</span> result.swap_routed       <span class="com"># SafeSwap quote -> execute</span></pre>
+  </section>
+
+  <div class="page-nav">
+    <a href="auction.html"><span class="pn-label">&larr; Previous</span><span class="pn-title">Compute Auction</span></a>
+    <a href="taxi.html" class="next"><span class="pn-label">Next &rarr;</span><span class="pn-title">Taxi Handover</span></a>
+  </div>
+
+<footer class="lab-footer">
+  <div class="brand"><em>kcolb</em>chain / switchboard &middot; the lab</div>
+  <div class="links">
+    <a href="../index.html">explorer</a>
+    <a href="../agents-demo.html">canvas lab</a>
+    <a href="../simulator.html">simulator</a>
+    <a href="../docs.html">docs</a>
+    <a href="https://github.com/kcolbchain/switchboard" target="_blank">source</a>
+  </div>
+</footer>
+</div><!-- .main -->
+</div><!-- .app -->
+
+<script src="shared.js"></script>
+<script>
+/* ============================================================
+   AGENTIC PAY + SWAP — interactive flow visualization
+   Mirrors examples/agentic_demo/scenario.py exactly.
+   ============================================================ */
+(function swapScene() {
+  const canvas = document.getElementById("stageCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  // — theme-aware palette pulled from CSS vars —
+  const css = (v, fb) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || fb);
+  const COL = () => ({
+    gold:    css("--gold", "#d4a853"),
+    emerald: css("--emerald", "#4ecb71"),
+    blue:    css("--blue", "#5b9cf5"),
+    violet:  css("--violet", "#a78bfa"),
+    cyan:    css("--cyan", "#67d4e0"),
+    fg:      css("--fg", "#eae6df"),
+    faint:   css("--fg-faint", "#5c5854"),
+    line:    css("--line", "rgba(255,255,255,.08)"),
+    elev:    css("--bg-elev", "#101018"),
+  });
+
+  // — the seven canonical steps (must mirror scenario.py StepLog order) —
+  const STEPS = [
+    { step: "402",          swap: false, detail: 'Agent B &rarr; <strong>402 Payment Required</strong> &middot; <code>escrow</code> offer' },
+    { step: "validate",     swap: false, detail: 'Agent A: offer passes <strong>cap / allowlist / gas budget</strong>' },
+    { step: "pay",          swap: false, detail: 'Agent A locks funds in <code>AgentEscrow</code> &rarr; <strong>Locked</strong>' },
+    { step: "deliver",      swap: false, detail: 'Agent B delivers work &middot; <code>200 OK</code>' },
+    { step: "settle",       swap: false, detail: '<code>confirmPayment()</code> &rarr; escrow <strong>Released</strong>' },
+    { step: "swap.quote",   swap: true,  detail: '<strong>SafeSwap</strong> best route quoted' },
+    { step: "swap.execute", swap: true,  detail: 'Routed swap settled &middot; receipt issued' },
+  ];
+
+  // — nodes laid out left (A) · center (Escrow) · right (B) · far-right (SafeSwap) —
+  let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const nodes = {
+    A:    { label: "Agent A",  sub: "payer",   kind: "agent",    x: .14, y: .42 },
+    esc:  { label: "Escrow",   sub: "vault",   kind: "contract", x: .42, y: .68 },
+    B:    { label: "Agent B",  sub: "payee",   kind: "agent",    x: .60, y: .30 },
+    swap: { label: "SafeSwap", sub: "orchestrator", kind: "service", x: .88, y: .58 },
+  };
+
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = W * DPR; canvas.height = H * DPR;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  // — animation state —
+  let phase = -1;          // index into STEPS, -1 = before start
+  let t0 = 0;              // ms timestamp the current phase began
+  const DUR = 1300;        // ms per step
+  let packet = null;       // { from, to, color, kind } in-flight
+  let running = false;
+  let raf = 0;
+  let block = 0;
+
+  const PRICE = () => parseFloat(document.getElementById("price").value);
+  const SWAP_TO = () => document.getElementById("swapTo").value;
+  // SafeSwap mock rates mirror MockSafeSwapOrchestrator.RATES (fee 0.30%)
+  const RATE = { ETH: 0.0004, LUX: 2.0 };
+  const swapOut = () => {
+    const gross = PRICE() * RATE[SWAP_TO()];
+    return +(gross * (1 - 0.003)).toFixed(4);
+  };
+
+  // — DOM refs —
+  const ledgerBody = document.getElementById("ledgerBody");
+  const balAEl = document.getElementById("balA");
+  const balBEl = document.getElementById("balB");
+  const balBUnit = document.getElementById("balBUnit");
+  const deltaAEl = document.getElementById("deltaA");
+  const deltaBEl = document.getElementById("deltaB");
+  const clockEl = document.getElementById("ledgerClock");
+  const statusPill = document.getElementById("statusPill");
+
+  function buildLedger() {
+    ledgerBody.innerHTML = "";
+    STEPS.forEach((s, i) => {
+      const row = document.createElement("div");
+      row.className = "ledger-row" + (s.swap ? " swap" : "");
+      row.id = "lr-" + i;
+      row.innerHTML =
+        '<span class="lr-dot"></span>' +
+        '<span class="lr-step">' + s.step + '</span>' +
+        '<span class="lr-detail">' + s.detail + '</span>';
+      ledgerBody.appendChild(row);
+    });
+  }
+
+  function setBalances() {
+    const price = PRICE();
+    let a = 100, b = 0, bUnit = "USDC";
+    if (phase >= 2) { a = 100 - price; }              // locked out of A at "pay"
+    if (phase >= 4) { b = price; }                    // released to B at "settle"
+    if (phase >= 6) { b = swapOut(); bUnit = SWAP_TO(); } // swapped out at execute
+    balAEl.textContent = a.toFixed(2);
+    balBEl.textContent = (bUnit === "USDC") ? b.toFixed(2) : b.toFixed(4);
+    balBUnit.textContent = bUnit;
+    deltaAEl.className = "delta" + (phase >= 2 ? " down" : "");
+    deltaAEl.textContent = phase >= 2 ? ("-" + price.toFixed(2) + " escrowed") : "";
+    if (phase >= 6) { deltaBEl.className = "delta swap"; deltaBEl.textContent = "swapped " + price.toFixed(2) + " USDC → " + SWAP_TO(); }
+    else if (phase >= 4) { deltaBEl.className = "delta up"; deltaBEl.textContent = "+" + price.toFixed(2) + " released"; }
+    else { deltaBEl.className = "delta"; deltaBEl.textContent = ""; }
+  }
+
+  function markLedger() {
+    STEPS.forEach((s, i) => {
+      const row = document.getElementById("lr-" + i);
+      if (!row) return;
+      row.classList.toggle("done", i < phase);
+      row.classList.toggle("active", i === phase);
+    });
+  }
+
+  // — describe the packet flying for each step —
+  function packetFor(i) {
+    const c = COL();
+    switch (STEPS[i].step) {
+      case "402":          return { from: "B", to: "A", color: c.gold,    kind: "402" };
+      case "validate":     return null;
+      case "pay":          return { from: "A", to: "esc", color: c.blue,  kind: "lock" };
+      case "deliver":      return { from: "B", to: "A", color: c.emerald, kind: "work" };
+      case "settle":       return { from: "esc", to: "B", color: c.emerald, kind: "release" };
+      case "swap.quote":   return { from: "B", to: "swap", color: c.violet, kind: "quote" };
+      case "swap.execute": return { from: "swap", to: "B", color: c.violet, kind: "exec" };
+    }
+    return null;
+  }
+
+  function px(n) { return { x: n.x * W, y: n.y * H }; }
+
+  function drawNode(key) {
+    const c = COL();
+    const n = nodes[key];
+    const p = px(n);
+    const r = 30;
+    const accent = n.kind === "contract" ? c.emerald : n.kind === "service" ? c.violet : c.gold;
+    const lit = (phase >= 0) && (
+      (packet && (packet.from === key || packet.to === key)) ||
+      (key === "esc" && phase >= 2 && phase < 5) ||
+      (key === "swap" && phase >= 5)
+    );
+    ctx.save();
+    // glow when lit
+    if (lit) {
+      ctx.shadowColor = accent; ctx.shadowBlur = 24;
+    }
+    ctx.lineWidth = lit ? 2 : 1.25;
+    ctx.strokeStyle = accent;
+    ctx.fillStyle = c.elev;
+    if (n.kind === "contract") {
+      // hexagon
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 6 + i * Math.PI / 3;
+        const x = p.x + r * Math.cos(a), y = p.y + r * Math.sin(a);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+    } else if (n.kind === "service") {
+      // circle
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.closePath();
+    } else {
+      // rounded square (agent)
+      const s = r * 1.7, x = p.x - s / 2, y = p.y - s / 2, rad = 10;
+      ctx.beginPath();
+      ctx.moveTo(x + rad, y);
+      ctx.arcTo(x + s, y, x + s, y + s, rad);
+      ctx.arcTo(x + s, y + s, x, y + s, rad);
+      ctx.arcTo(x, y + s, x, y, rad);
+      ctx.arcTo(x, y, x + s, y, rad);
+      ctx.closePath();
+    }
+    ctx.fill(); ctx.stroke();
+    ctx.shadowBlur = 0;
+    // labels
+    ctx.fillStyle = c.fg;
+    ctx.font = "600 13px 'DM Sans', system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(n.label, p.x, p.y + r + 18);
+    ctx.fillStyle = c.faint;
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    ctx.fillText(n.sub, p.x, p.y + r + 32);
+    ctx.restore();
+  }
+
+  function drawRail(aKey, bKey) {
+    const c = COL();
+    const a = px(nodes[aKey]), b = px(nodes[bKey]);
+    ctx.save();
+    ctx.strokeStyle = c.line; ctx.lineWidth = 1; ctx.setLineDash([4, 6]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+  }
+
+  function drawPacket(prog) {
+    if (!packet) return;
+    const a = px(nodes[packet.from]), b = px(nodes[packet.to]);
+    const e = prog < .5 ? 2 * prog * prog : 1 - Math.pow(-2 * prog + 2, 2) / 2; // easeInOut
+    const x = a.x + (b.x - a.x) * e, y = a.y + (b.y - a.y) * e;
+    ctx.save();
+    ctx.shadowColor = packet.color; ctx.shadowBlur = 18;
+    ctx.fillStyle = packet.color;
+    ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+    // trailing comet
+    const tx = a.x + (b.x - a.x) * Math.max(0, e - .08), ty = a.y + (b.y - a.y) * Math.max(0, e - .08);
+    ctx.strokeStyle = packet.color; ctx.lineWidth = 2; ctx.globalAlpha = .45;
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y); ctx.stroke();
+    ctx.restore();
+  }
+
+  function frame(now) {
+    ctx.clearRect(0, 0, W, H);
+    // static rails
+    drawRail("A", "esc"); drawRail("esc", "B"); drawRail("A", "B"); drawRail("B", "swap");
+    // nodes
+    Object.keys(nodes).forEach(drawNode);
+    // packet
+    if (running && phase >= 0 && packet) {
+      const prog = Math.min((now - t0) / DUR, 1);
+      drawPacket(prog);
+      if (prog >= 1) advance(now);
+    }
+    raf = requestAnimationFrame(frame);
+  }
+
+  function advance(now) {
+    // apply effects of the just-finished phase, then move on
+    phase++;
+    block += (STEPS[phase - 1] && /pay|settle|deliver/.test(STEPS[phase - 1].step)) ? 1 : 0;
+    clockEl.textContent = "block #" + block;
+    setBalances();
+    markLedger();
+    if (phase >= STEPS.length) {
+      running = false; packet = null;
+      statusPill.textContent = "settled · swap routed";
+      statusPill.className = "status-pill ok";
+      markLedger();
+      return;
+    }
+    packet = packetFor(phase);
+    t0 = now;
+    // skip steps with no packet (validate) after a short beat
+    if (!packet) { setTimeout(() => { if (running) advance(performance.now()); }, 600); }
+  }
+
+  function start() {
+    cancelAnimationFrame(raf);
+    phase = -1; block = 0; packet = null; running = true;
+    buildLedger(); setBalances(); markLedger();
+    statusPill.textContent = "running…"; statusPill.className = "status-pill run";
+    resize();
+    advance(performance.now());
+    raf = requestAnimationFrame(frame);
+  }
+
+  // — wire controls —
+  document.getElementById("btnReplay").addEventListener("click", (e) => { e.preventDefault(); start(); });
+  document.getElementById("swapTo").addEventListener("change", () => { if (!running) { setBalances(); } });
+  document.getElementById("price").addEventListener("change", () => { if (!running) { setBalances(); } });
+  window.addEventListener("resize", () => { resize(); });
+
+  // initial paint + autostart shortly after load
+  resize(); buildLedger(); setBalances();
+  raf = requestAnimationFrame(frame);
+  setTimeout(start, 900);
+})();
+</script>
+
+</body>
+</html>

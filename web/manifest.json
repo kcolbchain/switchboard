@@ -1,0 +1,50 @@
+{
+  "name": "Switchboard Lab — Agentic Payments",
+  "short_name": "Switchboard",
+  "description": "Interactive lab of agent-to-agent payment patterns: x402 paywalls, on-chain escrow, streaming micropayments, and agentic pay + SafeSwap routing. Installable and offline-capable.",
+  "id": "/lab/",
+  "scope": "./",
+  "start_url": "./lab/index.html",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#06060b",
+  "theme_color": "#06060b",
+  "categories": ["finance", "developer", "productivity"],
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Agentic Pay + Swap",
+      "short_name": "Pay + Swap",
+      "description": "A2A pay + escrow settle + SafeSwap route, visualized",
+      "url": "./lab/swap.html"
+    },
+    {
+      "name": "Canvas Lab",
+      "short_name": "Canvas",
+      "description": "Animated agent-payment scenes",
+      "url": "./agents-demo.html"
+    },
+    {
+      "name": "x402 Paywall",
+      "short_name": "x402",
+      "description": "HTTP-402 payment-required flow",
+      "url": "./lab/x402.html"
+    }
+  ]
+}

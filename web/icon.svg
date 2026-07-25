@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Switchboard">
+  <defs>
+    <radialGradient id="bg" cx="35%" cy="20%" r="90%">
+      <stop offset="0%" stop-color="#16161f"/>
+      <stop offset="100%" stop-color="#06060b"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e8c878"/>
+      <stop offset="55%" stop-color="#d4a853"/>
+      <stop offset="100%" stop-color="#b8862f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="8" y="8" width="496" height="496" rx="106" fill="none" stroke="#d4a853" stroke-opacity="0.25" stroke-width="3"/>
+  <!-- switchboard 'patch cord' mark: two terminals joined by a routed cable -->
+  <g fill="none" stroke="url(#gold)" stroke-width="26" stroke-linecap="round">
+    <path d="M150 168 C 150 320, 362 192, 362 344"/>
+  </g>
+  <circle cx="150" cy="168" r="46" fill="url(#gold)"/>
+  <circle cx="150" cy="168" r="18" fill="#06060b"/>
+  <circle cx="362" cy="344" r="46" fill="url(#gold)"/>
+  <circle cx="362" cy="344" r="18" fill="#06060b"/>
+</svg>
